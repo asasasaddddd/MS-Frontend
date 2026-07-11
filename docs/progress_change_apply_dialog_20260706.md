@@ -1,0 +1,33 @@
+# 2026-07-06 管理员状态变更申请弹窗复刻
+
+- 本轮仅修改新前端 `F:\MetrologySystem\MS-Frontend`，未修改后端流程。
+- 按用户提供的 7 张截图复刻管理员申请状态变更弹窗：
+  - `检定周期调整申请`：当前周期提示、调整后周期、调整原因、申请日期、附件。
+  - `管理类别调整申请`：当前类别提示、调整后管理类别、申请日期、附件。
+  - `非正常报废申请`：报废类型三段按钮（丢失/损坏/其它）、报废原因、申请日期、附件。
+  - `设备封存申请`：封存原因、申请日期、附件。
+  - `设备启用申请`：启用原因、申请时间、附件。
+  - `设备转移申请`：接收单位、转移原因、申请日期、附件。
+  - `用前检定申请`：检定原因、申请日期、附件。
+- 重写 `src/views/change/components/ChangeApplyDialog.vue`：
+  - 使用 Ant Design Vue 表单控件。
+  - 弹窗样式对齐原型：白色页头、浅灰内容区、右上角取消/提交、蓝色主按钮、居中大弹窗。
+  - 报废类型做成三段按钮；周期和类别显示当前值提示。
+- 保留真实附件上传入口，使用 `AttachmentUploadButton` 上传。
+- 当前后端 `ChangeSubmitRequest` 无附件组字段，本轮不把附件组伪装进状态变更提交 payload。
+- 清理状态变更相关中文乱码：
+  - `src/views/change/changeDisplayModel.ts`
+  - `src/api/changeContract.ts`
+  - `src/views/change/ChangeApplyView.vue`
+  - `src/components/AttachmentUploadButton.vue`
+  - `src/api/attachmentModel.ts`
+- 新增 `tests/changeDisplayModel.test.ts`，锁定状态变更中文显示、类别 code 转换、周期展示和后端提交类型归一化。
+- 浏览器自动化验证：
+  - 注入管理员会话后打开 `/change/apply`。
+  - 勾选设备并逐个打开 7 类申请弹窗。
+  - 校验所有弹窗标题和关键字段均出现。
+  - 截图确认原生 file input 已隐藏，弹窗不透底。
+- 验证通过：
+  - `node --experimental-strip-types tests\changeDisplayModel.test.ts`
+  - `npm run typecheck`
+  - `npm run build`

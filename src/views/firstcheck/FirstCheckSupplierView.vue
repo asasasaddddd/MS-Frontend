@@ -1,0 +1,233 @@
+<script setup lang="ts">
+import { reactive, ref } from 'vue'
+import { message } from 'ant-design-vue'
+import { startFirstCheck } from '@/api/firstcheck'
+import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
+import { useSessionStore } from '@/stores/session'
+import type { AttachmentId } from '@/types/firstcheck'
+
+const session = useSessionStore()
+const submitting = ref(false)
+
+const form = reactive({
+  purchaseOrderNo: '',
+  materialCode: '',
+  materialName: '',
+  quantity: 1,
+  applyDeptName: session.user?.deptName || '',
+  supplierName: session.user?.employeeName || '',
+  attachmentGroupId: undefined as AttachmentId | undefined,
+  applyTime: new Date().toLocaleDateString('zh-CN'),
+  remark: ''
+})
+
+function resetForm() {
+  form.purchaseOrderNo = ''
+  form.materialCode = ''
+  form.materialName = ''
+  form.quantity = 1
+  form.applyDeptName = session.user?.deptName || ''
+  form.supplierName = session.user?.employeeName || ''
+  form.attachmentGroupId = undefined
+  form.applyTime = new Date().toLocaleDateString('zh-CN')
+  form.remark = ''
+}
+
+function searchPurchaseOrder() {
+  if (!form.purchaseOrderNo.trim()) {
+    message.warning('请先填写采购订单编号')
+    return
+  }
+  message.info('采购订单查询接口未单独暴露，请继续填写物料信息后提交')
+}
+
+function printPage() {
+  window.print()
+}
+
+async function submit() {
+  if (!form.purchaseOrderNo.trim()) {
+    message.warning('请填写采购订单编号')
+    return
+  }
+  if (!form.materialCode.trim()) {
+    message.warning('请填写物料编号')
+    return
+  }
+  if (!form.materialName.trim()) {
+    message.warning('请填写物料描述')
+    return
+  }
+  if (!form.quantity || form.quantity < 1) {
+    message.warning('数量必须大于 0')
+    return
+  }
+  if (!form.applyDeptName.trim()) {
+    message.warning('请填写使用部门')
+    return
+  }
+  if (!form.supplierName.trim()) {
+    message.warning('请填写供应商名称')
+    return
+  }
+
+  submitting.value = true
+  try {
+    const orderId = await startFirstCheck({
+      purchaseOrderNo: form.purchaseOrderNo.trim(),
+      supplierName: form.supplierName.trim(),
+      attachmentGroupId: form.attachmentGroupId,
+      applyDeptId: session.user?.deptId || form.applyDeptName.trim(),
+      applyDeptName: form.applyDeptName.trim(),
+      material: {
+        materialCode: form.materialCode.trim(),
+        materialName: form.materialName.trim(),
+        deviceName: form.materialName.trim(),
+        quantity: Number(form.quantity),
+        remark: form.remark.trim() || undefined
+      },
+      remark: form.remark.trim() || undefined
+    })
+    message.success(`首检申请已提交，单据ID：${orderId}`)
+    resetForm()
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '首检申请提交失败')
+  } finally {
+    submitting.value = false
+  }
+}
+</script>
+
+<template>
+  <section class="firstcheck-supplier-page form-page">
+    <a-card class="panel" :bordered="false">
+      <template #title>
+        <div class="panel-title">
+          <h2>基本信息</h2>
+          <a-tag class="tag blue">编号 自动生成</a-tag>
+        </div>
+      </template>
+
+      <div class="form-grid cols-4">
+        <label class="field">
+          <span>采购订单编号</span>
+          <a-input-group compact>
+            <a-input v-model:value="form.purchaseOrderNo" class="po-input" placeholder="填写采购订单编号" />
+            <a-button @click="searchPurchaseOrder">搜索</a-button>
+          </a-input-group>
+        </label>
+        <label class="field"><span>物料编号</span><a-input v-model:value="form.materialCode" placeholder="填写物料编号" /></label>
+        <label class="field"><span>物料描述</span><a-input v-model:value="form.materialName" placeholder="填写物料描述" /></label>
+        <label class="field">
+          <span>数量</span>
+          <a-input-number v-model:value="form.quantity" class="full-input" :min="1" placeholder="填写数量" />
+        </label>
+        <label class="field"><span>使用部门</span><a-input v-model:value="form.applyDeptName" placeholder="填写使用部门" /></label>
+        <label class="field"><span>供应商名称</span><a-input v-model:value="form.supplierName" placeholder="填写供应商名称" /></label>
+        <label class="field">
+          <span>附件</span>
+          <AttachmentUploadButton
+            v-model="form.attachmentGroupId"
+            business-type="FIRST_CHECK"
+            remark="供应商首检申请附件"
+            button-text="上传文件"
+          />
+        </label>
+        <label class="field"><span>申请时间</span><a-input v-model:value="form.applyTime" /></label>
+      </div>
+    </a-card>
+
+    <div class="form-actions">
+      <a-button @click="resetForm">取消</a-button>
+      <a-button @click="printPage">打印</a-button>
+      <a-button type="primary" :loading="submitting" @click="submit">提交</a-button>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.firstcheck-supplier-page {
+  display: grid;
+  gap: 16px;
+}
+
+.panel {
+  overflow: hidden;
+  border: 1px solid #e5eaf1;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.panel :deep(.ant-card-head) {
+  min-height: 49px;
+  padding: 0 14px;
+  border-bottom: 1px solid #e5eaf1;
+}
+
+.panel :deep(.ant-card-body) {
+  padding: 0;
+}
+
+.panel-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.panel h2 {
+  margin: 0;
+  color: #172033;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.form-grid {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.form-grid.cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.field {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field span {
+  color: #344054;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.po-input {
+  width: calc(100% - 66px);
+}
+
+.full-input {
+  width: 100%;
+}
+
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.tag.blue {
+  border-color: #b7d3ff;
+  background: #eef5ff;
+  color: #175cd3;
+}
+
+@media (max-width: 980px) {
+  .form-grid.cols-4 {
+    grid-template-columns: 1fr;
+  }
+}
+</style>

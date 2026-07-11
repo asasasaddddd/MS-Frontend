@@ -1,0 +1,50 @@
+:root {
+  color: #172033;
+  background: #f3f5f8;
+  font-family: "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: #f3f5f8;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.page-shell {
+  min-height: 100vh;
+  background: #f3f5f8;
+}
+
+.simple-workspace {
+  min-height: 100vh;
+  padding: 32px;
+}
+
+.simple-workspace-card {
+  max-width: 960px;
+  margin: 0 auto;
+  border: 1px solid #e5eaf1;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 30px rgba(7, 21, 37, 0.06);
+}

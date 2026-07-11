@@ -1,0 +1,84 @@
+import axios, { type AxiosRequestConfig } from 'axios'
+import { useSessionStore } from '@/stores/session'
+import type { ApiResponse } from '@/types/common'
+
+export class ApiError extends Error {
+  code: number
+
+  constructor(code: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.code = code
+  }
+}
+
+export const httpClient = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  timeout: 20000
+})
+
+function isApiResponse(value: unknown): value is ApiResponse<unknown> {
+  return typeof value === 'object' && value !== null && 'code' in value && 'message' in value
+}
+
+function unwrapResponse<T>(response: ApiResponse<T>): T {
+  if (response.code === 200) {
+    return response.data
+  }
+  throw new ApiError(response.code, response.message || '请求失败')
+}
+
+function clearSessionOnUnauthorized(code?: number, status?: number) {
+  if (code !== 401 && status !== 401) return
+  const session = useSessionStore()
+  session.clear()
+  if (window.location.pathname !== '/login') {
+    window.location.assign('/login')
+  }
+}
+
+export async function request<T>(config: AxiosRequestConfig): Promise<T> {
+  const session = useSessionStore()
+  const user = session.user
+  const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData
+  const headers: Record<string, string> = {}
+
+  if (!isFormData) {
+    headers['Content-Type'] = 'application/json'
+  }
+
+  if (session.token) {
+    headers.Authorization = `Bearer ${session.token}`
+  }
+
+  if (user) {
+    headers['X-User-Id'] = user.employeeId
+    headers['X-User-Name'] = encodeURIComponent(user.employeeName)
+    headers['X-User-Role'] = user.roleCode
+    headers['X-User-Dept-Id'] = user.deptId || ''
+    headers['X-User-Dept-Name'] = encodeURIComponent(user.deptName || '')
+  }
+
+  try {
+    const response = await httpClient.request<ApiResponse<T>>({
+      ...config,
+      headers: {
+        ...headers,
+        ...(config.headers || {})
+      }
+    })
+    return unwrapResponse(response.data)
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status
+      const payload = error.response?.data
+      if (isApiResponse(payload)) {
+        clearSessionOnUnauthorized(payload.code, status)
+        throw new ApiError(payload.code, payload.message || '请求失败')
+      }
+      clearSessionOnUnauthorized(undefined, status)
+      throw new ApiError(status || 0, error.message || '网络请求失败')
+    }
+    throw error
+  }
+}
