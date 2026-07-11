@@ -82,8 +82,7 @@ export interface FirstCheckOrder {
   validUntil?: string
   certificateAttachmentGroupId?: AttachmentId
   verificationOpinion?: string
-  selfCost?: number
-  sendoutCost?: number
+  verificationUnitPrice?: number
   isCommon?: number
   isWithReport?: number
   needSendout?: number
@@ -251,8 +250,7 @@ export interface VerifierVerifyRequest {
   validUntil?: string
   storageLocation?: string
   verificationOpinion?: string
-  selfCost?: number
-  sendoutCost?: string
+  verificationUnitPrice: number
   opinion?: string
 }
 

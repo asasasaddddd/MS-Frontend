@@ -187,3 +187,11 @@
 - 前端已删除旧 `/periodic/plan-confirm` API 封装与 `PeriodicPlanConfirmRequest` 类型，只保留 `/periodic/exception-change/submit` 作为周检异常分流提交入口。
 - 管理员周检表格保持无“操作”列；页面右上角统一使用异常分支选择器和“提交异常分支”按钮，要求选中任务属于同一张周检单。
 - 验证通过：`node --experimental-strip-types tests\periodicDisplayModel.test.ts`、`node --experimental-strip-types tests\periodicContract.test.ts`、`npm run typecheck`、`npm run build`。
+# 2026-07-12 首检费用字段统一
+
+- 首检详情和检定提交类型统一为 `verificationUnitPrice: number`。
+- 删除首检前端的 `selfCost/sendoutCost` 双字段，不保留旧请求参数。
+- 检定弹窗自检、外委共用“单台检定费用（元）”。
+- Ant Design 5 `InputNumber` 固定最小值 0、精度 2、步长 0.01。
+- 新增 `tests/firstCheckCostContract.test.ts`，约束字段、文案和控件精度。
+- 后端真库已同步为 `MET_FIRST_CHECK_ORDER.VERIFICATION_UNIT_PRICE DECIMAL(18,2)`。

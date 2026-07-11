@@ -44,8 +44,7 @@ const form = reactive({
   verificationDate: '',
   validUntil: '',
   storageLocation: '',
-  selfCost: undefined as number | undefined,
-  sendoutCost: undefined as string | undefined,
+  verificationUnitPrice: undefined as number | undefined,
   verificationOpinion: '检定完成',
   opinion: '检定完成'
 })
@@ -126,8 +125,7 @@ function resetForm(order?: FirstCheckOrder) {
   form.verificationDate = order?.verificationDate || new Date().toISOString().slice(0, 10)
   form.validUntil = order?.validUntil || ''
   form.storageLocation = order?.storageLocation || ''
-  form.selfCost = order?.selfCost
-  form.sendoutCost = order?.sendoutCost === undefined ? undefined : String(order.sendoutCost)
+  form.verificationUnitPrice = order?.verificationUnitPrice
   form.verificationOpinion = order?.verificationOpinion || '检定完成'
   form.opinion = '检定完成'
 }
@@ -154,6 +152,11 @@ async function submit() {
 
   if (!/^\d{6}$/.test(form.subjectSubcategory || '')) {
     message.warning('请选择 6 位学科小类编码')
+    return
+  }
+
+  if (form.verificationUnitPrice === undefined || form.verificationUnitPrice === null) {
+    message.warning('请填写单台检定费用')
     return
   }
 
@@ -188,8 +191,7 @@ async function submit() {
         validUntil: form.validUntil,
         storageLocation: form.storageLocation,
         verificationOpinion: form.verificationOpinion,
-        selfCost: form.selfCost,
-        sendoutCost: form.sendoutCost,
+        verificationUnitPrice: form.verificationUnitPrice,
         opinion: form.opinion
       })
     )
@@ -389,7 +391,17 @@ watch(
               ]"
             />
           </label>
-          <label><span>费用</span><a-input-number v-model:value="form.selfCost" style="width:100%" placeholder="填写费用" /></label>
+          <label>
+            <span>单台检定费用（元）</span>
+            <a-input-number
+              v-model:value="form.verificationUnitPrice"
+              style="width:100%"
+              :min="0"
+              :precision="2"
+              :step="0.01"
+              placeholder="填写单台检定费用"
+            />
+          </label>
           <label><span>使用部门</span><a-input :value="display(order?.applyDeptName)" readonly /></label>
           <label><span>检定日期</span><a-input v-model:value="form.verificationDate" type="date" /></label>
           <label><span>有效期</span><a-input v-model:value="form.validUntil" type="date" /></label>
