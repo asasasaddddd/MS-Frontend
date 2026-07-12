@@ -11,9 +11,9 @@ import {
   SaveOutlined,
   SearchOutlined
 } from '@ant-design/icons-vue'
-import { cancelCostRecord, createManualCostRecord, getCostSummary, listCostRecords, updateCostRecord } from '@/api/cost'
+import { cancelCostRecord, createManualCostRecord, listCostRecords, updateCostRecord } from '@/api/cost'
 import { useSessionStore } from '@/stores/session'
-import type { CostManualCreateRequest, CostRecordVO, CostSummaryVO } from '@/types/cost'
+import type { CostManualCreateRequest, CostRecordVO } from '@/types/cost'
 import {
   amountNumber,
   buildCostCsv,
@@ -46,7 +46,6 @@ const loading = ref(false)
 const saving = ref(false)
 const activeMode = ref<CostPageMode>(resolveMode())
 const rows = ref<CostRecordVO[]>([])
-const backendSummary = ref<CostSummaryVO>()
 const selectedRowKeys = ref<Array<string | number>>([])
 const amountDrafts = reactive<Record<string, number>>({})
 const dirtyAmountIds = ref<string[]>([])
@@ -93,18 +92,6 @@ const selectedRows = computed(() => {
 
 const summary = computed(() => {
   const targetRows = activeMode.value === 'periodic' ? [...mainRows.value, ...otherRows.value] : mainRows.value
-  const server = backendSummary.value
-  if (server) {
-    return {
-      total: Number(server.totalAmount || 0),
-      count: Number(server.totalCount || 0),
-      groups: (server.bySource || []).map((item) => ({
-        label: item.name || item.code || '-',
-        amount: Number(item.amount || 0),
-        count: Number(item.count || 0)
-      }))
-    }
-  }
   return {
     total: sumCost(targetRows),
     count: targetRows.length,
@@ -219,21 +206,11 @@ function handleModeChange(value: string | number) {
 async function loadRows() {
   loading.value = true
   try {
-    const [recordList, summaryResult] = await Promise.all([
-      listCostRecords(),
-      getCostSummary({
-        sourceType: activeMode.value === 'history' ? undefined : sourceForMode(activeMode.value),
-        startDate: filters.startDate || undefined,
-        endDate: filters.endDate || undefined
-      }).catch(() => undefined)
-    ])
-    rows.value = recordList
-    backendSummary.value = summaryResult
+    rows.value = await listCostRecords()
     syncDrafts()
     selectedRowKeys.value = selectedRowKeys.value.filter((key) => rows.value.some((row) => String(row.id) === String(key)))
   } catch (error) {
     rows.value = []
-    backendSummary.value = undefined
     message.error(error instanceof Error ? error.message : '费用列表加载失败')
   } finally {
     loading.value = false

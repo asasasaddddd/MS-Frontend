@@ -50,6 +50,7 @@ export interface DeviceVO {
   sourceOrderId?: EntityId
   selfCost?: number
   sendoutCost?: string
+  verificationCost?: number | string
   purchaseCost?: number | string
   remark?: string
 }

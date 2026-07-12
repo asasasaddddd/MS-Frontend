@@ -128,9 +128,7 @@ function personText(name?: string, employeeId?: string) {
 }
 
 function verificationCostText(device: DeviceVO) {
-  const value = device.verificationMethod === '自检' || device.verificationMethod === 'self'
-    ? device.selfCost
-    : device.sendoutCost
+  const value = device.verificationCost
   return value === undefined || value === null || value === '' ? '-' : String(value)
 }
 
