@@ -9,6 +9,7 @@ import {
 } from '../src/api/periodicContract.ts'
 
 assert.equal(periodicEndpoint('myTasks'), '/periodic/my-tasks')
+assert.equal(periodicEndpoint('generateTestPlan'), '/periodic/plans/generate-test-one')
 assert.equal(periodicEndpoint('supplierFillInfo'), '/periodic/supplier-fill-info')
 assert.equal(periodicEndpoint('responsibleSecondJudge'), '/periodic/responsible-second-judge')
 assert.equal(periodicEndpoint('secondJudge'), '/periodic/second-judge')

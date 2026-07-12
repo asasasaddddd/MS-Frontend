@@ -32,6 +32,13 @@ export function generatePeriodicPlan(data: GeneratePeriodicPlanRequest) {
   })
 }
 
+export function generatePeriodicTestPlan() {
+  return request<EntityId>({
+    url: periodicEndpoint('generateTestPlan'),
+    method: 'POST'
+  })
+}
+
 export function generatePeriodicMonthPlan(planYear: number, planMonth: number) {
   return request<EntityId[]>({
     url: periodicEndpoint('generateMonthPlan'),

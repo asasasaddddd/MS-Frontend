@@ -7,6 +7,7 @@ import type {
 
 const periodicEndpoints = {
   generatePlan: '/periodic/plans/generate',
+  generateTestPlan: '/periodic/plans/generate-test-one',
   generateMonthPlan: '/periodic/plans/generate-month',
   generateBeforeUsePlan: '/periodic/pre-use/plans/generate',
   planDetail: '/periodic/plans',

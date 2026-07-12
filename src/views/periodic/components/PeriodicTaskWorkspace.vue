@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
   confirmerConfirmPeriodic,
+  generatePeriodicTestPlan,
   getPeriodicPlan,
   listPeriodicMyHistory,
   listPeriodicMyTasks,
@@ -60,6 +61,7 @@ const route = useRoute()
 const router = useRouter()
 const loading = ref(false)
 const submitting = ref(false)
+const generatingTestPlan = ref(false)
 const exceptionChangeSubmitting = ref(false)
 const activeTab = ref<ActiveTab>('todo')
 const statusFilter = ref<string>('all')
@@ -285,6 +287,26 @@ async function loadData() {
   }
 }
 
+async function generateTestTask() {
+  generatingTestPlan.value = true
+  try {
+    const planId = await generatePeriodicTestPlan()
+    await router.replace({
+      path: route.path,
+      query: {
+        ...route.query,
+        planId: String(planId)
+      }
+    })
+    await loadData()
+    message.success(`已生成一项周检测试待办：${planId}`)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '周检测试待办生成失败')
+  } finally {
+    generatingTestPlan.value = false
+  }
+}
+
 async function runSubmit(action: () => Promise<void>, successText: string, close: () => void) {
   submitting.value = true
   try {
@@ -408,6 +430,15 @@ watch(routePlanId, () => {
         <a-button type="primary">查询</a-button>
         <a-button @click="resetFilter">重置</a-button>
         <div class="filter-spacer"></div>
+        <a-popconfirm
+          v-if="role === 'admin' && activeTab === 'todo'"
+          title="将按正式规则选择当前管理员名下一台下月到期设备，确认生成测试待办吗？"
+          ok-text="确认生成"
+          cancel-text="取消"
+          @confirm="generateTestTask"
+        >
+          <a-button :loading="generatingTestPlan">生成周检待办</a-button>
+        </a-popconfirm>
         <a-select
           v-if="canBatchException"
           v-model:value="exceptionActionType"

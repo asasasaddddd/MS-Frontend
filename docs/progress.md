@@ -203,3 +203,9 @@
 - 非检定员角色不受该过滤规则影响。
 - 新增模型测试覆盖自检、外委和非检定员角色匹配。
 - 验证通过：模型测试、`npm run typecheck`、`npm run build`。
+
+## 2026-07-12 周检可控测试任务生成
+
+- 周检管理员工作台新增“生成周检待办”按钮，调用 `/api/periodic/plans/generate-test-one`。
+- 生成成功后自动定位新计划并刷新当前待办列表；后端无合格候选设备时展示业务错误。
+- 新增前端周期接口契约断言；`node --experimental-strip-types tests\\periodicContract.test.ts`、`npm run typecheck`、`npm run build` 通过。
