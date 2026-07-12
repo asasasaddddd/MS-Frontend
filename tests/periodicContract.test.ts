@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
   buildPeriodicScanRequest,
@@ -53,3 +54,10 @@ assert.equal(verificationPayload.forceValidUntil, 1)
 assert.equal(verificationPayload.confirmationRequired, 0)
 assert.equal(verificationPayload.certificateAttachmentGroupId, '2073579912313286657')
 assert.equal(typeof verificationPayload.certificateAttachmentGroupId, 'string')
+
+const periodicWorkspaceSource = readFileSync(
+  new URL('../src/views/periodic/components/PeriodicTaskWorkspace.vue', import.meta.url),
+  'utf8'
+)
+assert.match(periodicWorkspaceSource, /数智部王熙然名下/)
+assert.match(periodicWorkspaceSource, /派给王熙然自检/)

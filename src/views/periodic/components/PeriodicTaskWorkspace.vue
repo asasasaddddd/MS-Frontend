@@ -299,7 +299,7 @@ async function generateTestTask() {
       }
     })
     await loadData()
-    message.success(`已生成一项周检测试待办：${planId}`)
+    message.success(`已在数智部王熙然名下生成周检测试待办：${planId}，并派给王熙然自检`)
   } catch (error) {
     message.error(error instanceof Error ? error.message : '周检测试待办生成失败')
   } finally {
@@ -432,7 +432,7 @@ watch(routePlanId, () => {
         <div class="filter-spacer"></div>
         <a-popconfirm
           v-if="role === 'admin' && activeTab === 'todo'"
-          title="将按正式规则选择当前管理员名下一台下月到期设备，确认生成测试待办吗？"
+          title="将创建一台全新测试设备，归数智部王熙然管理并派给王熙然自检，确认生成吗？"
           ok-text="确认生成"
           cancel-text="取消"
           @confirm="generateTestTask"

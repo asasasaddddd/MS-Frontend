@@ -209,3 +209,10 @@
 - 周检管理员工作台新增“生成周检待办”按钮，调用 `/api/periodic/plans/generate-test-one`。
 - 生成成功后自动定位新计划并刷新当前待办列表；后端无合格候选设备时展示业务错误。
 - 新增前端周期接口契约断言；`node --experimental-strip-types tests\\periodicContract.test.ts`、`npm run typecheck`、`npm run build` 通过。
+
+## 2026-07-13 周检测试任务固定王熙然归属
+
+- 管理员周检工作台“生成周检待办”继续调用真实接口 `/api/periodic/plans/generate-test-one`。
+- 二次确认明确说明：创建全新测试设备，归 `数智部 / 王熙然` 管理，并派给王熙然自检。
+- 成功提示同步显示计划 ID、设备归属和自检派单结果，避免误认为任务归当前任意管理员。
+- 前端契约测试增加固定文案断言；`npm run build` 通过。
