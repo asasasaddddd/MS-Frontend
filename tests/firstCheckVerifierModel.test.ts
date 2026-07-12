@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   canOpenFirstCheckVerify,
   firstCheckVerifierAction,
+  matchesFirstCheckVerifierRole,
   resolveFirstCheckVerifierStatus
 } from '../src/views/firstcheck/firstCheckVerifierModel.ts'
 
@@ -61,3 +62,9 @@ assert.deepEqual(resolveFirstCheckVerifierStatus(externalReturnedOrder), {
 })
 assert.equal(firstCheckVerifierAction(externalReturnedOrder), 'verify')
 assert.equal(canOpenFirstCheckVerify(externalReturnedOrder), true)
+
+assert.equal(matchesFirstCheckVerifierRole(waitReceiveOrder, 'VERIFIER_SELF'), true)
+assert.equal(matchesFirstCheckVerifierRole(waitReceiveOrder, 'VERIFIER_EXTERNAL'), false)
+assert.equal(matchesFirstCheckVerifierRole(externalWaitReturnOrder, 'VERIFIER_EXTERNAL'), true)
+assert.equal(matchesFirstCheckVerifierRole(externalWaitReturnOrder, 'VERIFIER_SELF'), false)
+assert.equal(matchesFirstCheckVerifierRole(externalWaitReturnOrder, 'MEASURE_ADMIN'), true)

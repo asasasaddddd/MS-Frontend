@@ -6,12 +6,14 @@ import { getFirstCheckDetail } from '@/api/firstcheck'
 import { listWorkflowTasks } from '@/api/workflow'
 import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { WorkflowTask } from '@/types/workflow'
+import { useSessionStore } from '@/stores/session'
 import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
 import FirstCheckAssignCodeDialog from '@/views/firstcheck/components/FirstCheckAssignCodeDialog.vue'
 import FirstCheckVerifyDialog from '@/views/firstcheck/components/FirstCheckVerifyDialog.vue'
 import {
   canOpenFirstCheckVerify,
   firstCheckVerifierAction,
+  matchesFirstCheckVerifierRole,
   resolveFirstCheckVerifierStatus,
   type FirstCheckVerifierStatusKey
 } from '@/views/firstcheck/firstCheckVerifierModel'
@@ -32,6 +34,7 @@ interface VerifierRow {
 
 const route = useRoute()
 const router = useRouter()
+const session = useSessionStore()
 const loading = ref(false)
 const actionLoading = ref(false)
 const rows = ref<VerifierRow[]>([])
@@ -203,6 +206,7 @@ async function loadRows() {
 
     rows.value = details
       .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: FirstCheckOrder }> => item.status === 'fulfilled')
+      .filter((item) => matchesFirstCheckVerifierRole(item.value.order, session.user?.roleCode))
       .map((item) => toRow(item.value.task, item.value.order))
   } catch (error) {
     rows.value = []

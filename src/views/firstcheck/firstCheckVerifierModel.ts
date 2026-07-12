@@ -28,6 +28,15 @@ export interface FirstCheckVerifierStatusSource {
   scanStatus?: string
 }
 
+export function matchesFirstCheckVerifierRole(
+  source: Pick<FirstCheckVerifierStatusSource, 'verificationType'>,
+  roleCode?: string
+) {
+  if (roleCode === 'VERIFIER_SELF') return source.verificationType === 'self_check'
+  if (roleCode === 'VERIFIER_EXTERNAL') return source.verificationType === 'external_commission'
+  return true
+}
+
 export interface FirstCheckVerifierResolvedStatus {
   statusKey: FirstCheckVerifierStatusKey
   statusLabel: string

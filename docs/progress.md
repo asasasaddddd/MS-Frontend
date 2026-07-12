@@ -195,3 +195,11 @@
 - Ant Design 5 `InputNumber` 固定最小值 0、精度 2、步长 0.01。
 - 新增 `tests/firstCheckCostContract.test.ts`，约束字段、文案和控件精度。
 - 后端真库已同步为 `MET_FIRST_CHECK_ORDER.VERIFICATION_UNIT_PRICE DECIMAL(18,2)`。
+
+## 2026-07-12 首检检定员角色待办隔离
+
+- 同一工号兼任自检检定员和外委检定员时，总代办与首检检定员详情页统一按当前角色过滤。
+- `VERIFIER_SELF` 仅显示 `verificationType=self_check`，`VERIFIER_EXTERNAL` 仅显示 `verificationType=external_commission`。
+- 非检定员角色不受该过滤规则影响。
+- 新增模型测试覆盖自检、外委和非检定员角色匹配。
+- 验证通过：模型测试、`npm run typecheck`、`npm run build`。

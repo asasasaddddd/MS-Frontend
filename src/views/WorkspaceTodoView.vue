@@ -15,6 +15,7 @@ import type { ProductSupportOrderVO } from '@/types/productSupport'
 import type { FirstCheckOrder } from '@/types/firstcheck'
 import { useSessionStore } from '@/stores/session'
 import { isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
+import { matchesFirstCheckVerifierRole } from '@/views/firstcheck/firstCheckVerifierModel'
 
 type TodoType = 'all' | 'firstcheck' | 'periodic' | 'change' | 'sampling' | 'productSupport'
 type TodoColor = 'orange' | 'blue' | 'red' | 'green'
@@ -202,6 +203,10 @@ const firstCheckTodoEntries = computed<TodoDefinition[]>(() => {
   return workflowTasks.value
     .filter((task) => isPendingWorkflowTask(task))
     .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
+    .filter((task) => {
+      const order = firstCheckOrders.value[String(task.businessId)]
+      return order ? matchesFirstCheckVerifierRole(order, currentRole) : true
+    })
     .map((task) => {
       const orderId = String(task.businessId)
       const order = firstCheckOrders.value[orderId]
@@ -393,7 +398,14 @@ function countWorkflowTasks(type: TodoType, fallback: number) {
     return fallback
   }
   if (type === 'firstcheck') {
-    return workflowTasks.value.filter((task) => matchesBusinessType(task.businessType, 'firstcheck')).length
+    const currentRole = roleCode.value
+    return workflowTasks.value
+      .filter((task) => isPendingWorkflowTask(task))
+      .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
+      .filter((task) => {
+        const order = firstCheckOrders.value[String(task.businessId)]
+        return order ? matchesFirstCheckVerifierRole(order, currentRole) : true
+      }).length
   }
   if (type === 'change') {
     return workflowTasks.value.filter((task) => matchesBusinessType(task.businessType, 'change')).length
