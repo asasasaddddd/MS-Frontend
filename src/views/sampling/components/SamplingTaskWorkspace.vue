@@ -343,7 +343,6 @@ watch(routePlanId, () => {
       :result="resultMode"
       :title="resultMode === 'qualified' ? 'C类抽检合格信息填写' : 'C类抽检不合格处理'"
       :submitting="submitting"
-      :allow-cost="role === 'verifier'"
       @submit="submitResult"
     />
   </section>

@@ -148,7 +148,6 @@ const samplingRouteByRole: Partial<Record<RoleCode, string>> = {
   PLANNER: '/sampling/plan',
   MEASURE_ADMIN: '/sampling/admin',
   VERIFIER_SELF: '/sampling/verifier',
-  VERIFIER_EXTERNAL: '/sampling/verifier',
   CONFIRMER: '/sampling/confirmer'
 }
 

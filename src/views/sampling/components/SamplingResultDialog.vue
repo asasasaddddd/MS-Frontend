@@ -14,11 +14,9 @@ const props = withDefaults(
     result: SamplingResult
     title: string
     submitting?: boolean
-    allowCost?: boolean
   }>(),
   {
-    submitting: false,
-    allowCost: true
+    submitting: false
   }
 )
 
@@ -31,7 +29,6 @@ const form = reactive({
   verificationDate: '',
   validUntil: '',
   attachmentGroupId: undefined as AttachmentId | undefined,
-  costAmount: undefined as number | undefined,
   nonconformingReason: '',
   disposalType: undefined as string | undefined,
   opinion: ''
@@ -50,7 +47,6 @@ function resetForm() {
   form.verificationDate = formatDate(task?.verificationDate) === '-' ? new Date().toISOString().slice(0, 10) : formatDate(task?.verificationDate)
   form.validUntil = formatDate(task?.validUntil) === '-' ? '' : formatDate(task?.validUntil)
   form.attachmentGroupId = task?.attachmentGroupId
-  form.costAmount = task?.costAmount === undefined || task?.costAmount === null ? undefined : Number(task.costAmount)
   form.nonconformingReason = task?.nonconformingReason || ''
   form.disposalType = task?.disposalType
   form.opinion = isQualified.value ? '抽检合格' : '抽检不合格，提交处理'
@@ -79,7 +75,6 @@ function submit() {
     verificationDate: form.verificationDate,
     validUntil: form.validUntil || undefined,
     attachmentGroupId: form.attachmentGroupId,
-    costAmount: props.allowCost ? form.costAmount : undefined,
     nonconformingReason: isQualified.value ? undefined : form.nonconformingReason,
     disposalType: isQualified.value ? undefined : form.disposalType,
     opinion: form.opinion
@@ -130,7 +125,6 @@ watch(
         <div class="form-grid cols-2">
           <label><span>检定日期 <b>*</b></span><a-input v-model:value="form.verificationDate" type="date" /></label>
           <label><span>新有效期</span><a-input v-model:value="form.validUntil" type="date" /></label>
-          <label v-if="allowCost"><span>费用金额</span><a-input-number v-model:value="form.costAmount" :min="0" :precision="2" style="width:100%" /></label>
           <label>
             <span>证书/记录附件</span>
             <div class="attachment-actions">

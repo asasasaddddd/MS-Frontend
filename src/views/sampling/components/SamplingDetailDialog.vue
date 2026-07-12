@@ -60,7 +60,6 @@ function close() {
           <label><span>有效期</span><a-input :value="formatDate(task?.validUntil)" readonly /></label>
           <label class="span-2"><span>不合格原因</span><a-input :value="display(task?.nonconformingReason)" readonly /></label>
           <label><span>处理方式</span><a-input :value="samplingResultName(task?.disposalType)" readonly /></label>
-          <label><span>费用</span><a-input :value="display(task?.costAmount)" readonly /></label>
           <label class="span-4"><span>备注</span><a-textarea :value="display(task?.remark)" :rows="3" readonly /></label>
         </div>
       </section>

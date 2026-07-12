@@ -192,7 +192,7 @@ export const navSections: NavSection[] = [
         title: 'C类物资抽检',
         description: 'C类抽检检定录入',
         module: 'sampling',
-        roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'],
+        roles: ['VERIFIER_SELF'],
         nodes: ['verifier_verify']
       },
       {
@@ -276,7 +276,7 @@ export const navSections: NavSection[] = [
       {
         path: '/cost/list',
         title: '费用管理',
-        description: '周检、首检、状态变更、抽检和其他费用记录',
+        description: '周检、首检、状态变更和其他外委费用记录',
         module: 'cost',
         roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'],
         nodes: ['cost_records']

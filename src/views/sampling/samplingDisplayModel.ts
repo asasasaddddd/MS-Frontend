@@ -66,10 +66,7 @@ export function samplingMethodName(value?: string) {
   const map: Record<string, string> = {
     self: '自检',
     self_check: '自检',
-    internal: '自检',
-    send_out: '外委',
-    external: '外委',
-    external_commission: '外委'
+    internal: '自检'
   }
   return value ? map[value] || value : '-'
 }
@@ -125,7 +122,6 @@ export function mapSamplingTaskRow(task: SamplingTaskVO): SamplingDisplayRowWith
     confirmerName: display(task.confirmerName),
     resultName: samplingResultName(task.result),
     validUntil: formatDate(task.validUntil),
-    costAmount: display(task.costAmount),
     remark: display(task.remark),
     tagColor: samplingTagColor(task.currentNode || task.taskStatus)
   }

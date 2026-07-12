@@ -39,7 +39,6 @@ export interface SamplingVerificationSubmitRequest {
   verificationDate?: string
   validUntil?: string
   attachmentGroupId?: SamplingEntityId
-  costAmount?: number | string
   nonconformingReason?: string
   disposalType?: SamplingDisposalType
   opinion?: string
@@ -92,7 +91,6 @@ export interface SamplingTaskVO {
   validUntil?: string
   verificationRecordId?: SamplingEntityId
   attachmentGroupId?: SamplingEntityId
-  costAmount?: number | string
   result?: SamplingResult | string
   nonconformingReason?: string
   disposalType?: SamplingDisposalType
@@ -125,6 +123,5 @@ export interface SamplingDisplayRow {
   confirmerName: string
   resultName: string
   validUntil: string
-  costAmount: string
   remark: string
 }

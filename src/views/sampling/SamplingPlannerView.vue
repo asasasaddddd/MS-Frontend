@@ -50,16 +50,8 @@ const rowSelection = computed(() => ({
   }
 }))
 
-function methodName(value?: string) {
-  const map: Record<string, string> = {
-    self: '自检',
-    self_check: '自检',
-    internal: '自检',
-    send_out: '外委',
-    external: '外委',
-    external_commission: '外委'
-  }
-  return value ? map[value] || value : '-'
+function methodName() {
+  return '自检'
 }
 
 function commonName(value?: number) {
@@ -175,7 +167,7 @@ onMounted(loadDevices)
           <template v-if="column.key === 'index'">{{ index + 1 }}</template>
           <template v-else-if="column.key === 'verificationDate'">{{ form.verificationDate }}</template>
           <template v-else-if="column.key === 'manageCategory'">{{ display(record.manageCategory) }}</template>
-          <template v-else-if="column.key === 'verificationMethod'">{{ methodName(record.verificationMethod) }}</template>
+          <template v-else-if="column.key === 'verificationMethod'">{{ methodName() }}</template>
           <template v-else-if="column.key === 'isCommon'">{{ commonName(record.isCommon) }}</template>
           <template v-else-if="column.key === 'deptName'">{{ display(record.deptName) }}</template>
           <template v-else-if="column.key === 'deviceCode'">{{ display(record.deviceCode) }}</template>
