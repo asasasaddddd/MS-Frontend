@@ -1,109 +1,44 @@
 import { request } from '@/api/request'
 import {
   externalSendOutPeriodic,
+  listPeriodicMyHistory,
   listPeriodicMyTasks,
   sendOutReturnPeriodic,
   verifierReceivePeriodic
 } from '@/api/periodic'
-import { periodicNodeName, periodicStatusName } from '@/api/periodicContract'
-import type { EntityId, PeriodicTaskVO } from '@/types/periodic'
+import type { PeriodicTaskVO } from '@/types/periodic'
+import type {
+  BusinessScanRecordQuery,
+  FirstCheckScanInboxItem,
+  FirstCheckScanRequest,
+  PeriodicScanAction,
+  ScanRecord,
+  UnifiedScanAction,
+  UnifiedScanInboxItem,
+  UnifiedScanSubmitRequest
+} from '@/types/scan'
+import {
+  buildPeriodicScanRecordQuery,
+  isPeriodicScanAction,
+  normalizePeriodicPendingRow,
+  normalizePeriodicScannedRow,
+  periodicScanActions,
+  resolvePeriodicScanAction
+} from '@/views/scan/scanModel'
 
-export type FirstCheckScanAction = 'receive' | 'sendout' | 'sendout-return' | 'take-back'
-
-export type PeriodicScanAction =
-  | 'periodic-verifier-receive'
-  | 'periodic-external-send-out'
-  | 'periodic-send-out-return'
-
-export type UnifiedScanAction = FirstCheckScanAction | PeriodicScanAction | string
-export type UnifiedScanBusinessType = 'firstcheck' | 'periodic' | 'change' | string
-
-export interface FirstCheckScanInboxItem {
-  orderId: number
-  orderNo?: string
-  lineNo?: number
-  sourceType?: string
-  currentNodeName?: string
-  scanStatus?: string
-  scanAction: FirstCheckScanAction | string
-  scanCode?: string
-  deviceCode?: string
-  deviceName?: string
-  materialCode?: string
-  useDeptName?: string
-  applyTime?: string
-  scanned?: boolean
-  scanTime?: string
-}
-
-export interface UnifiedScanInboxItem {
-  id: string
-  businessType: UnifiedScanBusinessType
-  sourceType: string
-  sourceLabel: string
-  businessId?: EntityId
-  orderId?: number
-  taskId?: EntityId
-  orderNo?: string
-  taskNo?: string
-  lineNo?: number
-  currentNode?: string
-  currentNodeName?: string
-  scanStatus?: string
-  scanAction: UnifiedScanAction
-  scanCode?: string
-  deviceCode?: string
-  deviceName?: string
-  materialCode?: string
-  useDeptName?: string
-  applyTime?: string
-  scanned?: boolean
-  scanTime?: string
-}
-
-export interface FirstCheckScanRequest {
-  orderId: number
-  scanCode: string
-  scanContent?: string
-  scanLocation?: string
-  clientType?: string
-  terminalCode?: string
-  opinion?: string
-}
-
-export interface UnifiedScanSubmitRequest {
-  scanCode: string
-  opinion?: string
-}
-
-export interface ScanRecord {
-  scanRecordId?: number
-  scanNo?: string
-  businessType?: string
-  businessId?: number
-  orderId?: number
-  scanCode?: string
-  deviceCode?: string
-  scanScene?: string
-  scanStatus?: string
-  operatorId?: string
-  operatorName?: string
-  scanTime?: string
-}
-
-const periodicScanActionByNode: Record<string, PeriodicScanAction> = {
-  transfer_verifier: 'periodic-verifier-receive',
-  send_out_return: 'periodic-send-out-return'
-}
-
-function periodicScanAction(task: PeriodicTaskVO): PeriodicScanAction | undefined {
-  const node = String(task.currentNode || '')
-  if (node === 'send_out') {
-    if (task.physicalStatus === 'wait_sendout_return_receive') return 'periodic-send-out-return'
-    return 'periodic-external-send-out'
-  }
-  return periodicScanActionByNode[node]
-}
+export type {
+  BusinessScanRecordQuery,
+  FirstCheckScanAction,
+  FirstCheckScanInboxItem,
+  FirstCheckScanRequest,
+  PeriodicScanAction,
+  ScanRecord,
+  UnifiedScanAction,
+  UnifiedScanBusinessType,
+  UnifiedScanInboxItem,
+  UnifiedScanSubmitRequest
+} from '@/types/scan'
+export { buildPeriodicScanRecordQuery, resolvePeriodicScanAction }
 
 export function firstCheckScanStatusName(value?: string) {
   const map: Record<string, string> = {
@@ -116,7 +51,7 @@ export function firstCheckScanStatusName(value?: string) {
     wait_take_back: '待取回',
     taken_back: '已取回'
   }
-  return value ? map[value] || value : '-'
+  return value ? map[value] || '未知状态' : '-'
 }
 
 export function scanActionName(value?: string) {
@@ -129,7 +64,7 @@ export function scanActionName(value?: string) {
     'periodic-external-send-out': '外扩人员接收',
     'periodic-send-out-return': '外委送回'
   }
-  return value ? map[value] || value : '-'
+  return value ? map[value] || '未知操作' : '-'
 }
 
 export const firstCheckScanActionName = scanActionName
@@ -149,6 +84,9 @@ function buildScanRequest(input: FirstCheckScanRequest): FirstCheckScanRequest {
 function normalizeFirstCheckRow(row: FirstCheckScanInboxItem): UnifiedScanInboxItem {
   const action = row.scanAction || ''
   const id = ['firstcheck', row.orderId, row.lineNo || 0, action, row.scanCode || row.deviceCode || row.orderNo || ''].join('-')
+  const currentNodeName = row.currentNodeName && /[\u3400-\u9fff]/.test(row.currentNodeName)
+    ? row.currentNodeName
+    : firstCheckScanStatusName(row.scanStatus)
   return {
     ...row,
     id,
@@ -156,37 +94,9 @@ function normalizeFirstCheckRow(row: FirstCheckScanInboxItem): UnifiedScanInboxI
     sourceType: row.sourceType || 'FIRST_CHECK',
     sourceLabel: '首检',
     businessId: row.orderId,
-    currentNodeName: row.currentNodeName || firstCheckScanStatusName(row.scanStatus),
+    currentNodeName,
     scanAction: action,
     useDeptName: row.useDeptName
-  }
-}
-
-function normalizePeriodicRow(task: PeriodicTaskVO): UnifiedScanInboxItem | null {
-  const node = String(task.currentNode || '')
-  const action = periodicScanAction(task)
-  if (!action) return null
-  const statusName = task.taskStatusName || periodicStatusName(task.taskStatus)
-  return {
-    id: ['periodic', task.id, action, task.deviceCode || task.taskNo || ''].join('-'),
-    businessType: 'periodic',
-    sourceType: 'PERIODIC',
-    sourceLabel: '周检',
-    businessId: task.planId,
-    taskId: task.id,
-    orderNo: task.taskNo,
-    taskNo: task.taskNo,
-    currentNode: node,
-    currentNodeName: task.currentNodeName || periodicNodeName(node),
-    scanStatus: task.taskStatus || statusName,
-    scanAction: action,
-    scanCode: task.deviceCode,
-    deviceCode: task.deviceCode,
-    deviceName: task.deviceName,
-    materialCode: task.materialCode,
-    useDeptName: task.deptName,
-    applyTime: task.transferTime || task.receiveTime || task.requiredFinishTime,
-    scanned: false
   }
 }
 
@@ -197,8 +107,45 @@ export function listFirstCheckScanInbox() {
   })
 }
 
-export async function listUnifiedScanInbox() {
-  const [firstCheckResult, periodicResult] = await Promise.allSettled([listFirstCheckScanInbox(), listPeriodicMyTasks()])
+export function listBusinessScanRecords(params: BusinessScanRecordQuery) {
+  return request<ScanRecord[]>({
+    url: '/scan/business/records',
+    method: 'GET',
+    params
+  })
+}
+
+function uniquePeriodicTasks(...groups: PeriodicTaskVO[][]) {
+  const map = new Map<string, PeriodicTaskVO>()
+  groups.flat().forEach((task) => map.set(String(task.id), task))
+  return Array.from(map.values())
+}
+
+async function listPeriodicScannedRows(tasks: PeriodicTaskVO[], actions: PeriodicScanAction[]) {
+  const queries = tasks.flatMap((task) => actions.map((action) => ({
+    task,
+    action,
+    params: buildPeriodicScanRecordQuery(task, action)
+  }))).filter((item): item is { task: PeriodicTaskVO; action: PeriodicScanAction; params: BusinessScanRecordQuery } => Boolean(item.params))
+
+  const results = await Promise.allSettled(queries.map(async ({ task, action, params }) => {
+    const records = await listBusinessScanRecords(params)
+    return records[0] ? normalizePeriodicScannedRow(task, action, records[0]) : null
+  }))
+
+  return results.flatMap((result) => result.status === 'fulfilled' && result.value ? [result.value] : [])
+}
+
+export async function listUnifiedScanInbox(actions?: UnifiedScanAction[]) {
+  const requestedPeriodicActions = actions === undefined
+    ? periodicScanActions
+    : actions.map(String).filter(isPeriodicScanAction)
+  const historyRequest = requestedPeriodicActions.length ? listPeriodicMyHistory() : Promise.resolve([])
+  const [firstCheckResult, periodicResult, periodicHistoryResult] = await Promise.allSettled([
+    listFirstCheckScanInbox(),
+    listPeriodicMyTasks(),
+    historyRequest
+  ])
   const rows: UnifiedScanInboxItem[] = []
 
   if (firstCheckResult.status === 'fulfilled') {
@@ -206,14 +153,28 @@ export async function listUnifiedScanInbox() {
   }
 
   if (periodicResult.status === 'fulfilled') {
-    rows.push(...periodicResult.value.map(normalizePeriodicRow).filter((row): row is UnifiedScanInboxItem => Boolean(row)))
+    rows.push(...periodicResult.value.map(normalizePeriodicPendingRow).filter((row): row is UnifiedScanInboxItem => Boolean(row)))
   }
 
-  if (firstCheckResult.status === 'rejected' && periodicResult.status === 'rejected') {
+  const periodicTasks = uniquePeriodicTasks(
+    periodicResult.status === 'fulfilled' ? periodicResult.value : [],
+    periodicHistoryResult.status === 'fulfilled' ? periodicHistoryResult.value : []
+  )
+  if (requestedPeriodicActions.length && periodicTasks.length) {
+    rows.push(...await listPeriodicScannedRows(periodicTasks, requestedPeriodicActions))
+  }
+
+  if (
+    firstCheckResult.status === 'rejected' &&
+    periodicResult.status === 'rejected' &&
+    periodicHistoryResult.status === 'rejected'
+  ) {
     throw firstCheckResult.reason
   }
 
-  return rows
+  const rowMap = new Map<string, UnifiedScanInboxItem>()
+  rows.forEach((row) => rowMap.set(row.id, row))
+  return Array.from(rowMap.values())
 }
 
 export function sendoutFirstCheckDevice(data: FirstCheckScanRequest) {

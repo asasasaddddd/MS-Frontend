@@ -81,6 +81,9 @@ export interface PeriodicTaskVO {
   labelRecordId?: EntityId
   exceptionFlowType?: string
   exceptionFlowName?: string
+  relatedChangeOrderId?: EntityId
+  responsibleEngineerId?: string
+  responsibleEngineerName?: string
   taskStatus?: PeriodicTaskStatus
   taskStatusName?: string
   verificationMethod?: string
@@ -104,7 +107,6 @@ export interface PeriodicTaskVO {
   deviceStatusName?: string
   subjectCategory?: string
   measureManagerName?: string
-  responsibleEngineerName?: string
   verificationTime?: string
   newValidUntil?: string
 }

@@ -5,10 +5,9 @@ import { message } from 'ant-design-vue'
 import {
   listUnifiedScanInbox,
   scanActionName,
-  submitUnifiedScan,
-  type UnifiedScanAction,
-  type UnifiedScanInboxItem
+  submitUnifiedScan
 } from '@/api/scan'
+import type { UnifiedScanAction, UnifiedScanInboxItem } from '@/types/scan'
 import { roleNameMap } from '@/types/common'
 import { useSessionStore } from '@/stores/session'
 
@@ -19,7 +18,6 @@ const router = useRouter()
 const loading = ref(false)
 const submitting = ref(false)
 const rows = ref<UnifiedScanInboxItem[]>([])
-const recentScannedRows = ref<UnifiedScanInboxItem[]>([])
 const keywordCode = ref('')
 const keywordName = ref('')
 const nodeFilter = ref('all')
@@ -95,14 +93,7 @@ const roleConfig = computed(() => {
 })
 
 const actionSet = computed(() => new Set(roleConfig.value.actions.map(String)))
-const allRows = computed(() => {
-  const map = new Map<string, UnifiedScanInboxItem>()
-  rows.value.forEach((row) => map.set(row.id, row))
-  recentScannedRows.value.forEach((row) => map.set(row.id, row))
-  return Array.from(map.values())
-})
-
-const roleRows = computed(() => allRows.value.filter((row) => actionSet.value.has(String(row.scanAction))))
+const roleRows = computed(() => rows.value.filter((row) => actionSet.value.has(String(row.scanAction))))
 
 const filteredAllRows = computed(() => {
   const code = keywordCode.value.trim()
@@ -237,7 +228,7 @@ async function focusRouteTarget() {
 async function loadRows() {
   loading.value = true
   try {
-    rows.value = await listUnifiedScanInbox()
+    rows.value = await listUnifiedScanInbox(roleConfig.value.actions)
     await focusRouteTarget()
   } catch (error) {
     rows.value = []
@@ -265,13 +256,6 @@ async function submitScan() {
       scanCode: scanForm.scanCode,
       opinion: scanForm.opinion
     })
-    const scannedRow: UnifiedScanInboxItem = {
-      ...row,
-      scanned: true,
-      scanCode: scanForm.scanCode,
-      scanTime: new Date().toISOString()
-    }
-    recentScannedRows.value = [scannedRow, ...recentScannedRows.value.filter((item) => item.id !== scannedRow.id)].slice(0, 50)
     message.success(`${scanActionName(row.scanAction)}扫码成功`)
     scanOpen.value = false
     await router.replace({ path: route.path })

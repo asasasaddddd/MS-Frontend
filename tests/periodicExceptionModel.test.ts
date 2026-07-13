@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
 
 import {
+  buildPeriodicExceptionDisposeRequest,
   buildPeriodicExceptionChangeRequest,
+  canDisposePeriodicException,
   canSubmitPeriodicException,
   periodicExceptionSubmitNodeCodes,
   periodicExceptionHandlingType
@@ -33,6 +35,33 @@ assert.deepEqual(periodicExceptionSubmitNodeCodes, ['plan_issue', 'plan_confirm'
 assert.equal(canSubmitPeriodicException({ currentNode: 'plan_confirm' }), true)
 assert.equal(canSubmitPeriodicException({ currentNode: 'exception_disposal' }), false)
 assert.equal(canSubmitPeriodicException({ currentNode: 'exception_disposal', taskStatus: 'exception' }), false)
+assert.equal(
+  canDisposePeriodicException({
+    currentNode: 'exception_disposal',
+    taskStatus: 'exception',
+    relatedChangeOrderId: '9001'
+  }),
+  true
+)
+assert.equal(
+  canDisposePeriodicException({ currentNode: 'exception_disposal', taskStatus: 'exception' }),
+  false
+)
+assert.deepEqual(
+  buildPeriodicExceptionDisposeRequest({
+    id: '2001',
+    currentNode: 'exception_disposal',
+    taskStatus: 'exception',
+    exceptionFlowType: 'cycle',
+    relatedChangeOrderId: '9001'
+  }),
+  {
+    taskId: '2001',
+    handlingType: 'change',
+    relatedChangeOrderId: '9001',
+    opinion: '状态变更审批完成，关闭周检异常任务'
+  }
+)
 
 const seal = buildPeriodicExceptionChangeRequest(task, applicant, {
   actionType: 'seal',

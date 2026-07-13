@@ -1,5 +1,5 @@
 import type { ChangeSubmitRequest, ChangeType } from '../../types/change'
-import type { EntityId, PeriodicTaskVO } from '../../types/periodic'
+import type { EntityId, PeriodicExceptionDisposeRequest, PeriodicTaskVO } from '../../types/periodic'
 
 export type PeriodicExceptionAction = 'seal' | 'defer' | 'scrap' | 'category' | 'cycle'
 export type PeriodicExceptionHandlingType = 'seal' | 'defer' | 'scrap' | 'change'
@@ -15,6 +15,47 @@ export function canSubmitPeriodicException(task: Pick<PeriodicTaskVO, 'currentNo
     periodicExceptionSubmitNodeCodes.includes(node as (typeof periodicExceptionSubmitNodeCodes)[number]) &&
     !terminalTaskStatuses.includes(status)
   )
+}
+
+type PeriodicExceptionDisposeTask = Pick<
+  PeriodicTaskVO,
+  'id' | 'currentNode' | 'taskStatus' | 'exceptionFlowType' | 'relatedChangeOrderId'
+>
+
+export function canDisposePeriodicException(task: PeriodicExceptionDisposeTask) {
+  return (
+    task.currentNode === 'exception_disposal' &&
+    task.taskStatus === 'exception' &&
+    Boolean(task.relatedChangeOrderId)
+  )
+}
+
+export function buildPeriodicExceptionDisposeRequest(
+  task: PeriodicExceptionDisposeTask
+): PeriodicExceptionDisposeRequest {
+  if (task.currentNode !== 'exception_disposal') {
+    throw new Error('周检任务尚未进入异常处置节点')
+  }
+  if (task.taskStatus !== 'exception') {
+    throw new Error('周检异常任务状态不允许完成处置')
+  }
+  if (!task.relatedChangeOrderId) {
+    throw new Error('周检异常任务缺少已完成的状态变更单')
+  }
+
+  const exceptionFlowType = String(task.exceptionFlowType || '')
+  const handlingType: PeriodicExceptionDisposeRequest['handlingType'] =
+    exceptionFlowType === 'category' || exceptionFlowType === 'cycle' ? 'change' : exceptionFlowType
+  if (!['seal', 'defer', 'scrap', 'change'].includes(handlingType)) {
+    throw new Error('周检异常处置类型无效')
+  }
+
+  return {
+    taskId: task.id,
+    handlingType,
+    relatedChangeOrderId: task.relatedChangeOrderId,
+    opinion: '状态变更审批完成，关闭周检异常任务'
+  }
 }
 
 export interface PeriodicExceptionActionMeta {

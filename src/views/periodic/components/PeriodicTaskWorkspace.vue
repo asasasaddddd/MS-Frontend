@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import {
   confirmerConfirmPeriodic,
+  exceptionDisposePeriodic,
   generatePeriodicTestPlan,
   getPeriodicPlan,
   listPeriodicMyHistory,
@@ -44,7 +45,12 @@ import PeriodicSecondJudgeDialog from './PeriodicSecondJudgeDialog.vue'
 import PeriodicSupplierFillDialog from './PeriodicSupplierFillDialog.vue'
 import PeriodicTaskTable from './PeriodicTaskTable.vue'
 import PeriodicVerifyDialog from './PeriodicVerifyDialog.vue'
-import type { PeriodicExceptionAction } from '../periodicExceptionModel'
+import {
+  buildPeriodicExceptionDisposeRequest,
+  canDisposePeriodicException,
+  canSubmitPeriodicException,
+  type PeriodicExceptionAction
+} from '../periodicExceptionModel'
 import type { PeriodicTableRole } from '../periodicDisplayModel'
 
 type ActiveTab = 'todo' | 'history'
@@ -182,15 +188,6 @@ const todoCount = computed(() =>
 )
 
 const canBatchException = computed(() => props.role === 'admin' && activeTab.value === 'todo')
-const periodicExceptionSubmitNodeCodes = ['plan_issue', 'plan_confirm']
-const terminalExceptionTaskStatuses = ['exception', 'completed', 'rejected', 'cancelled']
-
-function canSubmitPeriodicException(task: Pick<PeriodicTaskVO, 'currentNode' | 'taskStatus'>) {
-  const node = String(task.currentNode || '')
-  const status = String(task.taskStatus || '')
-  return periodicExceptionSubmitNodeCodes.includes(node) && !terminalExceptionTaskStatuses.includes(status)
-}
-
 const exceptionCandidates = computed(() => selectedTasks.value.filter(canSubmitPeriodicException))
 const normalCandidates = computed(() =>
   selectedTasks.value.filter(
@@ -260,6 +257,32 @@ function openScan(action: string, task: PeriodicTaskVO) {
   })
 }
 
+function confirmExceptionDispose(task: PeriodicTaskVO) {
+  if (!canDisposePeriodicException(task)) {
+    message.warning('状态变更流程尚未完成，暂不能关闭周检异常任务')
+    return
+  }
+  Modal.confirm({
+    title: `完成${task.exceptionFlowName || '异常'}处置`,
+    content: `关联状态变更单 ${task.relatedChangeOrderId} 已审批完成后，方可关闭本次周检任务。`,
+    okText: '确认完成',
+    cancelText: '取消',
+    async onOk() {
+      submitting.value = true
+      try {
+        await exceptionDisposePeriodic(buildPeriodicExceptionDisposeRequest(task))
+        message.success('周检异常任务已完成')
+        await loadData()
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '周检异常处置失败')
+        throw error
+      } finally {
+        submitting.value = false
+      }
+    }
+  })
+}
+
 function openProcess(task: PeriodicTaskVO) {
   if (activeTab.value === 'history') {
     openDetail(task)
@@ -277,7 +300,12 @@ function openProcess(task: PeriodicTaskVO) {
     verifyOpen.value = true
     return
   }
-  if (node === 'send_out') return openScan('periodic-external-send-out', task)
+  if (node === 'send_out') {
+    const action = task.physicalStatus === 'wait_sendout_return_receive'
+      ? 'periodic-send-out-return'
+      : 'periodic-external-send-out'
+    return openScan(action, task)
+  }
   if (node === 'send_out_return') return openScan('periodic-send-out-return', task)
   if (node === 'supplier_fill_info') {
     supplierFillOpen.value = true
@@ -297,6 +325,10 @@ function openProcess(task: PeriodicTaskVO) {
   }
   if (node === 'confirmer_confirm') {
     confirmOpen.value = true
+    return
+  }
+  if (node === 'exception_disposal') {
+    confirmExceptionDispose(task)
     return
   }
   openDetail(task)

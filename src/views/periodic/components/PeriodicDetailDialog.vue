@@ -95,6 +95,7 @@ const attachmentTask = computed(() => props.task as TaskWithAttachment | null)
           <a-descriptions-item label="检定时间">{{ row.verificationTime }}</a-descriptions-item>
           <a-descriptions-item label="新有效期">{{ row.newValidUntil }}</a-descriptions-item>
           <a-descriptions-item label="责任工程师">{{ row.responsibleEngineerName }}</a-descriptions-item>
+          <a-descriptions-item label="关联状态变更单">{{ displayValue(task.relatedChangeOrderId) }}</a-descriptions-item>
           <a-descriptions-item label="要求完成时间">{{ row.requiredFinishTime }}</a-descriptions-item>
           <a-descriptions-item label="检定附件">
             <AttachmentListButton
