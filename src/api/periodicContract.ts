@@ -15,7 +15,7 @@ const periodicEndpoints = {
   myTasks: '/periodic/my-tasks',
   myHistory: '/periodic/my-history',
   taskDetail: '/periodic/tasks',
-  managerReceive: '/periodic/manager-receive',
+  normalSubmit: '/periodic/normal-submit',
   verifierReceive: '/periodic/verifier-receive',
   externalSendOut: '/periodic/external-send-out',
   sendOutReturn: '/periodic/send-out-return',
@@ -43,7 +43,6 @@ export function periodicNodeName(value?: string) {
   const map: Record<string, string> = {
     plan_issue: '计划下发',
     plan_confirm: '异常分流',
-    manager_receive: '管理员接收核对',
     transfer_verifier: '转检定员',
     verifier_receive: '检定员扫码接收',
     self_verify: '自检检定',
@@ -111,14 +110,6 @@ export function buildPeriodicScanRequest(input: PeriodicScanRequest): PeriodicSc
     scanCode,
     scanContent: input.scanContent || scanCode,
     scanLocation: input.scanLocation || '现场扫码'
-  }
-}
-
-export function buildPeriodicManagerScanRequest(input: PeriodicScanRequest) {
-  return {
-    taskId: input.taskId,
-    scanCode: input.scanCode.trim(),
-    opinion: input.opinion
   }
 }
 

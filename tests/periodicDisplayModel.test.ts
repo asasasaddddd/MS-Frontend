@@ -57,15 +57,19 @@ const summary = buildPeriodicPlanSummary(plan, [
   task,
   { ...task, id: '2', currentNode: 'responsible_second_judge', taskStatus: 'wait_confirm' },
   { ...task, id: '3', currentNode: 'external_third_judge', taskStatus: 'wait_confirm' },
-  { ...task, id: '4', currentNode: 'completed', taskStatus: 'completed' },
-  { ...task, id: '5', currentNode: 'exception_disposal', taskStatus: 'exception' }
+  { ...task, id: '4', currentNode: 'completed', taskStatus: 'completed', labelStatus: 'printed', physicalStatus: 'taken_back' },
+  { ...task, id: '5', currentNode: 'exception_disposal', taskStatus: 'exception', exceptionFlowName: '封存' },
+  { ...task, id: '6', currentNode: 'completed', taskStatus: 'completed', labelStatus: 'pending' }
 ])
 
 assert.equal(summary.planNo, '202607')
 assert.equal(summary.deviceCount, 4)
 assert.equal(summary.statusChangeCount, 1)
+assert.equal(summary.statusChangeBreakdown, '封存 1')
 assert.equal(summary.metrics.find((item) => item.key === 'externalReturned')?.value, 2)
-assert.equal(summary.metrics.find((item) => item.key === 'completed')?.value, 1)
+assert.equal(summary.metrics.find((item) => item.key === 'labelPending')?.value, 1)
+assert.equal(summary.metrics.find((item) => item.key === 'labelPrinted')?.value, 1)
+assert.equal(summary.metrics.find((item) => item.key === 'takenBack')?.value, 1)
 
 assert.deepEqual(
   getPeriodicTableColumns('admin').map((column) => column.title),

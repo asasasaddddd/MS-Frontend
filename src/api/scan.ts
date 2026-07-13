@@ -2,7 +2,6 @@ import { request } from '@/api/request'
 import {
   externalSendOutPeriodic,
   listPeriodicMyTasks,
-  managerReceivePeriodic,
   sendOutReturnPeriodic,
   verifierReceivePeriodic
 } from '@/api/periodic'
@@ -12,7 +11,6 @@ import type { EntityId, PeriodicTaskVO } from '@/types/periodic'
 export type FirstCheckScanAction = 'receive' | 'sendout' | 'sendout-return' | 'take-back'
 
 export type PeriodicScanAction =
-  | 'periodic-manager-receive'
   | 'periodic-verifier-receive'
   | 'periodic-external-send-out'
   | 'periodic-send-out-return'
@@ -94,7 +92,6 @@ export interface ScanRecord {
 }
 
 const periodicScanActionByNode: Record<string, PeriodicScanAction> = {
-  manager_receive: 'periodic-manager-receive',
   transfer_verifier: 'periodic-verifier-receive',
   send_out_return: 'periodic-send-out-return'
 }
@@ -128,7 +125,6 @@ export function scanActionName(value?: string) {
     sendout: '外委送出',
     'sendout-return': '外委送回',
     'take-back': '取回',
-    'periodic-manager-receive': '管理员接收核对',
     'periodic-verifier-receive': '检定员扫码接收',
     'periodic-external-send-out': '外扩人员接收',
     'periodic-send-out-return': '外委送回'
@@ -277,7 +273,6 @@ export function submitUnifiedScan(row: UnifiedScanInboxItem, payload: UnifiedSca
       scanCode: payload.scanCode,
       opinion: payload.opinion
     }
-    if (row.scanAction === 'periodic-manager-receive') return managerReceivePeriodic(requestPayload)
     if (row.scanAction === 'periodic-verifier-receive') return verifierReceivePeriodic(requestPayload)
     if (row.scanAction === 'periodic-external-send-out') return externalSendOutPeriodic(requestPayload)
     if (row.scanAction === 'periodic-send-out-return') return sendOutReturnPeriodic(requestPayload)

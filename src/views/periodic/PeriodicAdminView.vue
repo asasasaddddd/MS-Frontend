@@ -4,8 +4,8 @@ import PeriodicTaskWorkspace from './components/PeriodicTaskWorkspace.vue'
 
 <template>
   <PeriodicTaskWorkspace
-    title="周检异常分流"
+    title="周检待办明细"
     role="admin"
-    :node-codes="['plan_issue', 'plan_confirm', 'manager_receive']"
+    :node-codes="['plan_issue', 'plan_confirm', 'manager_forward_confirm', 'exception_disposal']"
   />
 </template>

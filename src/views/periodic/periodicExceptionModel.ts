@@ -4,7 +4,7 @@ import type { EntityId, PeriodicTaskVO } from '../../types/periodic'
 export type PeriodicExceptionAction = 'seal' | 'defer' | 'scrap' | 'category' | 'cycle'
 export type PeriodicExceptionHandlingType = 'seal' | 'defer' | 'scrap' | 'change'
 
-export const periodicExceptionSubmitNodeCodes = ['plan_issue', 'plan_confirm', 'manager_receive'] as const
+export const periodicExceptionSubmitNodeCodes = ['plan_issue', 'plan_confirm'] as const
 
 const terminalTaskStatuses = ['exception', 'completed', 'rejected', 'cancelled']
 

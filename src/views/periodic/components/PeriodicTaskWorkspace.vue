@@ -11,15 +11,18 @@ import {
   managerForwardConfirmPeriodic,
   responsibleSecondJudgePeriodic,
   secondJudgePeriodic,
+  submitPeriodicNormalTasks,
   submitPeriodicExceptionChange,
   supplierFillInfoPeriodic,
   verificationRecordPeriodic,
   verifierFillInfoPeriodic
 } from '../../../api/periodic'
+import { listUsersByDeptAndRole, type SysUserVO } from '../../../api/system'
 import type {
   EntityId,
   PeriodicConfirmerConfirmRequest,
   PeriodicManagerForwardConfirmRequest,
+  PeriodicNormalSubmitRequest,
   PeriodicPlanVO,
   PeriodicResponsibleSecondJudgeRequest,
   PeriodicSecondJudgeRequest,
@@ -73,6 +76,9 @@ const activeTask = ref<PeriodicTaskVO | null>(null)
 const selectedRowKeys = ref<EntityId[]>([])
 const selectedTasks = ref<PeriodicTaskVO[]>([])
 const exceptionActionType = ref<PeriodicExceptionAction>('seal')
+const confirmers = ref<SysUserVO[]>([])
+const confirmerId = ref<string>()
+const loadingConfirmers = ref(false)
 
 const detailOpen = ref(false)
 const verifyOpen = ref(false)
@@ -108,6 +114,15 @@ const exceptionActionOptions = [
   { label: '检定周期调整', value: 'cycle' }
 ]
 
+const confirmerOptions = computed(() =>
+  confirmers.value.map((user) => ({
+    label: `${user.employeeName || user.employeeId} · ${user.employeeId}`,
+    value: user.employeeId
+  }))
+)
+
+const selectedConfirmer = computed(() => confirmers.value.find((user) => user.employeeId === confirmerId.value))
+
 const routePlanId = computed(() => {
   const value = route.query.planId
   if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
@@ -122,7 +137,12 @@ function filterByRoutePlan(tasks: PeriodicTaskVO[]) {
 
 const scopedCurrentTasks = computed(() => filterByRoutePlan(currentTasks.value))
 const scopedHistoryTasks = computed(() => filterByRoutePlan(historyTasks.value))
-const scopedSummaryTasks = computed(() => (scopedCurrentTasks.value.length > 0 ? scopedCurrentTasks.value : scopedHistoryTasks.value))
+const scopedSummaryTasks = computed(() => {
+  const tasksById = new Map<string, PeriodicTaskVO>()
+  scopedHistoryTasks.value.forEach((task) => tasksById.set(String(task.id), task))
+  scopedCurrentTasks.value.forEach((task) => tasksById.set(String(task.id), task))
+  return Array.from(tasksById.values())
+})
 const sourceTasks = computed(() => (activeTab.value === 'todo' ? scopedCurrentTasks.value : scopedHistoryTasks.value))
 const visibleTasks = computed(() =>
   sourceTasks.value.filter((task) => {
@@ -150,7 +170,7 @@ const todoCount = computed(() =>
 )
 
 const canBatchException = computed(() => props.role === 'admin' && activeTab.value === 'todo')
-const periodicExceptionSubmitNodeCodes = ['plan_issue', 'plan_confirm', 'manager_receive']
+const periodicExceptionSubmitNodeCodes = ['plan_issue', 'plan_confirm']
 const terminalExceptionTaskStatuses = ['exception', 'completed', 'rejected', 'cancelled']
 
 function canSubmitPeriodicException(task: Pick<PeriodicTaskVO, 'currentNode' | 'taskStatus'>) {
@@ -160,6 +180,22 @@ function canSubmitPeriodicException(task: Pick<PeriodicTaskVO, 'currentNode' | '
 }
 
 const exceptionCandidates = computed(() => selectedTasks.value.filter(canSubmitPeriodicException))
+const normalCandidates = computed(() =>
+  selectedTasks.value.filter(
+    (task) => ['plan_issue', 'plan_confirm'].includes(String(task.currentNode || '')) && task.taskStatus === 'pending'
+  )
+)
+const forwardCandidates = computed(() =>
+  selectedTasks.value.filter(
+    (task) => task.currentNode === 'manager_forward_confirm' && task.taskStatus === 'wait_confirm'
+  )
+)
+const canSubmitForwardSelection = computed(
+  () =>
+    forwardCandidates.value.length > 0 &&
+    forwardCandidates.value.length === selectedTasks.value.length &&
+    Boolean(confirmerId.value)
+)
 
 function resetFilter() {
   statusFilter.value = 'all'
@@ -188,7 +224,7 @@ function openException(tasks?: PeriodicTaskVO[]) {
     return
   }
   if (!tasks && selectedTasks.value.length !== exceptionCandidates.value.length) {
-    message.warning('只能选择计划下发、异常分流或管理员接收节点的设备')
+    message.warning('只能选择计划下发或异常分流节点的设备')
     return
   }
   if (!samePlanId(nextTasks)) {
@@ -220,7 +256,6 @@ function openProcess(task: PeriodicTaskVO) {
 
   const node = String(task.currentNode || '')
   activeTask.value = task
-  if (node === 'manager_receive') return openScan('periodic-manager-receive', task)
   if (node === 'manager_forward_confirm') {
     forwardOpen.value = true
     return
@@ -268,6 +303,32 @@ async function loadPlanFromTasks(tasks: PeriodicTaskVO[]) {
   }
 }
 
+async function loadConfirmers(tasks: PeriodicTaskVO[]) {
+  if (props.role !== 'admin') {
+    confirmers.value = []
+    confirmerId.value = undefined
+    return
+  }
+  const deptIds = Array.from(new Set(tasks.map((task) => task.deptId).filter((value): value is string => Boolean(value))))
+  if (deptIds.length !== 1) {
+    confirmers.value = []
+    confirmerId.value = undefined
+    return
+  }
+  loadingConfirmers.value = true
+  try {
+    confirmers.value = await listUsersByDeptAndRole(deptIds[0], 'CONFIRMER')
+    if (!confirmers.value.some((user) => user.employeeId === confirmerId.value)) {
+      confirmerId.value = undefined
+    }
+  } catch {
+    confirmers.value = []
+    confirmerId.value = undefined
+  } finally {
+    loadingConfirmers.value = false
+  }
+}
+
 async function loadData() {
   loading.value = true
   selectedRowKeys.value = []
@@ -277,6 +338,7 @@ async function loadData() {
     currentTasks.value = todo
     historyTasks.value = history
     await loadPlanFromTasks([...todo, ...history])
+    await loadConfirmers(filterByRoutePlan([...todo, ...history]))
   } catch (error) {
     currentTasks.value = []
     historyTasks.value = []
@@ -284,6 +346,53 @@ async function loadData() {
     message.error(error instanceof Error ? error.message : '周检待办加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function submitForwardSelection() {
+  if (forwardCandidates.value.length === 0) {
+    message.warning('请选择报告待转办的周检设备')
+    return
+  }
+  if (forwardCandidates.value.length !== selectedTasks.value.length) {
+    message.warning('转发确认员时只能选择报告待转办记录')
+    return
+  }
+  if (!samePlanId(forwardCandidates.value)) {
+    message.warning('一次只能转办同一张周检计划内的设备')
+    return
+  }
+  const deptIds = new Set(forwardCandidates.value.map((task) => String(task.deptId || '')))
+  if (deptIds.size !== 1) {
+    message.warning('一次只能转办同一使用部门的设备')
+    return
+  }
+  if (!confirmerId.value) {
+    message.warning('请选择确认员')
+    return
+  }
+
+  submitting.value = true
+  let completed = 0
+  try {
+    for (const task of forwardCandidates.value) {
+      await managerForwardConfirmPeriodic({
+        taskId: task.id,
+        confirmerId: confirmerId.value,
+        confirmerName: selectedConfirmer.value?.employeeName || confirmerId.value,
+        opinion: '管理员转办确认员判定'
+      })
+      completed += 1
+    }
+    message.success(`已转办 ${completed} 台设备给确认员`)
+  } catch (error) {
+    const prefix = completed > 0 ? `已成功转办 ${completed} 台，` : ''
+    message.error(`${prefix}${error instanceof Error ? error.message : '转办确认员失败'}`)
+  } finally {
+    selectedRowKeys.value = []
+    selectedTasks.value = []
+    await loadData()
+    submitting.value = false
   }
 }
 
@@ -319,6 +428,35 @@ async function runSubmit(action: () => Promise<void>, successText: string, close
   } finally {
     submitting.value = false
   }
+}
+
+async function submitNormalSelection() {
+  if (normalCandidates.value.length === 0) {
+    message.warning('请选择需要进入正常检定的周检设备')
+    return
+  }
+  if (selectedTasks.value.length !== normalCandidates.value.length) {
+    message.warning('只能选择待分类的周检设备进入正常检定')
+    return
+  }
+  if (!samePlanId(normalCandidates.value)) {
+    message.warning('一次只能提交同一周检计划下的设备')
+    return
+  }
+  const planId = normalCandidates.value[0]?.planId
+  if (!planId) {
+    message.warning('缺少周检计划ID')
+    return
+  }
+  const payload: PeriodicNormalSubmitRequest = {
+    planId,
+    taskIds: normalCandidates.value.map((task) => task.id),
+    opinion: '管理员分类为正常设备，进入检定路线'
+  }
+  await runSubmit(() => submitPeriodicNormalTasks(payload), '已进入正常检定路线', () => {
+    selectedRowKeys.value = []
+    selectedTasks.value = []
+  })
 }
 
 async function submitVerify(payload: PeriodicVerificationRecordRequest) {
@@ -421,7 +559,7 @@ watch(routePlanId, () => {
       </template>
 
       <div class="task-filter">
-        <a-tabs v-model:activeKey="activeTab" class="task-tabs">
+        <a-tabs v-if="role !== 'admin'" v-model:activeKey="activeTab" class="task-tabs">
           <a-tab-pane key="todo" tab="当前待办" />
           <a-tab-pane key="history" tab="参与记录" />
         </a-tabs>
@@ -438,6 +576,36 @@ watch(routePlanId, () => {
           @confirm="generateTestTask"
         >
           <a-button :loading="generatingTestPlan">生成周检待办</a-button>
+        </a-popconfirm>
+        <a-select
+          v-if="canBatchException"
+          v-model:value="confirmerId"
+          class="confirmer-select"
+          :loading="loadingConfirmers"
+          :options="confirmerOptions"
+          placeholder="转发确认员"
+          show-search
+          option-filter-prop="label"
+        />
+        <a-popconfirm
+          v-if="canBatchException"
+          title="确认将选中的报告转办给该确认员吗？"
+          ok-text="确认"
+          cancel-text="取消"
+          @confirm="submitForwardSelection"
+        >
+          <a-button type="primary" :loading="submitting" :disabled="!canSubmitForwardSelection">确认</a-button>
+        </a-popconfirm>
+        <a-popconfirm
+          v-if="canBatchException"
+          title="确认将选中的正常设备提交到检定员扫码接收吗？"
+          ok-text="确认"
+          cancel-text="取消"
+          @confirm="submitNormalSelection"
+        >
+          <a-button type="primary" :loading="submitting" :disabled="normalCandidates.length === 0">
+            进入正常检定
+          </a-button>
         </a-popconfirm>
         <a-select
           v-if="canBatchException"
@@ -553,6 +721,7 @@ watch(routePlanId, () => {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
   padding: 12px 14px;
   border-bottom: 1px solid #e5eaf1;
   background: #fbfcfe;
@@ -576,6 +745,10 @@ watch(routePlanId, () => {
 
 .exception-action-select {
   width: 150px;
+}
+
+.confirmer-select {
+  width: 180px;
 }
 
 .filter-spacer {
@@ -605,7 +778,9 @@ watch(routePlanId, () => {
 
   .task-tabs,
   .status-select,
-  .keyword-input {
+  .keyword-input,
+  .confirmer-select,
+  .exception-action-select {
     width: 100%;
   }
 }

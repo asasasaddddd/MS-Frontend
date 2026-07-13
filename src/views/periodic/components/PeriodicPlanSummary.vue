@@ -36,7 +36,7 @@ const summary = computed(() => buildPeriodicPlanSummary(props.plan, props.tasks)
         <div class="plan-info-item wide">
           <span>状态变更</span>
           <strong>{{ summary.statusChangeCount }}</strong>
-          <small>封存 / 非正常报废 / 正常报废 / 缓检 / 维修 / 管理类别调整 / 检定周期调整</small>
+          <small>{{ summary.statusChangeBreakdown || '暂无状态变更' }}</small>
         </div>
         <div class="plan-info-item">
           <span>未送检</span>

@@ -29,14 +29,10 @@ const applicant = {
   deptName: '重一分厂'
 }
 
-assert.deepEqual(periodicExceptionSubmitNodeCodes, ['plan_issue', 'plan_confirm', 'manager_receive'])
+assert.deepEqual(periodicExceptionSubmitNodeCodes, ['plan_issue', 'plan_confirm'])
 assert.equal(canSubmitPeriodicException({ currentNode: 'plan_confirm' }), true)
-assert.equal(canSubmitPeriodicException({ currentNode: 'manager_receive' }), true)
 assert.equal(canSubmitPeriodicException({ currentNode: 'exception_disposal' }), false)
 assert.equal(canSubmitPeriodicException({ currentNode: 'exception_disposal', taskStatus: 'exception' }), false)
-assert.equal(canSubmitPeriodicException({ currentNode: 'manager_receive', taskStatus: 'completed' }), false)
-assert.equal(canSubmitPeriodicException({ currentNode: 'manager_receive', taskStatus: 'rejected' }), false)
-assert.equal(canSubmitPeriodicException({ currentNode: 'manager_receive', taskStatus: 'cancelled' }), false)
 
 const seal = buildPeriodicExceptionChangeRequest(task, applicant, {
   actionType: 'seal',

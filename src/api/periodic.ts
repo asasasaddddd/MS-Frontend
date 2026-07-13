@@ -1,6 +1,5 @@
 import { request } from '@/api/request'
 import {
-  buildPeriodicManagerScanRequest,
   buildPeriodicScanRequest,
   buildPeriodicSecondJudgeRequest,
   buildPeriodicVerificationRecordRequest,
@@ -13,6 +12,7 @@ import type {
   PeriodicConfirmerConfirmRequest,
   PeriodicExceptionDisposeRequest,
   PeriodicManagerForwardConfirmRequest,
+  PeriodicNormalSubmitRequest,
   PeriodicPlanVO,
   PeriodicResponsibleSecondJudgeRequest,
   PeriodicScanRequest,
@@ -92,11 +92,11 @@ export function getPeriodicTask(taskId: EntityId) {
   })
 }
 
-export function managerReceivePeriodic(data: PeriodicScanRequest) {
+export function submitPeriodicNormalTasks(data: PeriodicNormalSubmitRequest) {
   return request<void>({
-    url: periodicEndpoint('managerReceive'),
+    url: periodicEndpoint('normalSubmit'),
     method: 'POST',
-    data: buildPeriodicManagerScanRequest(data)
+    data
   })
 }
 

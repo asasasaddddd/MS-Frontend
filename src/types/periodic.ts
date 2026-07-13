@@ -3,7 +3,6 @@ export type EntityId = string | number
 export type PeriodicNodeCode =
   | 'plan_issue'
   | 'plan_confirm'
-  | 'manager_receive'
   | 'transfer_verifier'
   | 'verifier_receive'
   | 'self_verify'
@@ -166,6 +165,12 @@ export interface PeriodicScanRequest {
   scanCode: string
   scanContent?: string
   scanLocation?: string
+  opinion?: string
+}
+
+export interface PeriodicNormalSubmitRequest {
+  planId: EntityId
+  taskIds: EntityId[]
   opinion?: string
 }
 

@@ -11,6 +11,7 @@ import {
 
 assert.equal(periodicEndpoint('myTasks'), '/periodic/my-tasks')
 assert.equal(periodicEndpoint('generateTestPlan'), '/periodic/plans/generate-test-one')
+assert.equal(periodicEndpoint('normalSubmit'), '/periodic/normal-submit')
 assert.equal(periodicEndpoint('supplierFillInfo'), '/periodic/supplier-fill-info')
 assert.equal(periodicEndpoint('responsibleSecondJudge'), '/periodic/responsible-second-judge')
 assert.equal(periodicEndpoint('secondJudge'), '/periodic/second-judge')
@@ -61,3 +62,26 @@ const periodicWorkspaceSource = readFileSync(
 )
 assert.match(periodicWorkspaceSource, /数智部王熙然名下/)
 assert.match(periodicWorkspaceSource, /派给王熙然自检/)
+assert.match(periodicWorkspaceSource, /进入正常检定/)
+assert.match(periodicWorkspaceSource, /提交异常分支/)
+assert.match(periodicWorkspaceSource, /转发确认员/)
+assert.match(periodicWorkspaceSource, /submitForwardSelection/)
+
+const periodicPlanSummarySource = readFileSync(
+  new URL('../src/views/periodic/components/PeriodicPlanSummary.vue', import.meta.url),
+  'utf8'
+)
+assert.match(periodicPlanSummarySource, /计划基本信息/)
+
+const periodicAdminSource = readFileSync(
+  new URL('../src/views/periodic/PeriodicAdminView.vue', import.meta.url),
+  'utf8'
+)
+assert.match(periodicAdminSource, /周检待办明细/)
+assert.doesNotMatch(periodicAdminSource, /manager_receive/)
+
+const routerSource = readFileSync(new URL('../src/router/index.ts', import.meta.url), 'utf8')
+assert.match(routerSource, /周检计量管理员详情单/)
+
+const scanSource = readFileSync(new URL('../src/api/scan.ts', import.meta.url), 'utf8')
+assert.doesNotMatch(scanSource, /periodic-manager-receive/)

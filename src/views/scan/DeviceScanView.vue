@@ -52,7 +52,7 @@ const roleConfig = computed(() => {
 
   if (roleCode.value === 'MEASURE_ADMIN') {
     return {
-      actions: ['take-back', 'periodic-manager-receive'],
+      actions: ['take-back'],
       codeLabel: '计量编号',
       placeholder: '请扫描或输入计量编号',
       opinion: '扫码处理完成'
