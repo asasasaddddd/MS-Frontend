@@ -2,6 +2,15 @@ export type LabelRowKey = string
 
 type LabelId = string | number
 
+const verificationMethodLabels: Record<string, string> = {
+  self: '自检',
+  send_out: '外委'
+}
+
+export function labelVerificationMethodName(value?: string) {
+  return value ? verificationMethodLabels[value] || '-' : '-'
+}
+
 export function labelRowKey(value: LabelId): LabelRowKey {
   return String(value)
 }

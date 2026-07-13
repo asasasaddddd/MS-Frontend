@@ -3,12 +3,14 @@ import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import QRCode from 'qrcode'
-import { listPrintedLabels, listUnprintedLabels, printLabelRecord, type LabelPrintRecord } from '@/api/label'
+import { listPrintedLabels, listUnprintedLabels, printLabelRecord } from '@/api/label'
 import {
   getSelectedLabelRows,
+  labelVerificationMethodName,
   labelRowKey,
   type LabelRowKey
 } from '@/views/label/labelPrintModel'
+import type { LabelPrintRecord } from '@/types/label'
 
 const props = defineProps<{
   mode: 'pending' | 'printed'
@@ -58,7 +60,7 @@ const filteredRows = computed(() => {
   return rows.value.filter((row) => {
     const matchesCode = !keyword || (row.deviceCode || '').includes(keyword)
     const matchesSource = filters.sourceType === 'all' || row.sourceType === filters.sourceType
-    const matchesType = filters.verificationType === 'all' || verificationMethodName(row) === filters.verificationType
+    const matchesType = filters.verificationType === 'all' || labelVerificationMethodName(row.verificationMethod) === filters.verificationType
     const matchesCommon = filters.isCommon === 'all' || isCommonName(row.isCommon) === filters.isCommon
     return matchesCode && matchesSource && matchesType && matchesCommon
   })
@@ -101,14 +103,6 @@ function labelTypeName(value?: string) {
   const normalized = String(value || '').toUpperCase()
   if (normalized === 'SEALED') return '封存标签'
   return '合格标签'
-}
-
-function verificationMethodName(row: LabelPrintRecord) {
-  const raw = row.verificationMethodName || row.verificationTypeName || row.verificationMethod || ''
-  const normalized = raw.toLowerCase()
-  if (raw === '自检' || normalized === 'self' || normalized === 'self_check') return '自检'
-  if (raw === '外委' || normalized === 'send_out' || normalized === 'external_commission') return '外委'
-  return '-'
 }
 
 function isCommonName(value?: number) {
@@ -320,7 +314,7 @@ onMounted(loadRows)
           <template v-else-if="column.key === 'deviceName'">{{ display(record.deviceName) }}</template>
           <template v-else-if="column.key === 'validUntil'">{{ display(record.validUntil) }}</template>
           <template v-else-if="column.key === 'verificationDate'">{{ display(record.verificationDate) }}</template>
-          <template v-else-if="column.key === 'verificationType'">{{ verificationMethodName(record) }}</template>
+          <template v-else-if="column.key === 'verificationType'">{{ labelVerificationMethodName(record.verificationMethod) }}</template>
           <template v-else-if="column.key === 'manageCategory'">{{ display(record.manageCategory) }}</template>
           <template v-else-if="column.key === 'signUserName'">{{ signatureDisplay(record) }}</template>
           <template v-else-if="column.key === 'printCount'">{{ record.printCount || 0 }}</template>
@@ -345,7 +339,7 @@ onMounted(loadRows)
             <span>设备名称：{{ display(row.deviceName) }}</span>
             <span>来源流程：{{ sourceTypeName(row.sourceType) }}</span>
             <span>标签类型：{{ labelTypeName(row.labelType) }}</span>
-            <span>检定方式：{{ verificationMethodName(row) }}</span>
+            <span>检定方式：{{ labelVerificationMethodName(row.verificationMethod) }}</span>
             <span>管理类别：{{ display(row.manageCategory) }}</span>
             <span>是否通用：{{ isCommonName(row.isCommon) }}</span>
             <span>有效期：{{ display(row.validUntil || row.sealDate) }}</span>

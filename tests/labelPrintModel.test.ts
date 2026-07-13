@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
+  labelVerificationMethodName,
   getSelectedLabelRecordIds,
   getSelectedLabelRows
 } from '../src/views/label/labelPrintModel.ts'
@@ -28,3 +30,18 @@ assert.deepEqual(getSelectedLabelRecordIds(rows, selectedKeys), [
   '2070143016618696711'
 ])
 assert.equal(typeof getSelectedLabelRecordIds(rows, selectedKeys)[0], 'string')
+
+assert.equal(labelVerificationMethodName('self'), '自检')
+assert.equal(labelVerificationMethodName('send_out'), '外委')
+assert.equal(labelVerificationMethodName(undefined), '-')
+
+const labelApiSource = readFileSync(new URL('../src/api/label.ts', import.meta.url), 'utf8')
+const labelViewSource = readFileSync(
+  new URL('../src/views/label/components/LabelListPanel.vue', import.meta.url),
+  'utf8'
+)
+
+assert.equal(labelApiSource.includes('verificationMethodName'), false)
+assert.equal(labelApiSource.includes('verificationTypeName'), false)
+assert.equal(labelViewSource.includes('row.verificationMethodName'), false)
+assert.equal(labelViewSource.includes('row.verificationTypeName'), false)

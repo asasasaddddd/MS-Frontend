@@ -1,32 +1,5 @@
 import { request } from '@/api/request'
-
-export interface LabelPrintRecord {
-  id: string | number
-  labelType?: string
-  deviceCode?: string
-  deviceId?: string | number
-  deviceName?: string
-  validUntil?: string
-  verificationDate?: string
-  verificationMethod?: string
-  verificationMethodName?: string
-  verificationTypeName?: string
-  manageCategory?: string
-  isCommon?: number
-  sealDate?: string
-  printUserId?: string
-  printUserName?: string
-  signUserId?: string
-  signUserName?: string
-  firstPrintTime?: string
-  lastPrintTime?: string
-  printCount?: number
-  sourceType?: string
-  sourceId?: string | number
-  qrCodeData?: string
-  createdAt?: string
-  updatedAt?: string
-}
+import type { LabelPrintRecord } from '@/types/label'
 
 export function listUnprintedLabels(sourceType?: string) {
   return request<LabelPrintRecord[]>({
