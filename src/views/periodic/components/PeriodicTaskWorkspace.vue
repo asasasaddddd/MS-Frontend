@@ -27,6 +27,7 @@ import type {
   PeriodicResponsibleSecondJudgeRequest,
   PeriodicSecondJudgeRequest,
   PeriodicSupplierFillInfoRequest,
+  PeriodicTestPlanScenario,
   PeriodicTaskVO,
   PeriodicVerificationRecordRequest,
   PeriodicVerifierFillInfoRequest
@@ -65,6 +66,7 @@ const router = useRouter()
 const loading = ref(false)
 const submitting = ref(false)
 const generatingTestPlan = ref(false)
+const testPlanScenario = ref<PeriodicTestPlanScenario>('self')
 const exceptionChangeSubmitting = ref(false)
 const activeTab = ref<ActiveTab>('todo')
 const statusFilter = ref<string>('all')
@@ -105,6 +107,16 @@ const statusOptions = [
   { label: '报告待转办', value: 'manager_forward_confirm' },
   { label: '报告待确认', value: 'confirmer_confirm' }
 ]
+
+const testPlanScenarioOptions: Array<{ label: string; value: PeriodicTestPlanScenario }> = [
+  { label: '自检', value: 'self' },
+  { label: '外委通用设备', value: 'external_common' },
+  { label: '外委否通用设备', value: 'external_non_common' }
+]
+
+const selectedTestPlanScenarioName = computed(
+  () => testPlanScenarioOptions.find((option) => option.value === testPlanScenario.value)?.label || '自检'
+)
 
 const exceptionActionOptions = [
   { label: '封存', value: 'seal' },
@@ -399,7 +411,7 @@ async function submitForwardSelection() {
 async function generateTestTask() {
   generatingTestPlan.value = true
   try {
-    const planId = await generatePeriodicTestPlan()
+    const planId = await generatePeriodicTestPlan(testPlanScenario.value)
     await router.replace({
       path: route.path,
       query: {
@@ -408,7 +420,7 @@ async function generateTestTask() {
       }
     })
     await loadData()
-    message.success(`已在数智部王熙然名下生成周检测试待办：${planId}，并派给王熙然自检`)
+    message.success(`已在数智部王熙然名下生成${selectedTestPlanScenarioName.value}周检测试待办：${planId}`)
   } catch (error) {
     message.error(error instanceof Error ? error.message : '周检测试待办生成失败')
   } finally {
@@ -568,9 +580,15 @@ watch(routePlanId, () => {
         <a-button type="primary">查询</a-button>
         <a-button @click="resetFilter">重置</a-button>
         <div class="filter-spacer"></div>
+        <a-select
+          v-if="role === 'admin' && activeTab === 'todo'"
+          v-model:value="testPlanScenario"
+          class="test-plan-scenario-select"
+          :options="testPlanScenarioOptions"
+        />
         <a-popconfirm
           v-if="role === 'admin' && activeTab === 'todo'"
-          title="将创建一台全新测试设备，归数智部王熙然管理并派给王熙然自检，确认生成吗？"
+          :title="`将创建一台${selectedTestPlanScenarioName}测试设备，归数智部王熙然管理，确认生成吗？`"
           ok-text="确认生成"
           cancel-text="取消"
           @confirm="generateTestTask"
@@ -747,6 +765,10 @@ watch(routePlanId, () => {
   width: 150px;
 }
 
+.test-plan-scenario-select {
+  width: 170px;
+}
+
 .confirmer-select {
   width: 180px;
 }
@@ -779,6 +801,7 @@ watch(routePlanId, () => {
   .task-tabs,
   .status-select,
   .keyword-input,
+  .test-plan-scenario-select,
   .confirmer-select,
   .exception-action-select {
     width: 100%;

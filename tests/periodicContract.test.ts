@@ -61,11 +61,22 @@ const periodicWorkspaceSource = readFileSync(
   'utf8'
 )
 assert.match(periodicWorkspaceSource, /数智部王熙然名下/)
-assert.match(periodicWorkspaceSource, /派给王熙然自检/)
+assert.match(periodicWorkspaceSource, /外委通用设备/)
+assert.match(periodicWorkspaceSource, /外委否通用设备/)
+assert.match(periodicWorkspaceSource, /testPlanScenario/)
 assert.match(periodicWorkspaceSource, /进入正常检定/)
 assert.match(periodicWorkspaceSource, /提交异常分支/)
 assert.match(periodicWorkspaceSource, /转发确认员/)
 assert.match(periodicWorkspaceSource, /submitForwardSelection/)
+
+const periodicApiSource = readFileSync(new URL('../src/api/periodic.ts', import.meta.url), 'utf8')
+assert.match(periodicApiSource, /generatePeriodicTestPlan\(scenario: PeriodicTestPlanScenario\)/)
+assert.match(periodicApiSource, /params:\s*\{ scenario \}/)
+
+const periodicTypeSource = readFileSync(new URL('../src/types/periodic.ts', import.meta.url), 'utf8')
+assert.match(periodicTypeSource, /'self'/)
+assert.match(periodicTypeSource, /'external_common'/)
+assert.match(periodicTypeSource, /'external_non_common'/)
 
 const periodicPlanSummarySource = readFileSync(
   new URL('../src/views/periodic/components/PeriodicPlanSummary.vue', import.meta.url),

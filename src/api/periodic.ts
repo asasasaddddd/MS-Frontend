@@ -18,6 +18,7 @@ import type {
   PeriodicScanRequest,
   PeriodicSecondJudgeRequest,
   PeriodicSupplierFillInfoRequest,
+  PeriodicTestPlanScenario,
   PeriodicTaskVO,
   PeriodicVerificationRecordRequest,
   PeriodicVerifierFillInfoRequest
@@ -32,10 +33,11 @@ export function generatePeriodicPlan(data: GeneratePeriodicPlanRequest) {
   })
 }
 
-export function generatePeriodicTestPlan() {
+export function generatePeriodicTestPlan(scenario: PeriodicTestPlanScenario) {
   return request<EntityId>({
     url: periodicEndpoint('generateTestPlan'),
-    method: 'POST'
+    method: 'POST',
+    params: { scenario }
   })
 }
 

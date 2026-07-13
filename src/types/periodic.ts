@@ -1,5 +1,7 @@
 export type EntityId = string | number
 
+export type PeriodicTestPlanScenario = 'self' | 'external_common' | 'external_non_common'
+
 export type PeriodicNodeCode =
   | 'plan_issue'
   | 'plan_confirm'
