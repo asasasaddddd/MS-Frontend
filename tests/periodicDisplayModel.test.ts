@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import {
+  buildPeriodicPlanTodoGroups,
   buildPeriodicPlanSummary,
   displayValue,
   getPeriodicTableColumns,
@@ -46,6 +47,21 @@ assert.equal(row.verificationCycle, '12个月')
 assert.equal(row.verificationMethodName, '外委')
 assert.equal(row.isCommonName, '否')
 
+const dualEntryTask: PeriodicTaskVO = {
+  ...task,
+  currentNode: 'plan_confirm',
+  currentNodeName: '待实物交接',
+  taskStatus: 'pending',
+  physicalStatus: 'wait_verifier_receive'
+}
+
+assert.equal(mapPeriodicTaskRow(dualEntryTask, 'admin').currentNodeName, '待异常分流')
+assert.equal(mapPeriodicTaskRow(dualEntryTask, 'verifier').currentNodeName, '待扫码接收')
+assert.equal(
+  mapPeriodicTaskRow({ ...dualEntryTask, physicalStatus: 'verifier_received' }, 'admin').currentNodeName,
+  '待实物交接'
+)
+
 const plan: PeriodicPlanVO = {
   id: '2073579908903317500',
   planNo: '202607',
@@ -63,13 +79,22 @@ const summary = buildPeriodicPlanSummary(plan, [
 ])
 
 assert.equal(summary.planNo, '202607')
-assert.equal(summary.deviceCount, 4)
+assert.equal(summary.deviceCount, 6)
 assert.equal(summary.statusChangeCount, 1)
 assert.equal(summary.statusChangeBreakdown, '封存 1')
 assert.equal(summary.metrics.find((item) => item.key === 'externalReturned')?.value, 2)
 assert.equal(summary.metrics.find((item) => item.key === 'labelPending')?.value, 1)
 assert.equal(summary.metrics.find((item) => item.key === 'labelPrinted')?.value, 1)
 assert.equal(summary.metrics.find((item) => item.key === 'takenBack')?.value, 1)
+
+const todoGroups = buildPeriodicPlanTodoGroups([
+  dualEntryTask,
+  { ...dualEntryTask, id: '2' },
+  { ...dualEntryTask, id: '3', planId: '2073579908903317501' }
+])
+assert.equal(todoGroups.length, 2)
+assert.equal(todoGroups.find((group) => group.planId === '2073579908903317500')?.deviceCount, 2)
+assert.equal(todoGroups.find((group) => group.planId === '2073579908903317501')?.deviceCount, 1)
 
 assert.deepEqual(
   getPeriodicTableColumns('admin').map((column) => column.title),

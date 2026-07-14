@@ -4,16 +4,15 @@ import type { EntityId, PeriodicExceptionDisposeRequest, PeriodicTaskVO } from '
 export type PeriodicExceptionAction = 'seal' | 'defer' | 'scrap' | 'category' | 'cycle'
 export type PeriodicExceptionHandlingType = 'seal' | 'defer' | 'scrap' | 'change'
 
-export const periodicExceptionSubmitNodeCodes = ['plan_issue', 'plan_confirm'] as const
+export const periodicExceptionSubmitNodeCodes = ['plan_confirm'] as const
 
-const terminalTaskStatuses = ['exception', 'completed', 'rejected', 'cancelled']
-
-export function canSubmitPeriodicException(task: Pick<PeriodicTaskVO, 'currentNode' | 'taskStatus'>) {
-  const node = String(task.currentNode || '')
-  const status = String(task.taskStatus || '')
+export function canSubmitPeriodicException(
+  task: Pick<PeriodicTaskVO, 'currentNode' | 'taskStatus' | 'physicalStatus'>
+) {
   return (
-    periodicExceptionSubmitNodeCodes.includes(node as (typeof periodicExceptionSubmitNodeCodes)[number]) &&
-    !terminalTaskStatuses.includes(status)
+    task.currentNode === 'plan_confirm' &&
+    task.taskStatus === 'pending' &&
+    task.physicalStatus === 'wait_verifier_receive'
   )
 }
 

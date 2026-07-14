@@ -11,7 +11,6 @@ import {
 
 assert.equal(periodicEndpoint('myTasks'), '/periodic/my-tasks')
 assert.equal(periodicEndpoint('generateTestPlan'), '/periodic/plans/generate-test-one')
-assert.equal(periodicEndpoint('normalSubmit'), '/periodic/normal-submit')
 assert.equal(periodicEndpoint('supplierFillInfo'), '/periodic/supplier-fill-info')
 assert.equal(periodicEndpoint('responsibleSecondJudge'), '/periodic/responsible-second-judge')
 assert.equal(periodicEndpoint('secondJudge'), '/periodic/second-judge')
@@ -64,19 +63,24 @@ assert.match(periodicWorkspaceSource, /数智部王熙然名下/)
 assert.match(periodicWorkspaceSource, /外委通用设备/)
 assert.match(periodicWorkspaceSource, /外委否通用设备/)
 assert.match(periodicWorkspaceSource, /testPlanScenario/)
-assert.match(periodicWorkspaceSource, /进入正常检定/)
 assert.match(periodicWorkspaceSource, /提交异常分支/)
 assert.match(periodicWorkspaceSource, /转发确认员/)
 assert.match(periodicWorkspaceSource, /submitForwardSelection/)
+assert.doesNotMatch(periodicWorkspaceSource, /normalSubmit|submitNormalSelection|进入正常检定/)
 
 const periodicApiSource = readFileSync(new URL('../src/api/periodic.ts', import.meta.url), 'utf8')
 assert.match(periodicApiSource, /generatePeriodicTestPlan\(scenario: PeriodicTestPlanScenario\)/)
 assert.match(periodicApiSource, /params:\s*\{ scenario \}/)
+assert.doesNotMatch(periodicApiSource, /normalSubmit|submitPeriodicNormalTasks/)
+
+const periodicContractSource = readFileSync(new URL('../src/api/periodicContract.ts', import.meta.url), 'utf8')
+assert.doesNotMatch(periodicContractSource, /normalSubmit|normal-submit/)
 
 const periodicTypeSource = readFileSync(new URL('../src/types/periodic.ts', import.meta.url), 'utf8')
 assert.match(periodicTypeSource, /'self'/)
 assert.match(periodicTypeSource, /'external_common'/)
 assert.match(periodicTypeSource, /'external_non_common'/)
+assert.doesNotMatch(periodicTypeSource, /PeriodicNormalSubmitRequest/)
 
 const periodicPlanSummarySource = readFileSync(
   new URL('../src/views/periodic/components/PeriodicPlanSummary.vue', import.meta.url),

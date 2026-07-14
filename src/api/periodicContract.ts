@@ -2,6 +2,7 @@ import type {
   PeriodicScanRequest,
   PeriodicSecondJudgeDisposal,
   PeriodicSecondJudgeRequest,
+  PeriodicTaskVO,
   PeriodicVerificationRecordRequest
 } from '@/types/periodic'
 
@@ -15,7 +16,6 @@ const periodicEndpoints = {
   myTasks: '/periodic/my-tasks',
   myHistory: '/periodic/my-history',
   taskDetail: '/periodic/tasks',
-  normalSubmit: '/periodic/normal-submit',
   verifierReceive: '/periodic/verifier-receive',
   externalSendOut: '/periodic/external-send-out',
   sendOutReturn: '/periodic/send-out-return',
@@ -42,8 +42,7 @@ export function periodicEndpoint(key: PeriodicEndpointKey, id?: string | number)
 export function periodicNodeName(value?: string) {
   const map: Record<string, string> = {
     plan_issue: '计划下发',
-    plan_confirm: '异常分流',
-    transfer_verifier: '转检定员',
+    plan_confirm: '待实物交接',
     verifier_receive: '检定员扫码接收',
     self_verify: '自检检定',
     verification_record: '检定记录填写',
@@ -59,6 +58,16 @@ export function periodicNodeName(value?: string) {
     completed: '已完成'
   }
   return value ? map[value] || value : '-'
+}
+
+export function isPeriodicDualHandoverTask(
+  task: Pick<PeriodicTaskVO, 'currentNode' | 'taskStatus' | 'physicalStatus'>
+) {
+  return (
+    task.currentNode === 'plan_confirm' &&
+    task.taskStatus === 'pending' &&
+    task.physicalStatus === 'wait_verifier_receive'
+  )
 }
 
 export function periodicStatusName(value?: string) {

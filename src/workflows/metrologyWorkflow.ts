@@ -24,8 +24,7 @@ export const firstCheckNodes: WorkflowNode[] = [
 ]
 
 export const periodicNodes: WorkflowNode[] = [
-  { code: 'plan_confirm', name: '异常分流', module: 'periodic', roles: ['MEASURE_ADMIN'], api: 'POST /api/periodic/exception-change/submit' },
-  { code: 'transfer_verifier', name: '检定员扫码接收', module: 'periodic', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: 'POST /api/periodic/verifier-receive' },
+  { code: 'plan_confirm', name: '待实物交接', module: 'periodic', roles: ['MEASURE_ADMIN', 'VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: '管理员异常分流 / 检定员扫码接收' },
   { code: 'send_out', name: '外委送出', module: 'periodic', roles: ['EXTERNAL_OPERATOR'], api: 'POST /api/periodic/external-send-out' },
   { code: 'send_out_return', name: '外委送回', module: 'periodic', roles: ['VERIFIER_EXTERNAL'], api: 'POST /api/periodic/send-out-return' },
   { code: 'supplier_fill_info', name: '外扩人员填写检定信息', module: 'periodic', roles: ['EXTERNAL_OPERATOR'], api: 'POST /api/periodic/supplier-fill-info' },
@@ -62,9 +61,9 @@ export const workflowNodeGroups = {
   },
   periodic: {
     admin: ['plan_confirm', 'manager_forward_confirm'],
-    selfVerifier: ['transfer_verifier', 'verification_record'],
+    selfVerifier: ['plan_confirm', 'verification_record'],
     externalVerifier: [
-      'transfer_verifier',
+      'plan_confirm',
       'send_out_return',
       'verifier_fill_info',
       'external_third_judge'

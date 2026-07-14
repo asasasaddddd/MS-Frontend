@@ -6,7 +6,7 @@ import PeriodicTaskWorkspace from './components/PeriodicTaskWorkspace.vue'
   <PeriodicTaskWorkspace
     title="周检待办明细"
     role="verifier"
-    :node-codes="['transfer_verifier', 'self_verify', 'verification_record']"
+    :node-codes="['plan_confirm', 'self_verify', 'verification_record']"
     :verification-methods="['self', 'self_check', 'internal']"
   />
 </template>

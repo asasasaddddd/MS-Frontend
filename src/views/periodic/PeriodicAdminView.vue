@@ -6,6 +6,6 @@ import PeriodicTaskWorkspace from './components/PeriodicTaskWorkspace.vue'
   <PeriodicTaskWorkspace
     title="周检待办明细"
     role="admin"
-    :node-codes="['plan_issue', 'plan_confirm', 'manager_forward_confirm', 'exception_disposal']"
+    :node-codes="['plan_confirm', 'manager_forward_confirm', 'exception_disposal']"
   />
 </template>

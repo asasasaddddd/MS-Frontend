@@ -16,6 +16,7 @@ import type { FirstCheckOrder } from '@/types/firstcheck'
 import { useSessionStore } from '@/stores/session'
 import { isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 import { matchesFirstCheckVerifierRole } from '@/views/firstcheck/firstCheckVerifierModel'
+import { buildPeriodicPlanTodoGroups } from '@/views/periodic/periodicDisplayModel'
 
 type TodoType = 'all' | 'firstcheck' | 'periodic' | 'change' | 'sampling' | 'productSupport'
 type TodoColor = 'orange' | 'blue' | 'red' | 'green'
@@ -225,11 +226,6 @@ const firstCheckTodoEntries = computed<TodoDefinition[]>(() => {
     .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
 })
 
-function planGroupKey(task: PeriodicTaskVO) {
-  if (task.planId !== undefined && task.planId !== null && task.planId !== '') return String(task.planId)
-  return `task-${task.id}`
-}
-
 function derivePeriodicPlanLabel(planId: string, tasks: PeriodicTaskVO[]) {
   const taskNo = tasks.find((task) => task.taskNo)?.taskNo?.trim()
   if (taskNo && taskNo.length > 4) {
@@ -256,16 +252,8 @@ const periodicTodoEntries = computed<TodoDefinition[]>(() => {
   const path = currentRole ? periodicRouteByRole[currentRole] : undefined
   if (!currentRole || !path) return []
 
-  const groups = new Map<string, PeriodicTaskVO[]>()
-  periodicTasks.value.forEach((task) => {
-    const key = planGroupKey(task)
-    const list = groups.get(key) || []
-    list.push(task)
-    groups.set(key, list)
-  })
-
-  return Array.from(groups.entries())
-    .map(([planId, tasks]) => {
+  return buildPeriodicPlanTodoGroups(periodicTasks.value)
+    .map(({ planId, tasks, deviceCount }) => {
       const color: TodoColor = tasks.some((task) => task.taskStatus === 'exception' || task.currentNode === 'exception_disposal')
         ? 'red'
         : 'orange'
@@ -274,7 +262,7 @@ const periodicTodoEntries = computed<TodoDefinition[]>(() => {
         type: 'periodic' as const,
         title: `周检单 ${derivePeriodicPlanLabel(planId, tasks)}`,
         detailTitle: buildPeriodicPlanSubtitle(tasks),
-        count: tasks.length,
+        count: deviceCount,
         unit: '台',
         color,
         roles: [currentRole],

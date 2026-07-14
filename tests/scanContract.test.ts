@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { register } from 'node:module'
 
-import * as scan from '../src/api/scan.ts'
 import {
   resetScanTestDoubles,
   scanRequestCalls,
@@ -9,6 +9,9 @@ import {
   setPeriodicTasks,
   setScanRequestHandler
 } from './scanTestDoubles.ts'
+
+register('./scanLoader.mjs', import.meta.url)
+const scan = await import('../src/api/scan.ts')
 
 assert.equal(typeof scan.listBusinessScanRecords, 'function')
 assert.equal(typeof scan.buildPeriodicScanRecordQuery, 'function')
@@ -33,9 +36,47 @@ assert.equal(
   'periodic-external-send-out'
 )
 assert.equal(
-  scan.resolvePeriodicScanAction({ ...waitReturnTask, currentNode: 'transfer_verifier' }),
+  scan.resolvePeriodicScanAction({
+    ...waitReturnTask,
+    currentNode: 'plan_confirm',
+    taskStatus: 'pending',
+    physicalStatus: 'wait_verifier_receive'
+  }),
   'periodic-verifier-receive'
 )
+assert.equal(
+  scan.resolvePeriodicScanAction({
+    ...waitReturnTask,
+    currentNode: 'plan_confirm',
+    taskStatus: 'wait_scan',
+    physicalStatus: 'wait_verifier_receive'
+  }),
+  undefined
+)
+assert.equal(
+  scan.resolvePeriodicScanAction({
+    ...waitReturnTask,
+    currentNode: 'transfer_verifier',
+    taskStatus: 'pending',
+    physicalStatus: 'wait_verifier_receive'
+  }),
+  undefined
+)
+
+const dualEntryTask = {
+  ...waitReturnTask,
+  currentNode: 'plan_confirm',
+  currentNodeName: '待实物交接',
+  taskStatus: 'pending',
+  physicalStatus: 'wait_verifier_receive'
+}
+
+resetScanTestDoubles()
+setPeriodicTasks([dualEntryTask])
+setScanRequestHandler(() => [])
+const receiveRows = await scan.listUnifiedScanInbox(['periodic-verifier-receive'])
+assert.equal(receiveRows.length, 1)
+assert.equal(receiveRows[0]?.currentNodeName, '待扫码接收')
 
 assert.deepEqual(scan.buildPeriodicScanRecordQuery(waitReturnTask, 'periodic-send-out-return'), {
   businessType: 'periodic',

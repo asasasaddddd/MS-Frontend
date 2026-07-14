@@ -12,7 +12,6 @@ import {
   managerForwardConfirmPeriodic,
   responsibleSecondJudgePeriodic,
   secondJudgePeriodic,
-  submitPeriodicNormalTasks,
   submitPeriodicExceptionChange,
   supplierFillInfoPeriodic,
   verificationRecordPeriodic,
@@ -23,7 +22,6 @@ import type {
   EntityId,
   PeriodicConfirmerConfirmRequest,
   PeriodicManagerForwardConfirmRequest,
-  PeriodicNormalSubmitRequest,
   PeriodicPlanVO,
   PeriodicResponsibleSecondJudgeRequest,
   PeriodicSecondJudgeRequest,
@@ -34,6 +32,7 @@ import type {
   PeriodicVerifierFillInfoRequest
 } from '../../../types/periodic'
 import type { ChangeSubmitRequest } from '../../../types/change'
+import { isPeriodicDualHandoverTask } from '../../../api/periodicContract'
 import PeriodicConfirmDialog from './PeriodicConfirmDialog.vue'
 import PeriodicDetailDialog from './PeriodicDetailDialog.vue'
 import PeriodicExceptionDialog from './PeriodicExceptionDialog.vue'
@@ -99,10 +98,9 @@ const confirmOpen = ref(false)
 const exceptionOpen = ref(false)
 const exceptionTasks = ref<PeriodicTaskVO[]>([])
 
-const statusOptions = [
+const statusOptions = computed(() => [
   { label: '当前状态筛选', value: 'all' },
-  { label: '异常分流', value: 'plan_confirm' },
-  { label: '检定员接收', value: 'transfer_verifier' },
+  { label: props.role === 'admin' ? '待异常分流' : '待扫码接收', value: 'plan_confirm' },
   { label: '自检检定', value: 'self_verify' },
   { label: '外委送出', value: 'send_out' },
   { label: '外委送回', value: 'send_out_return' },
@@ -112,7 +110,7 @@ const statusOptions = [
   { label: '外委三次判定', value: 'external_third_judge' },
   { label: '报告待转办', value: 'manager_forward_confirm' },
   { label: '报告待确认', value: 'confirmer_confirm' }
-]
+])
 
 const testPlanScenarioOptions: Array<{ label: string; value: PeriodicTestPlanScenario }> = [
   { label: '自检', value: 'self' },
@@ -189,11 +187,9 @@ const todoCount = computed(() =>
 
 const canBatchException = computed(() => props.role === 'admin' && activeTab.value === 'todo')
 const exceptionCandidates = computed(() => selectedTasks.value.filter(canSubmitPeriodicException))
-const normalCandidates = computed(() =>
-  selectedTasks.value.filter(
-    (task) => ['plan_issue', 'plan_confirm'].includes(String(task.currentNode || '')) && task.taskStatus === 'pending'
-  )
-)
+const canSelectAdminTask = (task: PeriodicTaskVO) =>
+  canSubmitPeriodicException(task) ||
+  (task.currentNode === 'manager_forward_confirm' && task.taskStatus === 'wait_confirm')
 const forwardCandidates = computed(() =>
   selectedTasks.value.filter(
     (task) => task.currentNode === 'manager_forward_confirm' && task.taskStatus === 'wait_confirm'
@@ -233,7 +229,7 @@ function openException(tasks?: PeriodicTaskVO[]) {
     return
   }
   if (!tasks && selectedTasks.value.length !== exceptionCandidates.value.length) {
-    message.warning('只能选择计划下发或异常分流节点的设备')
+    message.warning('只能选择待异常分流且尚未扫码的设备')
     return
   }
   if (!samePlanId(nextTasks)) {
@@ -295,7 +291,9 @@ function openProcess(task: PeriodicTaskVO) {
     forwardOpen.value = true
     return
   }
-  if (node === 'transfer_verifier') return openScan('periodic-verifier-receive', task)
+  if (props.role === 'verifier' && isPeriodicDualHandoverTask(task)) {
+    return openScan('periodic-verifier-receive', task)
+  }
   if (node === 'self_verify' || node === 'verification_record') {
     verifyOpen.value = true
     return
@@ -474,35 +472,6 @@ async function runSubmit(action: () => Promise<void>, successText: string, close
   }
 }
 
-async function submitNormalSelection() {
-  if (normalCandidates.value.length === 0) {
-    message.warning('请选择需要进入正常检定的周检设备')
-    return
-  }
-  if (selectedTasks.value.length !== normalCandidates.value.length) {
-    message.warning('只能选择待分类的周检设备进入正常检定')
-    return
-  }
-  if (!samePlanId(normalCandidates.value)) {
-    message.warning('一次只能提交同一周检计划下的设备')
-    return
-  }
-  const planId = normalCandidates.value[0]?.planId
-  if (!planId) {
-    message.warning('缺少周检计划ID')
-    return
-  }
-  const payload: PeriodicNormalSubmitRequest = {
-    planId,
-    taskIds: normalCandidates.value.map((task) => task.id),
-    opinion: '管理员分类为正常设备，进入检定路线'
-  }
-  await runSubmit(() => submitPeriodicNormalTasks(payload), '已进入正常检定路线', () => {
-    selectedRowKeys.value = []
-    selectedTasks.value = []
-  })
-}
-
 async function submitVerify(payload: PeriodicVerificationRecordRequest) {
   if (!payload.verificationTime) {
     message.warning('请填写检定日期')
@@ -646,17 +615,6 @@ watch(routePlanId, () => {
         >
           <a-button type="primary" :loading="submitting" :disabled="!canSubmitForwardSelection">确认</a-button>
         </a-popconfirm>
-        <a-popconfirm
-          v-if="canBatchException"
-          title="确认将选中的正常设备提交到检定员扫码接收吗？"
-          ok-text="确认"
-          cancel-text="取消"
-          @confirm="submitNormalSelection"
-        >
-          <a-button type="primary" :loading="submitting" :disabled="normalCandidates.length === 0">
-            进入正常检定
-          </a-button>
-        </a-popconfirm>
         <a-select
           v-if="canBatchException"
           v-model:value="exceptionActionType"
@@ -678,6 +636,7 @@ watch(routePlanId, () => {
         :role="role"
         :loading="loading"
         :selectable="canBatchException"
+        :selectable-task="canSelectAdminTask"
         :selected-row-keys="selectedRowKeys"
         @selection-change="updateSelection"
         @detail="openDetail"

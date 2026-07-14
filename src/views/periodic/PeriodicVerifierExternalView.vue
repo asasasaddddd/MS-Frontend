@@ -6,7 +6,7 @@ import PeriodicTaskWorkspace from './components/PeriodicTaskWorkspace.vue'
   <PeriodicTaskWorkspace
     title="外委周检待办明细"
     role="verifier"
-    :node-codes="['transfer_verifier', 'send_out', 'send_out_return', 'verifier_fill_info', 'external_third_judge']"
+    :node-codes="['plan_confirm', 'send_out', 'send_out_return', 'verifier_fill_info', 'external_third_judge']"
     :verification-methods="['send_out', 'external', 'external_commission']"
   />
 </template>

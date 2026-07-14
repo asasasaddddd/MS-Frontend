@@ -27,6 +27,12 @@ export interface PeriodicPlanSummary {
   metrics: PeriodicPlanMetric[]
 }
 
+export interface PeriodicPlanTodoGroup {
+  planId: string
+  tasks: PeriodicTaskVO[]
+  deviceCount: number
+}
+
 export type PeriodicDisplayRowWithMeta = PeriodicDisplayRow & {
   tagColor: PeriodicTagColor
 }
@@ -34,6 +40,14 @@ export type PeriodicDisplayRowWithMeta = PeriodicDisplayRow & {
 export function displayValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '-'
   return String(value)
+}
+
+function isDualHandoverTask(task: PeriodicTaskVO) {
+  return (
+    task.currentNode === 'plan_confirm' &&
+    task.taskStatus === 'pending' &&
+    task.physicalStatus === 'wait_verifier_receive'
+  )
 }
 
 function formatDate(value: unknown, length = 10) {
@@ -78,8 +92,7 @@ function resultName(value?: string) {
 function nodeDisplayName(value?: string) {
   const map: Record<string, string> = {
     plan_issue: '计划下发',
-    plan_confirm: '异常分流',
-    transfer_verifier: '转检定员',
+    plan_confirm: '待实物交接',
     verifier_receive: '检定员扫码接收',
     self_verify: '自检检定',
     verification_record: '检定记录填写',
@@ -131,11 +144,19 @@ export function periodicTagColor(nodeOrStatus?: string): PeriodicTagColor {
   return 'blue'
 }
 
-export function mapPeriodicTaskRow(task: PeriodicTaskVO): PeriodicDisplayRowWithMeta {
-  const currentNodeName =
+function dualHandoverDisplayName(task: PeriodicTaskVO, role?: PeriodicTableRole) {
+  if (!isDualHandoverTask(task)) return undefined
+  if (role === 'admin') return '待异常分流'
+  if (role === 'verifier') return '待扫码接收'
+  return undefined
+}
+
+export function mapPeriodicTaskRow(task: PeriodicTaskVO, role?: PeriodicTableRole): PeriodicDisplayRowWithMeta {
+  const currentNodeName = dualHandoverDisplayName(task, role) || (
     task.currentNode === 'exception_disposal' && task.exceptionFlowName
       ? task.exceptionFlowName
       : task.currentNodeName || nodeDisplayName(task.currentNode)
+  )
   const taskStatusName = task.taskStatusName || statusDisplayName(task.taskStatus)
   return {
     taskId: task.id,
@@ -213,7 +234,7 @@ export function buildPeriodicPlanSummary(plan: PeriodicPlanVO | null | undefined
   const statusChangeCount = countTasks(tasks, (task) => nodeIn(task, ['exception_disposal']) || task.taskStatus === 'exception')
   const notSentCount = countTasks(
     tasks,
-    (task) => task.physicalStatus === 'wait_verifier_receive' || nodeIn(task, ['plan_confirm', 'transfer_verifier'])
+    (task) => isDualHandoverTask(task)
   )
   const metrics: PeriodicPlanMetric[] = [
     {
@@ -283,12 +304,29 @@ export function buildPeriodicPlanSummary(plan: PeriodicPlanVO | null | undefined
 
   return {
     planNo: displayValue(plan?.planNo),
-    deviceCount: plan?.deviceCount ?? tasks.length,
+    deviceCount: tasks.length,
     statusChangeCount,
     statusChangeBreakdown: buildStatusChangeBreakdown(tasks),
     notSentCount,
     metrics
   }
+}
+
+export function buildPeriodicPlanTodoGroups(tasks: PeriodicTaskVO[]): PeriodicPlanTodoGroup[] {
+  const groups = new Map<string, PeriodicTaskVO[]>()
+  tasks.forEach((task) => {
+    const planId = task.planId !== undefined && task.planId !== null && task.planId !== ''
+      ? String(task.planId)
+      : `task-${task.id}`
+    const planTasks = groups.get(planId) || []
+    planTasks.push(task)
+    groups.set(planId, planTasks)
+  })
+  return Array.from(groups.entries()).map(([planId, planTasks]) => ({
+    planId,
+    tasks: planTasks,
+    deviceCount: planTasks.length
+  }))
 }
 
 const adminColumns: PeriodicTableColumn[] = [

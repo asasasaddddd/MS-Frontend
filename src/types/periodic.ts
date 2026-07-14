@@ -5,7 +5,6 @@ export type PeriodicTestPlanScenario = 'self' | 'external_common' | 'external_no
 export type PeriodicNodeCode =
   | 'plan_issue'
   | 'plan_confirm'
-  | 'transfer_verifier'
   | 'verifier_receive'
   | 'self_verify'
   | 'verification_record'
@@ -169,12 +168,6 @@ export interface PeriodicScanRequest {
   scanCode: string
   scanContent?: string
   scanLocation?: string
-  opinion?: string
-}
-
-export interface PeriodicNormalSubmitRequest {
-  planId: EntityId
-  taskIds: EntityId[]
   opinion?: string
 }
 

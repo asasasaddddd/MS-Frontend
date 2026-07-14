@@ -1,4 +1,4 @@
-import { periodicNodeName, periodicStatusName } from '@/api/periodicContract'
+import { isPeriodicDualHandoverTask, periodicNodeName, periodicStatusName } from '@/api/periodicContract'
 import type { PeriodicTaskVO } from '@/types/periodic'
 import type {
   BusinessScanRecordQuery,
@@ -42,6 +42,7 @@ function periodicTaskStatusName(task: PeriodicTaskVO) {
 }
 
 function periodicTaskNodeName(task: PeriodicTaskVO, action: PeriodicScanAction) {
+  if (action === 'periodic-verifier-receive') return '待扫码接收'
   if (action === 'periodic-send-out-return') return '外委送回'
   if (hasChinese(task.currentNodeName)) return task.currentNodeName
   const name = periodicNodeName(task.currentNode)
@@ -83,7 +84,7 @@ export function isPeriodicScanAction(value: string): value is PeriodicScanAction
 
 export function resolvePeriodicScanAction(task: PeriodicTaskVO): PeriodicScanAction | undefined {
   const node = String(task.currentNode || '')
-  if (node === 'transfer_verifier') return 'periodic-verifier-receive'
+  if (isPeriodicDualHandoverTask(task)) return 'periodic-verifier-receive'
   if (node === 'send_out_return') return 'periodic-send-out-return'
   if (node === 'send_out') {
     return task.physicalStatus === 'wait_sendout_return_receive'

@@ -12,7 +12,6 @@ import type {
   PeriodicConfirmerConfirmRequest,
   PeriodicExceptionDisposeRequest,
   PeriodicManagerForwardConfirmRequest,
-  PeriodicNormalSubmitRequest,
   PeriodicPlanVO,
   PeriodicResponsibleSecondJudgeRequest,
   PeriodicScanRequest,
@@ -91,14 +90,6 @@ export function getPeriodicTask(taskId: EntityId) {
   return request<PeriodicTaskVO>({
     url: periodicEndpoint('taskDetail', taskId),
     method: 'GET'
-  })
-}
-
-export function submitPeriodicNormalTasks(data: PeriodicNormalSubmitRequest) {
-  return request<void>({
-    url: periodicEndpoint('normalSubmit'),
-    method: 'POST',
-    data
   })
 }
 

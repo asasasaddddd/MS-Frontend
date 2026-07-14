@@ -31,10 +31,47 @@ const applicant = {
   deptName: '重一分厂'
 }
 
-assert.deepEqual(periodicExceptionSubmitNodeCodes, ['plan_issue', 'plan_confirm'])
-assert.equal(canSubmitPeriodicException({ currentNode: 'plan_confirm' }), true)
-assert.equal(canSubmitPeriodicException({ currentNode: 'exception_disposal' }), false)
-assert.equal(canSubmitPeriodicException({ currentNode: 'exception_disposal', taskStatus: 'exception' }), false)
+assert.deepEqual(periodicExceptionSubmitNodeCodes, ['plan_confirm'])
+assert.equal(
+  canSubmitPeriodicException({
+    currentNode: 'plan_confirm',
+    taskStatus: 'pending',
+    physicalStatus: 'wait_verifier_receive'
+  }),
+  true
+)
+assert.equal(
+  canSubmitPeriodicException({
+    currentNode: 'plan_issue',
+    taskStatus: 'pending',
+    physicalStatus: 'wait_verifier_receive'
+  }),
+  false
+)
+assert.equal(
+  canSubmitPeriodicException({
+    currentNode: 'plan_confirm',
+    taskStatus: 'pending',
+    physicalStatus: 'verifier_received'
+  }),
+  false
+)
+assert.equal(
+  canSubmitPeriodicException({
+    currentNode: 'plan_confirm',
+    taskStatus: 'exception',
+    physicalStatus: 'wait_verifier_receive'
+  }),
+  false
+)
+assert.equal(
+  canSubmitPeriodicException({
+    currentNode: 'exception_disposal',
+    taskStatus: 'exception',
+    physicalStatus: 'wait_verifier_receive'
+  }),
+  false
+)
 assert.equal(
   canDisposePeriodicException({
     currentNode: 'exception_disposal',

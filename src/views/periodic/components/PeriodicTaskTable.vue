@@ -15,6 +15,7 @@ const props = withDefaults(
     role?: PeriodicTableRole
     loading?: boolean
     selectable?: boolean
+    selectableTask?: (task: PeriodicTaskVO) => boolean
     selectedRowKeys?: EntityId[]
   }>(),
   {
@@ -22,6 +23,7 @@ const props = withDefaults(
     role: 'admin',
     loading: false,
     selectable: false,
+    selectableTask: () => true,
     selectedRowKeys: () => []
   }
 )
@@ -33,7 +35,7 @@ const emit = defineEmits<{
 }>()
 
 const columns = computed(() => getPeriodicTableColumns(props.role))
-const rows = computed(() => props.tasks.map(mapPeriodicTaskRow))
+const rows = computed(() => props.tasks.map((task) => mapPeriodicTaskRow(task, props.role)))
 const taskById = computed(() => new Map(props.tasks.map((task) => [String(task.id), task])))
 const scrollX = computed(() => columns.value.reduce((sum, column) => sum + (column.width || 120), 0))
 
@@ -41,6 +43,10 @@ const rowSelection = computed(() => {
   if (!props.selectable) return undefined
   return {
     selectedRowKeys: props.selectedRowKeys,
+    getCheckboxProps: (row: PeriodicDisplayRowWithMeta) => {
+      const task = taskById.value.get(String(row.taskId))
+      return { disabled: !task || !props.selectableTask(task) }
+    },
     onChange: (keys: EntityId[]) => {
       emit(
         'selectionChange',
