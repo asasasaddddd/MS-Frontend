@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { listUsersByDeptAndRole, type SysUserVO } from '../../../api/system'
 import AttachmentListButton from '../../../components/AttachmentListButton.vue'
 import AttachmentUploadButton from '../../../components/AttachmentUploadButton.vue'
 import { displayValue } from '../periodicDisplayModel'
@@ -22,88 +23,187 @@ const emit = defineEmits<{
 }>()
 
 const certificateAttachmentGroupId = ref<EntityId>()
+const responsibleEngineers = ref<SysUserVO[]>([])
+const loadingEngineers = ref(false)
+const engineerSelectOpen = ref(false)
+const engineerSelectRef = ref<{ focus?: () => void } | null>(null)
+
 const form = reactive({
-  reportNo: '',
   verificationTime: '',
-  verificationUnit: '',
-  result: 'qualified' as PeriodicVerificationResult,
-  conclusion: '检定合格',
   newValidUntil: '',
-  forceValidUntil: false,
-  environmentTemp: '',
-  environmentHumidity: '',
-  nonconformingDisposal: undefined as string | undefined,
-  confirmationRequired: false,
-  opinion: '自检检定信息已填写'
+  result: 'qualified' as PeriodicVerificationResult,
+  nonconformingDisposal: undefined as 'repair' | 'scrap' | undefined,
+  responsibleEngineerId: undefined as string | undefined,
+  opinion: ''
+})
+
+const engineerOptions = computed(() =>
+  responsibleEngineers.value.map((user) => ({
+    label: `${user.employeeName || user.employeeId}（${user.employeeId}）`,
+    value: user.employeeId
+  }))
+)
+
+const selectedEngineer = computed(() =>
+  responsibleEngineers.value.find((user) => user.employeeId === form.responsibleEngineerId)
+)
+
+const verifierDisplay = computed(() => {
+  const id = props.task?.assignedVerifierId
+  const name = props.task?.assignedVerifierName
+  if (id && name) return `${id}（${name}）`
+  return displayValue(id || name)
+})
+
+const verificationMethodDisplay = computed(() => {
+  const value = String(props.task?.verificationMethod || '').toLowerCase()
+  if (['self', 'self_check', 'internal'].includes(value)) return '自检'
+  if (['send_out', 'external', 'external_commission'].includes(value)) return '外委'
+  return displayValue(props.task?.verificationMethod)
+})
+
+const canSubmit = computed(() => {
+  if (!props.task || !form.verificationTime) return false
+  if (form.result !== 'unqualified') return true
+  return Boolean(form.nonconformingDisposal && form.responsibleEngineerId)
 })
 
 function today() {
-  return new Date().toISOString().slice(0, 10)
+  const date = new Date()
+  return formatLocalDate(date)
 }
 
-function nextYearMinusOneDay() {
-  const date = new Date()
-  date.setFullYear(date.getFullYear() + 1)
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function calculateValidUntil(verificationDate: string, cycleMonth?: number) {
+  if (!verificationDate || !cycleMonth) return ''
+  const [year, month, day] = verificationDate.split('-').map(Number)
+  if (!year || !month || !day) return ''
+  const date = new Date(year, month - 1, day)
+  date.setDate(1)
+  date.setMonth(date.getMonth() + cycleMonth)
+  const lastDayOfTargetMonth = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
+  date.setDate(Math.min(day, lastDayOfTargetMonth))
   date.setDate(date.getDate() - 1)
-  return date.toISOString().slice(0, 10)
+  return formatLocalDate(date)
+}
+
+function syncValidUntil() {
+  form.newValidUntil = calculateValidUntil(form.verificationTime, props.task?.verificationCycleMonth)
 }
 
 function close() {
   emit('update:open', false)
 }
 
+function openEngineerDirectory() {
+  if (form.result !== 'unqualified') return
+  engineerSelectOpen.value = true
+  nextTick(() => engineerSelectRef.value?.focus?.())
+}
+
+async function loadResponsibleEngineers() {
+  responsibleEngineers.value = []
+  const task = props.task
+  if (!task) return
+  loadingEngineers.value = true
+  try {
+    const users = task.deptId
+      ? await listUsersByDeptAndRole(task.deptId, 'RESPONSIBLE_ENGINEER')
+      : []
+    const boundEngineer = task.responsibleEngineerId
+      ? {
+          employeeId: task.responsibleEngineerId,
+          employeeName: task.responsibleEngineerName,
+          deptId: task.deptId,
+          deptName: task.deptName
+        }
+      : undefined
+    responsibleEngineers.value = boundEngineer && !users.some((user) => user.employeeId === boundEngineer.employeeId)
+      ? [boundEngineer, ...users]
+      : users
+  } catch {
+    responsibleEngineers.value = []
+  } finally {
+    loadingEngineers.value = false
+  }
+}
+
 function submit() {
-  if (!props.task) return
+  if (!props.task || !canSubmit.value) return
+  const unqualified = form.result === 'unqualified'
+  const disposal = unqualified ? form.nonconformingDisposal : undefined
+  const engineer = unqualified ? selectedEngineer.value : undefined
   emit('submit', {
     taskId: props.task.id,
-    reportNo: form.reportNo || undefined,
     verificationTime: form.verificationTime,
-    verificationUnit: form.verificationUnit || undefined,
-    result: form.result,
-    conclusion: form.conclusion,
-    opinion: form.opinion,
     newValidUntil: form.newValidUntil || undefined,
-    forceValidUntil: form.forceValidUntil,
-    environmentTemp: form.environmentTemp || undefined,
-    environmentHumidity: form.environmentHumidity || undefined,
+    result: form.result,
+    conclusion: form.opinion || (unqualified ? '检定不合格' : '检定合格'),
+    opinion: form.opinion,
     certificateAttachmentGroupId: certificateAttachmentGroupId.value,
-    nonconformingDisposal: form.result === 'qualified' ? undefined : form.nonconformingDisposal,
-    confirmationRequired: form.confirmationRequired
+    nonconformingDisposal: disposal,
+    repairUserId: disposal === 'repair' ? engineer?.employeeId : undefined,
+    repairUserName: disposal === 'repair' ? engineer?.employeeName : undefined,
+    scrapEngineerId: disposal === 'scrap' ? engineer?.employeeId : undefined,
+    scrapEngineerName: disposal === 'scrap' ? engineer?.employeeName : undefined
   })
 }
 
 watch(
+  () => form.verificationTime,
+  () => syncValidUntil()
+)
+
+watch(
+  () => form.result,
+  (result) => {
+    if (result === 'unqualified') return
+    form.nonconformingDisposal = undefined
+    form.responsibleEngineerId = undefined
+  }
+)
+
+watch(
   () => props.open,
-  (open) => {
+  async (open) => {
     if (!open) return
     certificateAttachmentGroupId.value = undefined
-    form.reportNo = ''
     form.verificationTime = today()
-    form.verificationUnit = ''
+    form.newValidUntil = calculateValidUntil(form.verificationTime, props.task?.verificationCycleMonth)
     form.result = 'qualified'
-    form.conclusion = '检定合格'
-    form.newValidUntil = props.task?.newValidUntil || nextYearMinusOneDay()
-    form.forceValidUntil = false
-    form.environmentTemp = ''
-    form.environmentHumidity = ''
     form.nonconformingDisposal = undefined
-    form.confirmationRequired = false
-    form.opinion = '自检检定信息已填写'
+    form.responsibleEngineerId = props.task?.responsibleEngineerId
+    form.opinion = ''
+    engineerSelectOpen.value = false
+    await loadResponsibleEngineers()
   }
 )
 </script>
 
 <template>
-  <a-modal :open="open" width="95vw" :footer="null" :destroy-on-close="true" @cancel="close">
+  <a-modal
+    :open="open"
+    width="95vw"
+    wrap-class-name="periodic-verification-dialog"
+    :footer="null"
+    :destroy-on-close="true"
+    @cancel="close"
+  >
     <template #title>
       <div class="dialog-title">
-        <div>
-          <div class="dialog-breadcrumb">首页 / 工作台 / 待办事项 / 周检检定信息</div>
-          <strong>自检及外委通用检定信息</strong>
+        <div class="dialog-heading">
+          <div class="dialog-breadcrumb">首页 / 工作台 / 待办事项 / {{ displayValue(task?.deviceCode) }}</div>
+          <strong>测量设备填写检定信息</strong>
         </div>
         <div class="dialog-title-actions">
           <a-button @click="close">取消</a-button>
-          <a-button type="primary" :loading="submitting" @click="submit">提交</a-button>
+          <a-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="submit">提交</a-button>
         </div>
       </div>
     </template>
@@ -111,30 +211,55 @@ watch(
     <div class="form-page">
       <section class="panel">
         <div class="panel-header">
-          <h2>设备基础信息</h2>
-          <a-tag class="tag blue">{{ displayValue(task?.currentNodeName || task?.currentNode) }}</a-tag>
+          <h2>设备状态基础信息</h2>
+          <a-tag class="tag blue">计量编号 {{ displayValue(task?.deviceCode) }}</a-tag>
         </div>
         <div class="form-grid cols-4 readonly-area">
           <label><span>计量编号</span><a-input :value="displayValue(task?.deviceCode)" readonly /></label>
           <label><span>设备名称</span><a-input :value="displayValue(task?.deviceName)" readonly /></label>
-          <label><span>规格型号</span><a-input :value="displayValue(task?.modelSpec)" readonly /></label>
+          <label><span>生产厂商</span><a-input :value="displayValue(task?.manufacturer)" readonly /></label>
           <label><span>出厂编号</span><a-input :value="displayValue(task?.factoryCode)" readonly /></label>
-          <label><span>使用部门</span><a-input :value="displayValue(task?.deptName)" readonly /></label>
-          <label><span>管理类别</span><a-input :value="displayValue(task?.manageCategory)" readonly /></label>
+          <label><span>规格型号</span><a-input :value="displayValue(task?.modelSpec)" readonly /></label>
           <label><span>有效期</span><a-input :value="displayValue(task?.validUntil)" readonly /></label>
-          <label><span>是否通用</span><a-input :value="task?.isCommon === 1 ? '是' : task?.isCommon === 0 ? '否' : '-'" readonly /></label>
+          <label><span>检定周期</span><a-input :value="displayValue(task?.verificationCycleMonth)" readonly /></label>
+          <label><span>使用部门</span><a-input :value="displayValue(task?.deptName)" readonly /></label>
+          <label>
+            <span>设备状态</span>
+            <a-select
+              :value="displayValue(task?.deviceStatusName || task?.deviceStatus)"
+              :options="[{ label: displayValue(task?.deviceStatusName || task?.deviceStatus), value: displayValue(task?.deviceStatusName || task?.deviceStatus) }]"
+              disabled
+            />
+          </label>
+          <label>
+            <span>管理类别</span>
+            <a-select
+              :value="displayValue(task?.manageCategory)"
+              :options="[{ label: displayValue(task?.manageCategory), value: displayValue(task?.manageCategory) }]"
+              disabled
+            />
+          </label>
+          <label>
+            <span>检定方法</span>
+            <a-select
+              :value="verificationMethodDisplay"
+              :options="[{ label: verificationMethodDisplay, value: verificationMethodDisplay }]"
+              disabled
+            />
+          </label>
+          <label><span>学科分类</span><a-input :value="displayValue(task?.subjectCategory)" readonly /></label>
         </div>
       </section>
 
       <section class="panel">
         <div class="panel-header">
-          <h2>检定信息</h2>
+          <h2>检定人员检定</h2>
           <a-tag class="tag orange">待填写</a-tag>
         </div>
         <div class="form-grid cols-4">
-          <label><span>报告编号</span><a-input v-model:value="form.reportNo" placeholder="填写报告编号" /></label>
-          <label><span>检定日期</span><a-input v-model:value="form.verificationTime" type="date" /></label>
-          <label><span>检定单位</span><a-input v-model:value="form.verificationUnit" placeholder="填写检定单位" /></label>
+          <label><span>检定人</span><a-input :value="verifierDisplay" readonly /></label>
+          <label><span>检定时间</span><a-input v-model:value="form.verificationTime" type="date" /></label>
+          <label><span>新有效期</span><a-input v-model:value="form.newValidUntil" type="date" /></label>
           <label>
             <span>检定结果</span>
             <a-select
@@ -145,50 +270,55 @@ watch(
               ]"
             />
           </label>
-          <label><span>新有效期</span><a-input v-model:value="form.newValidUntil" type="date" /></label>
-          <label>
-            <span>强制使用新有效期</span>
-            <a-switch v-model:checked="form.forceValidUntil" checked-children="是" un-checked-children="否" />
-          </label>
-          <label><span>环境温度</span><a-input v-model:value="form.environmentTemp" placeholder="例如 23℃" /></label>
-          <label><span>环境湿度</span><a-input v-model:value="form.environmentHumidity" placeholder="例如 45%" /></label>
-          <label class="span-2"><span>检定结论</span><a-textarea v-model:value="form.conclusion" :rows="3" /></label>
           <label>
             <span>不合格处理方式</span>
             <a-select
               v-model:value="form.nonconformingDisposal"
-              :disabled="form.result === 'qualified'"
-              placeholder="不合格时选择"
+              :disabled="form.result !== 'unqualified'"
+              placeholder="请选择"
               :options="[
-                { label: '维修', value: 'repair' },
-                { label: '报废', value: 'scrap' }
+                { label: '报废', value: 'scrap' },
+                { label: '维修', value: 'repair' }
               ]"
             />
           </label>
           <label>
-            <span>是否需要确认员</span>
-            <a-switch v-model:checked="form.confirmationRequired" checked-children="是" un-checked-children="否" />
+            <span>责任工程师</span>
+            <div class="inline-row">
+              <a-select
+                ref="engineerSelectRef"
+                v-model:value="form.responsibleEngineerId"
+                v-model:open="engineerSelectOpen"
+                :disabled="form.result !== 'unqualified'"
+                :loading="loadingEngineers"
+                :options="engineerOptions"
+                placeholder="请选择"
+                show-search
+                option-filter-prop="label"
+              />
+              <a-button :disabled="form.result !== 'unqualified'" @click="openEngineerDirectory">数据目录</a-button>
+            </div>
           </label>
-          <label class="span-2">
-            <span>检定证书/报告附件</span>
+          <label class="span-4"><span>检定意见</span><a-textarea v-model:value="form.opinion" :rows="3" placeholder="填写检定意见" /></label>
+          <label>
+            <span>上传附件</span>
             <div class="attachment-actions">
               <AttachmentUploadButton
                 v-model="certificateAttachmentGroupId"
                 business-type="PERIODIC_CERTIFICATE"
                 :business-id="task?.id"
-                remark="周检检定证书附件"
-                button-text="上传检定证书"
+                remark="周检检定附件"
+                button-text="上传文件"
                 size="small"
               />
               <AttachmentListButton
                 :group-id="certificateAttachmentGroupId"
                 button-text="查看已上传"
-                title="周检检定证书附件"
+                title="周检检定附件"
                 size="small"
               />
             </div>
           </label>
-          <label class="span-2"><span>处理意见</span><a-textarea v-model:value="form.opinion" :rows="3" /></label>
         </div>
       </section>
     </div>
@@ -197,14 +327,37 @@ watch(
 
 <style scoped>
 .dialog-title,
-.dialog-title-actions {
+.dialog-title-actions,
+.inline-row,
+.attachment-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
 }
 
 .dialog-title {
+  min-width: 0;
   justify-content: space-between;
+  gap: 24px;
+}
+
+.dialog-heading {
+  min-width: 0;
+}
+
+.dialog-title strong {
+  color: #172033;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.dialog-title-actions,
+.inline-row,
+.attachment-actions {
+  gap: 8px;
+}
+
+.dialog-title-actions {
+  flex-shrink: 0;
 }
 
 .dialog-breadcrumb {
@@ -215,9 +368,10 @@ watch(
 }
 
 .form-page {
-  max-height: calc(95vh - 72px);
+  max-height: calc(90vh - 88px);
   display: grid;
   gap: 16px;
+  padding: 20px;
   overflow: auto;
   background: #f3f5f8;
 }
@@ -230,7 +384,7 @@ watch(
 }
 
 .panel-header {
-  min-height: 48px;
+  min-height: 49px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -243,6 +397,7 @@ watch(
   margin: 0;
   color: #172033;
   font-size: 16px;
+  font-weight: 700;
 }
 
 .form-grid {
@@ -262,28 +417,36 @@ watch(
   gap: 6px;
 }
 
-.form-grid span {
+.form-grid label > span:first-child {
   color: #667085;
   font-size: 12px;
 }
 
-.span-2 {
-  grid-column: span 2;
+.span-4 {
+  grid-column: span 4;
 }
 
-.readonly-area :deep(.ant-input) {
+.inline-row {
+  width: 100%;
+}
+
+.inline-row :deep(.ant-select) {
+  min-width: 0;
+  flex: 1;
+}
+
+.readonly-area :deep(.ant-input),
+.readonly-area :deep(.ant-select-disabled .ant-select-selector),
+.form-grid :deep(.ant-input[readonly]) {
   color: #344054;
-  background: #f9fafb;
+  background: #ffffff;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .attachment-actions {
-  display: flex;
-  align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
 }
 
 .tag.blue {
@@ -302,13 +465,14 @@ watch(
   .dialog-title {
     align-items: flex-start;
     flex-direction: column;
+    gap: 10px;
   }
 
   .form-grid.cols-4 {
     grid-template-columns: 1fr;
   }
 
-  .span-2 {
+  .span-4 {
     grid-column: span 1;
   }
 }
