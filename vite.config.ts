@@ -7,6 +7,7 @@ export default defineConfig(({ mode }) => {
   const backend = env.VITE_BACKEND_URL || 'http://127.0.0.1:8080'
 
   return {
+    base: env.VITE_APP_BASE || '/',
     plugins: [vue()],
     resolve: {
       alias: {
