@@ -55,26 +55,152 @@ export interface DeviceVO {
   remark?: string
 }
 
-export interface DeviceHistoryVO {
-  key?: string
-  historyType?: string
-  historyTypeName?: string
-  deviceCode?: string
-  sourceType?: string
-  sourceId?: EntityId
-  sourceItemId?: EntityId
-  sourceNo?: string
-  eventTime?: string
+export interface DeviceBusinessEventVO {
+  caseId: EntityId
+  businessType?: string
+  businessTypeName?: string
+  businessId?: EntityId
+  businessNo?: string
+  eventSubtype?: string
   title?: string
-  summary?: string
+  statusCode?: string
+  statusName?: string
+  currentNodeCode?: string
+  currentNodeName?: string
+  resultCode?: string
+  resultName?: string
+  startedAt?: string
+  endedAt?: string
+  deviceId?: EntityId
+  deviceCode?: string
+  businessItemId?: EntityId
+  relationRole?: string
+  joinedAt?: string
+}
+
+export interface BusinessCaseDeviceVO {
+  id?: EntityId
+  caseId?: EntityId
+  deviceId?: EntityId
+  deviceCode?: string
+  businessItemId?: EntityId
+  relationRole?: string
+  joinedAt?: string
+}
+
+export interface BusinessCaseRelationVO {
+  id?: EntityId
+  sourceCaseId?: EntityId
+  targetCaseId?: EntityId
+  relationType?: string
+  remark?: string
+  createdBy?: string
+  createdAt?: string
+}
+
+export interface BusinessFlowLogVO {
+  id: EntityId
+  caseId?: EntityId
+  businessItemId?: EntityId
+  processInstanceId?: EntityId
+  taskId?: EntityId
+  eventKind?: string
+  eventKindName?: string
+  nodeCode?: string
+  nodeName?: string
+  actionCode?: string
+  actionName?: string
+  nextNodeCode?: string
+  nextNodeName?: string
   operatorId?: string
   operatorName?: string
-  result?: string
-  amount?: number | string
-  currency?: string
+  opinion?: string
+  resultCode?: string
+  resultName?: string
+  snapshotJson?: string
+  schemaVersion?: number
+  idempotencyKey?: string
+  operatedAt?: string
+}
+
+export interface BusinessCaseDetailVO {
+  id: EntityId
+  businessType?: string
+  businessTypeName?: string
+  businessId?: EntityId
+  businessNo?: string
+  parentCaseId?: EntityId
+  eventSubtype?: string
+  processInstanceId?: EntityId
+  title?: string
+  statusCode?: string
+  statusName?: string
+  currentNodeCode?: string
+  currentNodeName?: string
+  resultCode?: string
+  resultName?: string
+  startedAt?: string
+  endedAt?: string
+  createdAt?: string
+  updatedAt?: string
+  devices?: BusinessCaseDeviceVO[]
+  outgoingRelations?: BusinessCaseRelationVO[]
+  incomingRelations?: BusinessCaseRelationVO[]
+  timeline?: BusinessFlowLogVO[]
+}
+
+export interface CaseAttachmentFileVO {
+  id: EntityId
   attachmentGroupId?: EntityId
-  certificateAttachmentGroupId?: EntityId
-  recordAttachmentGroupId?: EntityId
+  fileName?: string
+  fileExt?: string
+  fileMime?: string
+  fileSize?: number
+  storageProvider?: string
+  fileUrl?: string
+  contentSha256?: string
+  uploaderId?: string
+  uploaderName?: string
+  uploadedAt?: string
+  remark?: string
+}
+
+export interface CaseAttachmentLinkVO {
+  id?: EntityId
+  attachmentGroupId?: EntityId
+  caseId?: EntityId
+  flowLogId?: EntityId
+  businessItemId?: EntityId
+  deviceId?: EntityId
+  purpose?: string
+  linkScope?: string
+  primary?: boolean
+  linkedBy?: string
+  linkedAt?: string
+}
+
+export interface CaseAttachmentGroupVO {
+  id: EntityId
+  groupNo?: string
+  status?: string
+  versionNo?: number
+  supersedesGroupId?: EntityId
+  fileCount?: number
+  totalSize?: number
+  creatorId?: string
+  creatorName?: string
+  lockedBy?: string
+  lockedAt?: string
+  createdAt?: string
+  files?: CaseAttachmentFileVO[]
+}
+
+export interface AttachmentCaseGroupVO {
+  link?: CaseAttachmentLinkVO
+  group: CaseAttachmentGroupVO
+  purposeName?: string
+  linkScopeName?: string
+  statusName?: string
 }
 
 export interface DevicePageQuery {

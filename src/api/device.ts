@@ -1,6 +1,6 @@
 import { request } from '@/api/request'
 import type { PageResult } from '@/types/common'
-import type { DeviceHistoryVO, DevicePageQuery, DeviceVO } from '@/types/device'
+import type { BusinessCaseDetailVO, DeviceBusinessEventVO, DevicePageQuery, DeviceVO } from '@/types/device'
 
 export function listDevicePage(query: DevicePageQuery = {}) {
   const { current = 1, size = 10, ...filters } = query
@@ -22,9 +22,16 @@ export function getDeviceByCode(deviceCode: string) {
   })
 }
 
-export function getDeviceHistory(deviceCode: string) {
-  return request<DeviceHistoryVO[]>({
-    url: `/device/${encodeURIComponent(deviceCode)}/history`,
+export function listDeviceBusinessEvents(deviceCode: string) {
+  return request<DeviceBusinessEventVO[]>({
+    url: `/devices/${encodeURIComponent(deviceCode)}/business-events`,
+    method: 'GET'
+  })
+}
+
+export function getBusinessCaseDetail(caseId: string | number) {
+  return request<BusinessCaseDetailVO>({
+    url: `/business-cases/${encodeURIComponent(String(caseId))}`,
     method: 'GET'
   })
 }

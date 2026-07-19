@@ -49,6 +49,6 @@ export function resolveUploadedAttachmentGroupId(record: AttachmentRecord) {
 
 export function attachmentDownloadUrl(recordOrId: AttachmentRecord | AttachmentId) {
   const id = typeof recordOrId === 'object' ? recordOrId.id : recordOrId
-  const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
+  const apiBaseUrl = (import.meta.env?.VITE_API_BASE_URL || '/api').replace(/\/$/, '')
   return `${apiBaseUrl}/attachment/file/${encodeURIComponent(String(id))}`
 }

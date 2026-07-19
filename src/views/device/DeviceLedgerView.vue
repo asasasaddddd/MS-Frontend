@@ -9,11 +9,17 @@ import {
   FileOutlined,
   SearchOutlined
 } from '@ant-design/icons-vue'
-import { attachmentDownloadUrl, listAttachmentsByGroupId, type AttachmentRecord } from '@/api/attachment'
-import { getDeviceByCode, getDeviceHistory, listDevicePage } from '@/api/device'
-import type { DeviceHistoryVO, DevicePageQuery, DeviceVO } from '@/types/device'
+import { attachmentDownloadUrl, listAttachmentsByCaseId } from '@/api/attachment'
+import { getBusinessCaseDetail, getDeviceByCode, listDeviceBusinessEvents, listDevicePage } from '@/api/device'
+import type {
+  AttachmentCaseGroupVO,
+  BusinessCaseDetailVO,
+  CaseAttachmentFileVO,
+  DeviceBusinessEventVO,
+  DevicePageQuery,
+  DeviceVO
+} from '@/types/device'
 import {
-  buildDeviceHistoryRows,
   deviceCategoryColor,
   deviceCategoryText,
   deviceStatusColor,
@@ -25,6 +31,11 @@ import {
   type DeviceLedgerRow,
   verificationMethodText
 } from '@/views/device/deviceLedgerModel'
+import {
+  mapBusinessEventRow,
+  mapBusinessFlowRow,
+  mapCaseAttachmentSection
+} from '@/views/device/deviceBusinessHistoryModel'
 
 type SearchField =
   | 'deviceCode'
@@ -49,14 +60,16 @@ interface MeasurementRow {
 const loading = ref(false)
 const detailLoading = ref(false)
 const historyLoading = ref(false)
-const attachmentLoading = ref(false)
+const caseLoading = ref(false)
 const devices = ref<DeviceVO[]>([])
 const activeDevice = ref<DeviceVO>()
-const histories = ref<DeviceHistoryVO[]>([])
-const attachments = ref<AttachmentRecord[]>([])
+const businessEvents = ref<DeviceBusinessEventVO[]>([])
+const activeCase = ref<BusinessCaseDetailVO>()
+const caseAttachments = ref<AttachmentCaseGroupVO[]>([])
 const selectedRowKeys = ref<Array<string | number>>([])
 const detailOpen = ref(false)
 const historyOpen = ref(false)
+const caseDetailOpen = ref(false)
 const dataCatalogOpen = ref(false)
 const exportMode = ref<'basic' | 'detail'>('basic')
 const measurementRows = ref<MeasurementRow[]>([])
@@ -105,7 +118,9 @@ const rows = computed(() => {
   const today = new Date().toISOString().slice(0, 10)
   return devices.value.map((device) => mapDeviceLedgerRow(device, today))
 })
-const historyRows = computed(() => activeDevice.value ? buildDeviceHistoryRows(activeDevice.value, histories.value) : [])
+const historyRows = computed(() => businessEvents.value.map(mapBusinessEventRow))
+const caseFlowRows = computed(() => (activeCase.value?.timeline || []).map(mapBusinessFlowRow))
+const attachmentSections = computed(() => caseAttachments.value.map(mapCaseAttachmentSection))
 const selectedRow = computed(() => rows.value.find((row) => row.key === String(selectedRowKeys.value[0])))
 const canOpenSelectedHistory = computed(() => selectedRowKeys.value.length === 1)
 const rowSelection = computed(() => ({
@@ -248,14 +263,12 @@ async function resolveFullDevice(row: DeviceLedgerRow) {
   }
 }
 
-async function loadHistoryAndAttachments(deviceCode?: string) {
+async function loadBusinessEvents(deviceCode?: string) {
   if (!deviceCode) return
   historyLoading.value = true
-  histories.value = []
-  attachments.value = []
+  businessEvents.value = []
   try {
-    histories.value = await getDeviceHistory(deviceCode)
-    await loadAttachments(histories.value)
+    businessEvents.value = await listDeviceBusinessEvents(deviceCode)
   } catch (error) {
     message.warning(error instanceof Error ? error.message : '设备履历加载失败')
   } finally {
@@ -263,41 +276,34 @@ async function loadHistoryAndAttachments(deviceCode?: string) {
   }
 }
 
-async function loadAttachments(historyList: DeviceHistoryVO[]) {
-  const groupIds = [...new Set(historyList
-    .flatMap((history) => [
-      history.attachmentGroupId,
-      history.certificateAttachmentGroupId,
-      history.recordAttachmentGroupId
-    ])
-    .filter((groupId): groupId is string | number => groupId !== undefined && groupId !== null && groupId !== ''))]
-  if (!groupIds.length) return
-
-  attachmentLoading.value = true
+async function openCaseDetail(caseId: string | number) {
+  caseDetailOpen.value = true
+  caseLoading.value = true
+  activeCase.value = undefined
+  caseAttachments.value = []
   try {
-    const results = await Promise.allSettled(groupIds.map((groupId) => listAttachmentsByGroupId(groupId)))
-    const unique = new Map<string | number, AttachmentRecord>()
-    results.forEach((result) => {
-      if (result.status === 'fulfilled') {
-        result.value.forEach((attachment) => unique.set(attachment.id, attachment))
-      }
-    })
-    attachments.value = [...unique.values()]
+    const [detail, attachments] = await Promise.all([
+      getBusinessCaseDetail(caseId),
+      listAttachmentsByCaseId(caseId)
+    ])
+    activeCase.value = detail
+    caseAttachments.value = attachments
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '业务案例详情加载失败')
   } finally {
-    attachmentLoading.value = false
+    caseLoading.value = false
   }
 }
 
 async function openDetail(row: DeviceLedgerRow) {
   detailOpen.value = true
   await resolveFullDevice(row)
-  await loadHistoryAndAttachments(activeDevice.value?.deviceCode)
 }
 
 async function openHistory(row: DeviceLedgerRow) {
   historyOpen.value = true
   await resolveFullDevice(row)
-  await loadHistoryAndAttachments(activeDevice.value?.deviceCode)
+  await loadBusinessEvents(activeDevice.value?.deviceCode)
 }
 
 function openSelectedHistory() {
@@ -309,8 +315,8 @@ function openDataCatalog() {
   dataCatalogOpen.value = true
 }
 
-function downloadAttachment(attachment: AttachmentRecord) {
-  window.open(attachmentDownloadUrl(attachment), '_blank', 'noopener,noreferrer')
+function downloadAttachment(attachment: CaseAttachmentFileVO) {
+  window.open(attachmentDownloadUrl(attachment.id), '_blank', 'noopener,noreferrer')
 }
 
 function quoteCsv(value: unknown) {
@@ -469,19 +475,6 @@ onMounted(loadDevices)
             <label>数据目录</label>
             <div class="detail-value link-value" @click="openDataCatalog"><DatabaseOutlined />查看数据目录</div>
           </div>
-          <div class="detail-field full">
-            <label>附件</label>
-            <a-spin :spinning="attachmentLoading" size="small">
-              <div class="detail-value attachment-list">
-                <template v-if="attachments.length">
-                  <a v-for="attachment in attachments" :key="attachment.id" @click="downloadAttachment(attachment)">
-                    <FileOutlined />{{ attachment.fileName || attachment.id }}
-                  </a>
-                </template>
-                <span v-else>-</span>
-              </div>
-            </a-spin>
-          </div>
         </div>
       </a-spin>
     </a-drawer>
@@ -497,27 +490,90 @@ onMounted(loadDevices)
             </div>
             <span>规格型号：{{ displayValue(activeDevice.modelSpec) }}&ensp;|&ensp;使用部门：{{ displayValue(activeDevice.deptName) }}</span>
           </div>
-          <h3>流程履历</h3>
+          <h3>业务履历</h3>
           <a-timeline v-if="historyRows.length" class="history-timeline">
             <a-timeline-item v-for="item in historyRows" :key="item.key" :color="item.color === 'default' ? 'gray' : item.color">
-              <div class="timeline-card">
+              <div class="timeline-card timeline-card-link" @click="openCaseDetail(item.caseId)">
                 <div class="timeline-card-header">
-                  <strong>{{ item.title || item.typeText }}</strong>
-                  <a-tag :class="['ledger-tag', item.color]">已完成</a-tag>
+                  <strong>{{ item.title }}</strong>
+                  <a-tag :class="['ledger-tag', item.color]">{{ item.statusText }}</a-tag>
                 </div>
                 <div class="timeline-meta">
                   <span>{{ item.dateText }}</span>
-                  <span v-if="item.operator && item.operator !== '-'">操作人：{{ item.operator }}</span>
+                  <span>{{ item.typeText }}</span>
                 </div>
-                <p v-if="item.summary && item.summary !== '-'">{{ item.summary }}</p>
-                <p v-else>{{ item.sourceNo }}</p>
+                <p>业务单号：{{ item.businessNo }}</p>
+                <p>当前节点：{{ item.currentNodeText }}</p>
+                <p v-if="item.resultText !== '-'">处理结果：{{ item.resultText }}</p>
               </div>
             </a-timeline-item>
           </a-timeline>
-          <a-empty v-else description="暂无履历记录" />
+          <a-empty v-else description="暂无业务履历" />
         </template>
       </a-spin>
     </a-drawer>
+
+    <a-modal v-model:open="caseDetailOpen" :footer="null" :width="1040" class="case-detail-modal">
+      <template #title>
+        <span class="drawer-title"><ClockCircleOutlined />业务流程详情</span>
+      </template>
+      <a-spin :spinning="caseLoading">
+        <template v-if="activeCase">
+          <section class="case-summary-grid">
+            <div><label>业务类型</label><strong>{{ activeCase.businessTypeName || activeCase.businessType || '-' }}</strong></div>
+            <div><label>业务单号</label><strong>{{ activeCase.businessNo || '-' }}</strong></div>
+            <div><label>当前状态</label><strong>{{ activeCase.statusName || activeCase.statusCode || '-' }}</strong></div>
+            <div><label>当前节点</label><strong>{{ activeCase.currentNodeName || activeCase.currentNodeCode || '-' }}</strong></div>
+            <div><label>处理结果</label><strong>{{ activeCase.resultName || activeCase.resultCode || '-' }}</strong></div>
+            <div><label>开始时间</label><strong>{{ activeCase.startedAt ? activeCase.startedAt.replace('T', ' ').slice(0, 16) : '-' }}</strong></div>
+          </section>
+
+          <section class="case-section">
+            <h3>流程轨迹与审批意见</h3>
+            <a-timeline v-if="caseFlowRows.length" class="history-timeline">
+              <a-timeline-item v-for="flow in caseFlowRows" :key="flow.key" :color="flow.color === 'default' ? 'gray' : flow.color">
+                <div class="timeline-card">
+                  <div class="timeline-card-header">
+                    <strong>{{ flow.nodeText }}</strong>
+                    <a-tag :class="['ledger-tag', flow.color]">{{ flow.kindText }}</a-tag>
+                  </div>
+                  <div class="timeline-meta">
+                    <span>{{ flow.dateText }}</span>
+                    <span>操作人：{{ flow.operatorText }}</span>
+                    <span>动作：{{ flow.actionText }}</span>
+                    <span v-if="flow.nextNodeText !== '-'">下一节点：{{ flow.nextNodeText }}</span>
+                  </div>
+                  <p v-if="flow.opinion !== '-'">审批意见：{{ flow.opinion }}</p>
+                  <p v-if="flow.resultText !== '-'">处理结果：{{ flow.resultText }}</p>
+                </div>
+              </a-timeline-item>
+            </a-timeline>
+            <a-empty v-else description="暂无流程轨迹" />
+          </section>
+
+          <section class="case-section">
+            <h3>流程附件</h3>
+            <div v-if="attachmentSections.length" class="attachment-groups">
+              <article v-for="section in attachmentSections" :key="section.key" class="attachment-group">
+                <div class="attachment-group-header">
+                  <strong>{{ section.purposeText }}</strong>
+                  <span>{{ section.scopeText }} · {{ section.statusText }}</span>
+                </div>
+                <div v-if="section.files.length" class="attachment-file-list">
+                  <a v-for="attachment in section.files" :key="attachment.id" @click="downloadAttachment(attachment)">
+                    <FileOutlined />
+                    <span>{{ attachment.fileName || attachment.id }}</span>
+                    <small>{{ attachment.uploaderName || attachment.uploaderId || '-' }}</small>
+                  </a>
+                </div>
+                <a-empty v-else :image="false" description="附件组内暂无文件" />
+              </article>
+            </div>
+            <a-empty v-else description="暂无流程附件" />
+          </section>
+        </template>
+      </a-spin>
+    </a-modal>
 
     <a-modal v-model:open="dataCatalogOpen" :footer="null" :width="680">
       <template #title><span class="drawer-title"><DatabaseOutlined />数据目录 · {{ displayValue(activeDevice?.deviceName) }}</span></template>
@@ -757,18 +813,6 @@ onMounted(loadDevices)
   cursor: pointer;
 }
 
-.attachment-list {
-  flex-wrap: wrap;
-  gap: 8px 12px;
-}
-
-.attachment-list a {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: #1769e0;
-}
-
 .history-device-summary {
   display: grid;
   gap: 7px;
@@ -810,6 +854,17 @@ onMounted(loadDevices)
   background: #f8fafc;
 }
 
+.timeline-card-link {
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.timeline-card-link:hover {
+  border-color: #91bfff;
+  box-shadow: 0 8px 18px rgb(23 105 224 / 10%);
+  transform: translateY(-1px);
+}
+
 .timeline-card-header,
 .timeline-meta {
   display: flex;
@@ -836,6 +891,101 @@ onMounted(loadDevices)
   line-height: 1.6;
 }
 
+.case-detail-modal :deep(.ant-modal-body) {
+  max-height: calc(92vh - 116px);
+  overflow-y: auto;
+}
+
+.case-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e5eaf1;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.case-summary-grid > div {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.case-summary-grid label,
+.attachment-group-header span,
+.attachment-file-list small {
+  color: #667085;
+  font-size: 12px;
+}
+
+.case-summary-grid strong {
+  overflow-wrap: anywhere;
+  color: #172033;
+}
+
+.case-section {
+  margin-top: 20px;
+}
+
+.case-section h3 {
+  margin: 0 0 12px;
+  color: #172033;
+  font-size: 15px;
+}
+
+.attachment-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.attachment-group {
+  overflow: hidden;
+  border: 1px solid #e5eaf1;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.attachment-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5eaf1;
+  background: #f8fafc;
+}
+
+.attachment-file-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+}
+
+.attachment-file-list a {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid #e5eaf1;
+  border-radius: 6px;
+  color: #1769e0;
+}
+
+.attachment-file-list a:hover {
+  border-color: #91bfff;
+  background: #f6f9ff;
+}
+
+.attachment-file-list a span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .catalog-device-code {
   margin-bottom: 14px;
   color: #667085;
@@ -860,6 +1010,11 @@ onMounted(loadDevices)
 
   .detail-field.full {
     grid-column: auto;
+  }
+
+  .case-summary-grid,
+  .attachment-file-list {
+    grid-template-columns: 1fr;
   }
 }
 </style>

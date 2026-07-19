@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 
 import {
-  buildDeviceHistoryRows,
   deviceCategoryText,
   deviceStatusText,
   formatCycle,
@@ -56,9 +55,3 @@ assert.equal(row.statusText, '在用')
 assert.equal(row.cycleText, '12个月')
 assert.equal(row.overdue, true)
 assert.equal(row.mandatoryText, '否')
-
-const historyRows = buildDeviceHistoryRows(device)
-assert.equal(historyRows.length, 1)
-assert.equal(historyRows[0].typeText, '首检')
-assert.equal(historyRows[0].sourceNo, 'NEW-123')
-assert.equal(historyRows[0].dateText, '2026年06月25日')
