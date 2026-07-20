@@ -36,6 +36,20 @@ export function listPrintedLabels(sourceType?: string) {
   })
 }
 
+export function listSupplierFirstCheckUnprintedLabels() {
+  return request<LabelPrintRecord[]>({
+    url: '/label/supplier/firstcheck/unprinted',
+    method: 'GET'
+  })
+}
+
+export function listSupplierFirstCheckPrintedLabels() {
+  return request<LabelPrintRecord[]>({
+    url: '/label/supplier/firstcheck/printed',
+    method: 'GET'
+  })
+}
+
 export function printLabelRecord(recordId: string | number) {
   return request<void>({
     url: `/label/print/${recordId}`,

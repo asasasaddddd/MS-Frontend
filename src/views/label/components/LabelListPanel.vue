@@ -3,7 +3,15 @@ import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import QRCode from 'qrcode'
-import { downloadLabelPdf, listPrintedLabels, listUnprintedLabels, printLabelRecord } from '@/api/label'
+import {
+  downloadLabelPdf,
+  listPrintedLabels,
+  listSupplierFirstCheckPrintedLabels,
+  listSupplierFirstCheckUnprintedLabels,
+  listUnprintedLabels,
+  printLabelRecord
+} from '@/api/label'
+import { useSessionStore } from '@/stores/session'
 import {
   getSelectedLabelRows,
   labelVerificationMethodName,
@@ -20,6 +28,7 @@ type SourceFlow = 'all' | 'FIRST_CHECK' | 'PERIODIC' | 'BEFORE_USE' | 'CHANGE' |
 
 const route = useRoute()
 const router = useRouter()
+const session = useSessionStore()
 const loading = ref(false)
 const printing = ref(false)
 const rows = ref<LabelPrintRecord[]>([])
@@ -35,10 +44,29 @@ const filters = reactive({
   isCommon: 'all'
 })
 
-const title = computed(() => (props.mode === 'pending' ? '打印标签' : '已打印标签'))
+const isSupplier = computed(() => session.user?.roleCode === 'SUPPLIER')
+const title = computed(() => {
+  if (isSupplier.value) return props.mode === 'pending' ? '临时首检标签' : '已打印临时首检标签'
+  return props.mode === 'pending' ? '打印标签' : '已打印标签'
+})
 const tableTitle = computed(() => (props.mode === 'pending' ? '待打印标签明细' : '已打印标签明细'))
 
 const columns = computed(() => {
+  if (isSupplier.value) {
+    return [
+      { title: '序号', key: 'index', width: 70 },
+      { title: '首检编号', key: 'orderNo', width: 170 },
+      { title: '临时首检码', dataIndex: 'deviceCode', key: 'deviceCode', width: 190 },
+      { title: '采购订单号', key: 'purchaseOrderNo', width: 150 },
+      { title: '物料编号', key: 'materialCode', width: 130 },
+      { title: '物料描述', key: 'materialName', width: 150 },
+      { title: '设备名称', dataIndex: 'deviceName', key: 'deviceName', width: 150 },
+      { title: '数量', key: 'quantity', width: 80 },
+      { title: '使用部门', key: 'applyDeptName', width: 130 },
+      { title: '申请时间', key: 'applyTime', width: 170 },
+      ...(props.mode === 'printed' ? [{ title: '打印次数', dataIndex: 'printCount', key: 'printCount', width: 100 }] : [])
+    ]
+  }
   const base = [
     { title: '序号', key: 'index', width: 70 },
     { title: '计量编号', dataIndex: 'deviceCode', key: 'deviceCode', width: 150 },
@@ -101,6 +129,7 @@ function sourceTypeName(value?: string) {
 
 function labelTypeName(value?: string) {
   const normalized = String(value || '').toUpperCase()
+  if (normalized === 'TEMPORARY_FIRST_CHECK') return '首检临时标签'
   if (normalized === 'SEALED') return '封存标签'
   return '合格标签'
 }
@@ -200,7 +229,13 @@ async function confirmPrint() {
 async function loadRows() {
   loading.value = true
   try {
-    rows.value = props.mode === 'pending' ? await listUnprintedLabels() : await listPrintedLabels()
+    if (isSupplier.value) {
+      rows.value = props.mode === 'pending'
+        ? await listSupplierFirstCheckUnprintedLabels()
+        : await listSupplierFirstCheckPrintedLabels()
+    } else {
+      rows.value = props.mode === 'pending' ? await listUnprintedLabels() : await listPrintedLabels()
+    }
     selectedRowKeys.value = selectedRowKeys.value.filter((key) => rows.value.some((row) => labelRowKey(row.id) === key))
     await focusRouteTarget()
   } catch (error) {
@@ -257,10 +292,10 @@ onMounted(loadRows)
       <template #title><h2>筛选条件</h2></template>
       <div class="filter-section">
         <label>
-          <span>计量编号</span>
-          <a-input v-model:value="filters.deviceCode" placeholder="请输入计量编号" allow-clear />
+          <span>{{ isSupplier ? '临时首检码' : '计量编号' }}</span>
+          <a-input v-model:value="filters.deviceCode" :placeholder="isSupplier ? '请输入临时首检码' : '请输入计量编号'" allow-clear />
         </label>
-        <label>
+        <label v-if="!isSupplier">
           <span>来源流程</span>
           <a-select
             v-model:value="filters.sourceType"
@@ -274,7 +309,7 @@ onMounted(loadRows)
             ]"
           />
         </label>
-        <label>
+        <label v-if="!isSupplier">
           <span>检定方式</span>
           <a-select
             v-model:value="filters.verificationType"
@@ -285,7 +320,7 @@ onMounted(loadRows)
             ]"
           />
         </label>
-        <label>
+        <label v-if="!isSupplier">
           <span>是否通用</span>
           <a-select
             v-model:value="filters.isCommon"
@@ -321,16 +356,23 @@ onMounted(loadRows)
         :loading="loading"
         :pagination="{ pageSize: 10, showSizeChanger: false }"
         :row-selection="rowSelection"
-        :scroll="{ x: mode === 'printed' ? 1120 : 1020 }"
+        :scroll="{ x: isSupplier ? 1420 : mode === 'printed' ? 1120 : 1020 }"
         :row-key="getTableRowKey"
         size="middle"
       >
         <template #bodyCell="{ column, record, index }">
           <template v-if="column.key === 'index'">{{ index + 1 }}</template>
+          <template v-else-if="column.key === 'orderNo'">{{ display(record.sourceDetail?.businessNo) }}</template>
           <template v-else-if="column.key === 'deviceCode'">
             <a-button type="link" class="code-link" @click="openPreview(record)">{{ display(record.deviceCode) }}</a-button>
           </template>
+          <template v-else-if="column.key === 'purchaseOrderNo'">{{ display(record.sourceDetail?.purchaseOrderNo) }}</template>
+          <template v-else-if="column.key === 'materialCode'">{{ display(record.sourceDetail?.materialCode) }}</template>
+          <template v-else-if="column.key === 'materialName'">{{ display(record.sourceDetail?.materialName) }}</template>
           <template v-else-if="column.key === 'deviceName'">{{ display(record.deviceName) }}</template>
+          <template v-else-if="column.key === 'quantity'">{{ display(record.sourceDetail?.quantity) }}</template>
+          <template v-else-if="column.key === 'applyDeptName'">{{ display(record.sourceDetail?.applyDeptName) }}</template>
+          <template v-else-if="column.key === 'applyTime'">{{ display(record.sourceDetail?.applyTime) }}</template>
           <template v-else-if="column.key === 'validUntil'">{{ display(record.validUntil) }}</template>
           <template v-else-if="column.key === 'verificationDate'">{{ display(record.verificationDate) }}</template>
           <template v-else-if="column.key === 'verificationType'">{{ labelVerificationMethodName(record.verificationMethod) }}</template>
@@ -355,15 +397,33 @@ onMounted(loadRows)
             </div>
           </div>
           <div class="label-fields">
-            <span>设备名称：{{ display(row.deviceName) }}</span>
-            <span>来源流程：{{ sourceTypeName(row.sourceType) }}</span>
-            <span>标签类型：{{ labelTypeName(row.labelType) }}</span>
-            <span>检定方式：{{ labelVerificationMethodName(row.verificationMethod) }}</span>
-            <span>管理类别：{{ display(row.manageCategory) }}</span>
-            <span>是否通用：{{ isCommonName(row.isCommon) }}</span>
-            <span>有效期：{{ display(row.validUntil || row.sealDate) }}</span>
-            <span>检定日期：{{ display(row.verificationDate) }}</span>
-            <span>签名人：{{ signatureDisplay(row) }}</span>
+            <template v-if="isSupplier">
+              <span>首检编号：{{ display(row.sourceDetail?.businessNo) }}</span>
+              <span>临时首检码：{{ display(row.deviceCode) }}</span>
+              <span>采购订单号：{{ display(row.sourceDetail?.purchaseOrderNo) }}</span>
+              <span>物料编号：{{ display(row.sourceDetail?.materialCode) }}</span>
+              <span>物料描述：{{ display(row.sourceDetail?.materialName) }}</span>
+              <span>设备名称：{{ display(row.sourceDetail?.deviceName) }}</span>
+              <span>规格型号：{{ display(row.sourceDetail?.modelSpec) }}</span>
+              <span>数量：{{ display(row.sourceDetail?.quantity) }}</span>
+              <span>使用部门：{{ display(row.sourceDetail?.applyDeptName) }}</span>
+              <span>供应商名称：{{ display(row.sourceDetail?.supplierName) }}</span>
+              <span>申请人：{{ display(row.sourceDetail?.applicantName) }} / {{ display(row.sourceDetail?.applicantId) }}</span>
+              <span>申请时间：{{ display(row.sourceDetail?.applyTime) }}</span>
+              <span>附件：{{ row.sourceDetail?.hasAttachment ? '有附件' : '无附件' }}</span>
+              <span>备注：{{ display(row.sourceDetail?.remark) }}</span>
+            </template>
+            <template v-else>
+              <span>设备名称：{{ display(row.deviceName) }}</span>
+              <span>来源流程：{{ sourceTypeName(row.sourceType) }}</span>
+              <span>标签类型：{{ labelTypeName(row.labelType) }}</span>
+              <span>检定方式：{{ labelVerificationMethodName(row.verificationMethod) }}</span>
+              <span>管理类别：{{ display(row.manageCategory) }}</span>
+              <span>是否通用：{{ isCommonName(row.isCommon) }}</span>
+              <span>有效期：{{ display(row.validUntil || row.sealDate) }}</span>
+              <span>检定日期：{{ display(row.verificationDate) }}</span>
+              <span>签名人：{{ signatureDisplay(row) }}</span>
+            </template>
             <span v-if="mode === 'printed'">打印次数：{{ row.printCount || 0 }}</span>
           </div>
         </div>
@@ -372,7 +432,7 @@ onMounted(loadRows)
       <div class="dialog-actions">
         <a-button @click="previewOpen = false">关闭</a-button>
         <a-button type="primary" :loading="printing" @click="confirmPrint">
-          {{ mode === 'pending' ? '确认打印并流转' : '再次打印' }}
+          {{ mode === 'pending' ? '确认打印' : '再次打印' }}
         </a-button>
       </div>
     </a-modal>

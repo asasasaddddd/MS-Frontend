@@ -1,5 +1,23 @@
 export type LabelVerificationMethod = 'self' | 'send_out'
 
+export interface LabelSourceDetail {
+  sourceId?: string | number
+  businessNo?: string
+  purchaseOrderNo?: string
+  materialCode?: string
+  materialName?: string
+  deviceName?: string
+  modelSpec?: string
+  quantity?: number
+  applyDeptName?: string
+  supplierName?: string
+  applicantId?: string
+  applicantName?: string
+  applyTime?: string
+  remark?: string
+  hasAttachment?: boolean
+}
+
 export interface LabelPrintRecord {
   id: string | number
   labelType?: string
@@ -22,6 +40,7 @@ export interface LabelPrintRecord {
   sourceType?: string
   sourceId?: string | number
   qrCodeData?: string
+  sourceDetail?: LabelSourceDetail
   createdAt?: string
   updatedAt?: string
 }

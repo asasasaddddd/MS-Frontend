@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { startFirstCheck } from '@/api/firstcheck'
 import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
@@ -7,6 +8,7 @@ import { useSessionStore } from '@/stores/session'
 import type { AttachmentId } from '@/types/firstcheck'
 
 const session = useSessionStore()
+const router = useRouter()
 const submitting = ref(false)
 
 const form = reactive({
@@ -83,8 +85,9 @@ async function submit() {
       },
       remark: form.remark.trim() || undefined
     })
-    message.success(`首检申请已提交，单据ID：${orderId}`)
+    message.success(`首检申请已提交，单据ID：${orderId}，请打印临时首检标签`)
     resetForm()
+    await router.push({ path: '/label/print', query: { mode: 'pending' } })
   } catch (error) {
     message.error(error instanceof Error ? error.message : '首检申请提交失败')
   } finally {
