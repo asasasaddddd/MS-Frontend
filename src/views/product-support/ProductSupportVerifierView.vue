@@ -2,21 +2,17 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { SearchOutlined, UploadOutlined } from '@ant-design/icons-vue'
+import { SearchOutlined } from '@ant-design/icons-vue'
 import {
   getProductSupportOrder,
   listProductSupportMyHistory,
   listProductSupportMyTasks,
   verifierSubmitProductSupport
 } from '@/api/productSupport'
-import AttachmentListButton from '@/components/AttachmentListButton.vue'
-import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
 import type { ProductSupportEntityId, ProductSupportOrderVO, ProductSupportRatioVO } from '@/types/productSupport'
 import {
   buildProductSupportSummary,
   display,
-  formatDate,
-  formatMoney,
   mapProductSupportOrderRow,
   productSupportTagColor,
   toNumber
@@ -74,9 +70,7 @@ const ratioColumns = [
   { title: '备注', key: 'remark', width: 110 },
   { title: '费用编号', key: 'costNo', width: 140 },
   { title: '合格', key: 'qualifiedQuantity', width: 92 },
-  { title: '不合格', key: 'unqualifiedQuantity', width: 92 },
-  { title: '含税单价', key: 'unitPrice', width: 120 },
-  { title: '含税总价', key: 'totalAmount', width: 120 }
+  { title: '不合格', key: 'unqualifiedQuantity', width: 92 }
 ]
 
 const rows = computed(() => tasks.value.map(mapProductSupportOrderRow))
@@ -168,7 +162,7 @@ async function openOrder(orderId: ProductSupportEntityId) {
     currentOrder.value = detail
     ratioDrafts.value = (detail.ratios || []).map(ratioDraftFrom)
     attachmentGroupId.value = detail.attachmentGroupId
-    verifyForm.verificationDate = detail.verificationDate || new Date().toISOString().slice(0, 10)
+    verifyForm.verificationDate = detail.verificationDate || detail.inspectionDate || new Date().toISOString().slice(0, 10)
     verifyForm.opinion = ''
     verifyOpen.value = true
   } catch (error) {
@@ -235,10 +229,6 @@ async function submitVerify() {
   } finally {
     submitting.value = false
   }
-}
-
-function totalAmount(row: VerifyRatioDraft) {
-  return Number(row.sampleQuantity || 0) * Number(row.unitPrice || 0)
 }
 
 watch(
@@ -332,13 +322,19 @@ onMounted(async () => {
 
     <a-modal
       v-model:open="verifyOpen"
-      width="920px"
-      title="产品配套检定信息填写"
-      :confirm-loading="submitting"
-      ok-text="提交"
-      cancel-text="取消"
-      @ok="submitVerify"
+      width="820px"
+      wrap-class-name="product-support-verify-dialog"
+      :footer="null"
     >
+      <template #title>
+        <div class="verify-modal-header">
+          <h1>产品配套检定信息填写</h1>
+          <div class="verify-modal-actions">
+            <a-button @click="verifyOpen = false">取消</a-button>
+            <a-button type="primary" :loading="submitting" @click="submitVerify">提交</a-button>
+          </div>
+        </div>
+      </template>
       <div v-if="currentOrder" class="verify-modal">
         <section class="modal-section">
           <h3>产品基本信息</h3>
@@ -346,25 +342,9 @@ onMounted(async () => {
             <label><span>合同号</span><a-input :value="display(currentOrder.contractNo)" readonly /></label>
             <label><span>项目号</span><a-input :value="display(currentOrder.projectNo)" readonly /></label>
             <label><span>项目类型</span><a-input :value="display(currentOrder.projectType)" readonly /></label>
-            <label><span>送检时间</span><a-input :value="formatDate(currentOrder.inspectionDate)" readonly /></label>
+            <label><span>送检时间</span><a-input v-model:value="verifyForm.verificationDate" type="date" /></label>
             <label><span>供方</span><a-input :value="display(currentOrder.supplierName)" readonly /></label>
             <label><span>申请部门</span><a-input :value="display(currentOrder.applyDeptName)" readonly /></label>
-            <label><span>检定日期</span><a-input v-model:value="verifyForm.verificationDate" type="date" /></label>
-            <label>
-              <span>附件</span>
-              <div class="attachment-actions">
-                <AttachmentUploadButton
-                  v-model="attachmentGroupId"
-                  business-type="PRODUCT_SUPPORT"
-                  :business-id="currentOrder.id"
-                  button-text="上传文件"
-                  size="small"
-                >
-                  <template #icon><UploadOutlined /></template>
-                </AttachmentUploadButton>
-                <AttachmentListButton v-if="attachmentGroupId" :group-id="attachmentGroupId" size="small" />
-              </div>
-            </label>
           </div>
         </section>
 
@@ -391,15 +371,8 @@ onMounted(async () => {
               <template v-else-if="column.key === 'unqualifiedQuantity'">
                 <a-input-number v-model:value="record.unqualifiedQuantity" :min="0" :max="record.sampleQuantity" />
               </template>
-              <template v-else-if="column.key === 'unitPrice'"><a-input-number v-model:value="record.unitPrice" :min="0" :precision="2" /></template>
-              <template v-else-if="column.key === 'totalAmount'">{{ formatMoney(totalAmount(record)) }}</template>
             </template>
           </a-table>
-        </section>
-
-        <section class="modal-section last">
-          <h3>检定意见</h3>
-          <a-textarea v-model:value="verifyForm.opinion" :rows="3" placeholder="填写检定意见" />
         </section>
       </div>
     </a-modal>
@@ -543,17 +516,39 @@ onMounted(async () => {
 
 .verify-modal {
   display: grid;
-  gap: 18px;
+  gap: 20px;
+  max-height: calc(90vh - 66px);
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.verify-modal-header,
+.verify-modal-actions {
+  display: flex;
+  align-items: center;
+}
+
+.verify-modal-header {
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.verify-modal-header h1 {
+  margin: 0;
+  color: #1a1a2e;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.verify-modal-actions {
+  gap: 8px;
 }
 
 .modal-section {
-  padding-bottom: 18px;
-  border-bottom: 1px solid #e5eaf1;
-}
-
-.modal-section.last {
-  padding-bottom: 0;
-  border-bottom: 0;
+  margin-bottom: 0;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e5e9f0;
 }
 
 .modal-section h3 {
@@ -581,10 +576,29 @@ onMounted(async () => {
   font-size: 12px;
 }
 
-.attachment-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.verify-modal :deep(.ant-input),
+.verify-modal :deep(.ant-input-number),
+.verify-modal :deep(.ant-input-number-input) {
+  min-height: 34px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+:global(.product-support-verify-dialog .ant-modal-content) {
+  overflow: hidden;
+  padding: 0;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+}
+
+:global(.product-support-verify-dialog .ant-modal-header) {
+  margin: 0;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid #e5e9f0;
+}
+
+:global(.product-support-verify-dialog .ant-modal-close) {
+  display: none;
 }
 
 :deep(.ant-table-thead > tr > th) {

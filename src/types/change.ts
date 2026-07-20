@@ -70,11 +70,15 @@ export interface ChangeRejectRequest {
 
 export interface ChangeVerifierHandleRequest {
   orderId: EntityId
-  verificationResult: 'qualified' | 'unqualified' | string
+  verificationResult: 'qualified' | 'unqualified' | 'scrap' | 'repair' | string
   verificationDate?: string
   validUntil?: string
-  verificationRecordId?: EntityId
   certificateAttachmentGroupId?: EntityId
+  reason?: string
+  sendOutRequired?: number
+  responsibleEngineerId?: string
+  responsibleEngineerName?: string
+  newCycleMonth?: number
   opinion?: string
 }
 
@@ -87,7 +91,10 @@ export interface ChangeItemVO {
   deviceName?: string
   modelSpec?: string
   factoryCode?: string
+  deptId?: string
   deptName?: string
+  responsibleEngineerId?: string
+  responsibleEngineerName?: string
   oldStatus?: string
   newStatus?: string
   oldCategory?: string

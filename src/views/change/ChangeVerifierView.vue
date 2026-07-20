@@ -18,7 +18,7 @@ import {
   resolveItemSnapshot,
   type ChangeTaskRow
 } from '@/views/change/changeDisplayModel'
-import ChangeDetailDialog from '@/views/change/components/ChangeDetailDialog.vue'
+import ChangeVerifierHandleDialog from '@/views/change/components/ChangeVerifierHandleDialog.vue'
 import { changeNodeCodesByRole, isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 
 const route = useRoute()
@@ -225,12 +225,11 @@ onMounted(loadRows)
       </a-table>
     </a-card>
 
-    <ChangeDetailDialog
+    <ChangeVerifierHandleDialog
       v-model:open="detailOpen"
       :order="activeOrder"
-      mode="verifier"
       :submitting="submitting"
-      @verifier-submit="handleVerifierSubmit"
+      @submit="handleVerifierSubmit"
     />
   </section>
 </template>
