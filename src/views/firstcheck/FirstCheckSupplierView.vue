@@ -41,10 +41,6 @@ function searchPurchaseOrder() {
   message.info('采购订单查询接口未单独暴露，请继续填写物料信息后提交')
 }
 
-function printPage() {
-  window.print()
-}
-
 async function submit() {
   if (!form.purchaseOrderNo.trim()) {
     message.warning('请填写采购订单编号')
@@ -138,7 +134,6 @@ async function submit() {
 
     <div class="form-actions">
       <a-button @click="resetForm">取消</a-button>
-      <a-button @click="printPage">打印</a-button>
       <a-button type="primary" :loading="submitting" @click="submit">提交</a-button>
     </div>
   </section>

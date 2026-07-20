@@ -403,8 +403,6 @@ watch(
             />
           </label>
           <label><span>使用部门</span><a-input :value="display(order?.applyDeptName)" readonly /></label>
-          <label><span>检定日期</span><a-input v-model:value="form.verificationDate" type="date" /></label>
-          <label><span>有效期</span><a-input v-model:value="form.validUntil" type="date" /></label>
           <label><span>存储位置</span><a-input v-model:value="form.storageLocation" placeholder="填写存储位置" /></label>
           <label class="span-2"><span>检定意见</span><a-textarea v-model:value="form.verificationOpinion" :rows="3" /></label>
         </div>
@@ -420,12 +418,12 @@ watch(
           </a-table-column>
           <a-table-column title="检定日期">
             <template #default>
-              <a-input :value="form.verificationDate" type="date" />
+              <a-input v-model:value="form.verificationDate" type="date" />
             </template>
           </a-table-column>
           <a-table-column title="有效期">
             <template #default>
-              <a-input :value="form.validUntil" type="date" />
+              <a-input v-model:value="form.validUntil" type="date" />
             </template>
           </a-table-column>
           <a-table-column title="出厂编号">

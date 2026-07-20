@@ -6,4 +6,5 @@ const categorySource = readFileSync(new URL('../src/views/firstcheck/components/
 
 assert.match(source, /supplierName:\s*form\.supplierName\.trim\(\)/)
 assert.doesNotMatch(source, /form\.usageScenario/)
+assert.doesNotMatch(source, /printPage|>打印</)
 assert.match(categorySource, /usageScenario:\s*form\.usageScenario\.trim\(\)\s*\|\|\s*undefined/)
