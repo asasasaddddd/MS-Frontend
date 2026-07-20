@@ -37,7 +37,7 @@ const form = reactive({
   subjectSubcategory: undefined as string | undefined,
   deviceStatus: 'in_use',
   isMandatory: 0,
-  standardDevice: '',
+  standardDevice: '否',
   confirmInterval: '周期检定',
   specialProject: '',
   verificationCycleMonth: 12,
@@ -116,10 +116,10 @@ function resetForm(order?: FirstCheckOrder) {
   form.factoryDate = order?.factoryDate || ''
   form.subjectCategory = order?.subjectCategory
   form.subjectSubcategory = normalizeSubjectSubcategory(order?.subjectSubcategory)
-  form.deviceStatus = order?.deviceStatus || 'in_use'
+  form.deviceStatus = order?.deviceStatus === 'sealed' ? 'sealed' : 'in_use'
   form.isMandatory = order?.isMandatory ?? 0
-  form.standardDevice = order?.standardDevice || ''
-  form.confirmInterval = order?.confirmInterval || '周期检定'
+  form.standardDevice = order?.standardDevice === '是' ? '是' : '否'
+  form.confirmInterval = order?.confirmInterval === '一次检定' ? '一次检定' : '周期检定'
   form.specialProject = order?.specialProject || ''
   form.verificationCycleMonth = order?.verificationCycleMonth || 12
   form.verificationDate = order?.verificationDate || new Date().toISOString().slice(0, 10)
@@ -334,8 +334,7 @@ watch(
               v-model:value="form.deviceStatus"
               :options="[
                 { label: '在用', value: 'in_use' },
-                { label: '封存', value: 'sealed' },
-                { label: '停用', value: 'stopped' }
+                { label: '封存', value: 'sealed' }
               ]"
             />
           </label>
@@ -349,14 +348,23 @@ watch(
               ]"
             />
           </label>
-          <label><span>标准器</span><a-input v-model:value="form.standardDevice" placeholder="填写标准器" /></label>
+          <label>
+            <span>标准器</span>
+            <a-select
+              v-model:value="form.standardDevice"
+              :options="[
+                { label: '否', value: '否' },
+                { label: '是', value: '是' }
+              ]"
+            />
+          </label>
           <label>
             <span>确认间隔</span>
             <a-select
               v-model:value="form.confirmInterval"
               :options="[
                 { label: '周期检定', value: '周期检定' },
-                { label: '自然', value: '自然' }
+                { label: '一次检定', value: '一次检定' }
               ]"
             />
           </label>
@@ -366,9 +374,9 @@ watch(
             <a-select
               v-model:value="form.verificationCycleMonth"
               :options="[
-                { label: '12个月', value: 12 },
-                { label: '6个月', value: 6 },
-                { label: '24个月', value: 24 }
+                { label: '12', value: 12 },
+                { label: '6', value: 6 },
+                { label: '24', value: 24 }
               ]"
             />
           </label>
