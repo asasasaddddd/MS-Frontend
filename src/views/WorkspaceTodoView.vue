@@ -23,6 +23,7 @@ import { changeNodeName, changeTypeName, matchesChangeVerifierRole } from '@/vie
 import {
   dedupeTodoEntriesByKey,
   filterVisibleTodoEntries,
+  getWorkspaceLaunchActions,
   visibleTodoTypeValues,
   type WorkspaceTodoType
 } from '@/views/workspaceTodoModel'
@@ -62,6 +63,7 @@ const roleLabel = computed(() => {
 })
 const isVerifier = computed(() => roleCode.value === 'VERIFIER_SELF' || roleCode.value === 'VERIFIER_EXTERNAL')
 const isSingleMetricOverview = computed(() => roleCode.value === 'CONFIRMER' || roleCode.value === 'RESPONSIBLE_ENGINEER')
+const launchActions = computed(() => getWorkspaceLaunchActions(roleCode.value))
 
 const filterOptions: SelectProps['options'] = [
   { label: '全部类型', value: 'all' },
@@ -488,11 +490,28 @@ async function loadWorkflowSummary() {
   }, {})
 }
 
+function openLaunch(path: string) {
+  router.push(path)
+}
+
 onMounted(loadWorkflowSummary)
 </script>
 
 <template>
   <section class="todo-page">
+    <a-card v-if="route.path === '/todo' && launchActions.length > 0" class="launch-panel" :bordered="false">
+      <template #title>
+        <h2>业务发起</h2>
+      </template>
+      <div v-for="action in launchActions" :key="action.key" class="launch-item">
+        <div>
+          <strong>{{ action.title }}</strong>
+          <p>{{ action.description }}</p>
+        </div>
+        <a-button type="primary" @click="openLaunch(action.path)">进入申请</a-button>
+      </div>
+    </a-card>
+
     <div v-if="route.path === '/todo' && metrics.length > 0" class="metric-grid">
       <a-card v-for="metric in metrics" :key="metric.title" class="metric-card" :bordered="false">
         <span>{{ metric.title }}</span>
@@ -545,6 +564,47 @@ onMounted(loadWorkflowSummary)
 .todo-page {
   display: grid;
   gap: 16px;
+}
+
+.launch-panel {
+  border: 1px solid #e5eaf1;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.launch-panel :deep(.ant-card-head) {
+  min-height: 56px;
+  padding: 0 18px;
+  border-bottom: 1px solid #e5eaf1;
+}
+
+.launch-panel :deep(.ant-card-body) {
+  padding: 14px 18px;
+}
+
+.launch-panel h2 {
+  margin: 0;
+  color: #172033;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.launch-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.launch-item strong {
+  color: #172033;
+  font-size: 16px;
+}
+
+.launch-item p {
+  margin: 4px 0 0;
+  color: #667085;
+  font-size: 12px;
 }
 
 .metric-grid {

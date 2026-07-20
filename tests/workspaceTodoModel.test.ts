@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   dedupeTodoEntriesByKey,
   filterVisibleTodoEntries,
+  getWorkspaceLaunchActions,
   visibleTodoTypeValues
 } from '../src/views/workspaceTodoModel.ts'
 
@@ -21,3 +22,13 @@ const duplicateEntries = [
   { key: 'periodic-200', type: 'periodic' as const, count: 3 }
 ]
 assert.deepEqual(dedupeTodoEntriesByKey(duplicateEntries), [duplicateEntries[0], duplicateEntries[2]])
+
+assert.deepEqual(getWorkspaceLaunchActions('SUPPLIER'), [
+  {
+    key: 'firstcheck-start',
+    title: '发起首检',
+    description: '填写测量设备首次使用申请',
+    path: '/firstcheck/supplier'
+  }
+])
+assert.deepEqual(getWorkspaceLaunchActions('MEASURE_ADMIN'), [])
