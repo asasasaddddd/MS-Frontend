@@ -3,8 +3,6 @@ export type AttachmentId = string | number
 export interface AttachmentRecord {
   id: AttachmentId
   attachmentGroupId?: AttachmentId
-  businessType?: string
-  businessId?: AttachmentId
   fileName?: string
   fileExt?: string
   fileMime?: string
@@ -16,11 +14,29 @@ export interface AttachmentRecord {
   remark?: string
 }
 
+export interface AttachmentGroupRecord {
+  id: AttachmentId
+  groupNo?: string
+  status?: string
+  versionNo?: number
+  supersedesGroupId?: AttachmentId
+  fileCount?: number
+  totalSize?: number
+  creatorId?: string
+  creatorName?: string
+  lockedBy?: string
+  lockedAt?: string
+  createdAt?: string
+  files?: AttachmentRecord[]
+}
+
+export interface AttachmentGroupCreateInput {
+  supersedesGroupId?: AttachmentId
+}
+
 export interface AttachmentUploadInput {
   file: Blob
   fileName?: string
-  businessType: string
-  businessId?: AttachmentId
   attachmentGroupId?: AttachmentId
   remark?: string
 }
@@ -33,16 +49,13 @@ function appendIfPresent(formData: FormData, key: string, value: unknown) {
 export function createAttachmentFormData(input: AttachmentUploadInput) {
   const formData = new FormData()
   formData.append('file', input.file, input.fileName || 'attachment.bin')
-  appendIfPresent(formData, 'businessType', input.businessType)
-  appendIfPresent(formData, 'businessId', input.businessId)
-  appendIfPresent(formData, 'attachmentGroupId', input.attachmentGroupId)
   appendIfPresent(formData, 'remark', input.remark)
   return formData
 }
 
 export function resolveUploadedAttachmentGroupId(record: AttachmentRecord) {
   if (record.attachmentGroupId === undefined || record.attachmentGroupId === null || record.attachmentGroupId === '') {
-    throw new Error('附件上传成功但未返回附件组ID')
+    throw new Error('附件上传成功，但后端未返回附件组 ID')
   }
   return record.attachmentGroupId
 }

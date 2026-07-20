@@ -14,6 +14,7 @@ import {
   formatDate
 } from '@/views/change/changeDisplayModel'
 import ChangeApplyDialog from '@/views/change/components/ChangeApplyDialog.vue'
+import ChangeReceiveAdminPanel from '@/views/change/components/ChangeReceiveAdminPanel.vue'
 
 const session = useSessionStore()
 
@@ -156,6 +157,8 @@ onMounted(() => {
 
 <template>
   <section class="change-apply-page">
+    <ChangeReceiveAdminPanel v-if="session.user?.roleCode === 'MEASURE_ADMIN'" />
+
     <section class="panel selected-panel">
       <div class="panel-header">
         <h2>待变更设备</h2>

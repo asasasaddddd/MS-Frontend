@@ -1,25 +1,25 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
   attachmentDownloadUrl,
   createAttachmentFormData,
-  resolveUploadedAttachmentGroupId
+  resolveUploadedAttachmentGroupId,
+  type AttachmentGroupRecord
 } from '../src/api/attachmentModel.ts'
 
 const file = new Blob(['firstcheck attachment'], { type: 'text/plain' })
 const formData = createAttachmentFormData({
   file,
   fileName: 'firstcheck.txt',
-  businessType: 'FIRST_CHECK',
-  businessId: '2070143016618696705',
   attachmentGroupId: '2070143016618696710',
-  remark: '供应商申请附件'
+  remark: 'supplier attachment'
 })
 
-assert.equal(formData.get('businessType'), 'FIRST_CHECK')
-assert.equal(formData.get('businessId'), '2070143016618696705')
-assert.equal(formData.get('attachmentGroupId'), '2070143016618696710')
-assert.equal(formData.get('remark'), '供应商申请附件')
+assert.equal(formData.get('remark'), 'supplier attachment')
+assert.equal(formData.get('businessType'), null)
+assert.equal(formData.get('businessId'), null)
+assert.equal(formData.get('attachmentGroupId'), null)
 
 const uploaded = {
   id: '2070143016618696720',
@@ -28,3 +28,26 @@ const uploaded = {
 
 assert.equal(resolveUploadedAttachmentGroupId(uploaded), '2070143016618696710')
 assert.equal(attachmentDownloadUrl(uploaded), '/api/attachment/file/2070143016618696720')
+
+const group: AttachmentGroupRecord = {
+  id: '2070143016618696710',
+  files: [uploaded]
+}
+assert.equal(group.files?.[0].attachmentGroupId, '2070143016618696710')
+
+const attachmentApiSource = readFileSync(new URL('../src/api/attachment.ts', import.meta.url), 'utf8')
+const uploadButtonSource = readFileSync(
+  new URL('../src/components/AttachmentUploadButton.vue', import.meta.url),
+  'utf8'
+)
+const listButtonSource = readFileSync(
+  new URL('../src/components/AttachmentListButton.vue', import.meta.url),
+  'utf8'
+)
+
+assert.equal(attachmentApiSource.includes('/attachment/upload'), false)
+assert.equal(attachmentApiSource.includes('/attachment/groups'), true)
+assert.equal(attachmentApiSource.includes('/files'), true)
+assert.equal(uploadButtonSource.includes('businessType: props.businessType'), false)
+assert.equal(uploadButtonSource.includes('businessId: props.businessId'), false)
+assert.equal(listButtonSource.includes('listAttachmentsByGroupId'), true)

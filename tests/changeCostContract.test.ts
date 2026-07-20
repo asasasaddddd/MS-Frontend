@@ -14,8 +14,8 @@ import {
 
 assert.equal(changeEndpoint('submit'), '/change/submit')
 assert.equal(changeEndpoint('detail', '2073579908903317505'), '/change/detail/2073579908903317505')
-assert.equal(changeTypeName('category_change'), '管理类别调整')
-assert.equal(changeTypeName('cycle_change'), '检定周期调整')
+assert.equal(changeTypeName('category'), '管理类别调整')
+assert.equal(changeTypeName('cycle'), '检定周期调整')
 
 const change = buildChangeSubmitRequest({
   changeType: 'seal',

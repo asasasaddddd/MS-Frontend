@@ -228,17 +228,17 @@ export const navSections: NavSection[] = [
       {
         path: '/change/apply',
         title: '状态变更',
-        description: '封存、启用、报废、缓检、类别、周期、转移',
+        description: '状态变更申请及接收部门管理员确认',
         module: 'change',
         roles: ['MEASURE_ADMIN'],
-        nodes: [...workflowNodeGroups.change.apply]
+        nodes: [...workflowNodeGroups.change.apply, ...workflowNodeGroups.change.receiveAdmin]
       },
       {
         path: '/change/approval',
         title: '状态变更',
-        description: '分厂主管或计量领导审批变更单',
+        description: '主管领导、计量领导和责任工程师处理变更单',
         module: 'change',
-        roles: ['DEPT_LEADER', 'MEASURE_LEADER'],
+        roles: ['DEPT_LEADER', 'MEASURE_LEADER', 'RESPONSIBLE_ENGINEER'],
         nodes: [...workflowNodeGroups.change.approval]
       },
       {

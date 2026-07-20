@@ -1,4 +1,4 @@
-import type { ChangeSubmitRequest, ChangeType } from '@/types/change'
+import type { ChangeSubmitRequest } from '@/types/change'
 
 const changeEndpoints = {
   submit: '/change/submit',
@@ -22,11 +22,8 @@ export function changeTypeName(value?: string) {
     enable: '启用',
     transfer: '设备转移',
     category: '管理类别调整',
-    category_change: '管理类别调整',
     cycle: '检定周期调整',
-    cycle_change: '检定周期调整',
     scrap: '非正常报废',
-    abnormal_scrap: '非正常报废',
     precheck: '用前检定'
   }
   return value ? map[value] || value : '-'
@@ -47,17 +44,9 @@ export function changeStatusName(value?: string) {
   return value ? map[value] || value : '-'
 }
 
-function toBackendChangeType(value: ChangeType | string) {
-  if (value === 'category_change') return 'category'
-  if (value === 'cycle_change') return 'cycle'
-  if (value === 'abnormal_scrap') return 'scrap'
-  return value
-}
-
 export function buildChangeSubmitRequest(input: ChangeSubmitRequest): ChangeSubmitRequest {
   return {
     ...input,
-    changeType: toBackendChangeType(input.changeType),
     items: input.items.map((item) => ({ ...item }))
   }
 }

@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { SelectProps } from 'ant-design-vue'
 import { getFirstCheckDetail } from '@/api/firstcheck'
+import { getChangeOrderDetail } from '@/api/change'
 import { listWorkflowTasks } from '@/api/workflow'
 import { listPeriodicMyTasks } from '@/api/periodic'
 import { listSamplingMyTasks } from '@/api/sampling'
@@ -13,10 +14,12 @@ import type { PeriodicTaskVO } from '@/types/periodic'
 import type { SamplingTaskVO } from '@/types/sampling'
 import type { ProductSupportOrderVO } from '@/types/productSupport'
 import type { FirstCheckOrder } from '@/types/firstcheck'
+import type { ChangeOrderVO } from '@/types/change'
 import { useSessionStore } from '@/stores/session'
-import { isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
+import { changeNodeCodesByRole, isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 import { matchesFirstCheckVerifierRole } from '@/views/firstcheck/firstCheckVerifierModel'
 import { buildPeriodicPlanTodoGroups } from '@/views/periodic/periodicDisplayModel'
+import { changeNodeName, changeTypeName, matchesChangeVerifierRole } from '@/views/change/changeDisplayModel'
 
 type TodoType = 'all' | 'firstcheck' | 'periodic' | 'change' | 'sampling' | 'productSupport'
 type TodoColor = 'orange' | 'blue' | 'red' | 'green'
@@ -44,10 +47,7 @@ const periodicTasks = ref<PeriodicTaskVO[]>([])
 const samplingTasks = ref<SamplingTaskVO[]>([])
 const productSupportTasks = ref<ProductSupportOrderVO[]>([])
 const firstCheckOrders = ref<Record<string, FirstCheckOrder>>({})
-const workflowLoaded = ref(false)
-const periodicLoaded = ref(false)
-const samplingLoaded = ref(false)
-const productSupportLoaded = ref(false)
+const changeOrders = ref<Record<string, ChangeOrderVO>>({})
 
 const roleCode = computed(() => session.user?.roleCode as RoleCode | undefined)
 const roleLabel = computed(() => {
@@ -64,76 +64,6 @@ const filterOptions: SelectProps['options'] = [
   { label: '状态变更', value: 'change' },
   { label: '抽检计划', value: 'sampling' },
   { label: '产品配套', value: 'productSupport' }
-]
-
-const todoDefinitions: TodoDefinition[] = [
-  {
-    type: 'firstcheck',
-    title: '首次检定',
-    count: 3,
-    unit: '项',
-    color: 'orange',
-    roles: [
-      'SUPPLIER',
-      'PURCHASE_WAREHOUSE',
-      'MEASURE_ADMIN',
-      'DEPT_LEADER',
-      'RESPONSIBLE_ENGINEER',
-      'VERIFIER_SELF',
-      'VERIFIER_EXTERNAL',
-      'CONFIRMER'
-    ],
-    routeByRole: {
-      SUPPLIER: '/firstcheck/supplier',
-      PURCHASE_WAREHOUSE: '/firstcheck/supplier',
-      MEASURE_ADMIN: '/firstcheck/admin',
-      DEPT_LEADER: '/firstcheck/leader',
-      RESPONSIBLE_ENGINEER: '/firstcheck/engineer',
-      VERIFIER_SELF: '/firstcheck/verifier',
-      VERIFIER_EXTERNAL: '/firstcheck/verifier',
-      CONFIRMER: '/firstcheck/confirmer'
-    }
-  },
-  {
-    type: 'periodic',
-    title: '周检计划 202605',
-    count: 2,
-    unit: '件',
-    color: 'orange',
-    roles: ['MEASURE_ADMIN', 'VERIFIER_SELF', 'VERIFIER_EXTERNAL', 'CONFIRMER'],
-    routeByRole: {
-      MEASURE_ADMIN: '/periodic/admin',
-      VERIFIER_SELF: '/periodic/verifier',
-      VERIFIER_EXTERNAL: '/periodic/verifier-external',
-      CONFIRMER: '/periodic/confirmer'
-    }
-  },
-  {
-    type: 'change',
-    title: '状态变更',
-    count: 1,
-    unit: '项',
-    color: 'blue',
-    roles: ['MEASURE_ADMIN', 'DEPT_LEADER', 'MEASURE_LEADER', 'VERIFIER_SELF', 'VERIFIER_EXTERNAL'],
-    routeByRole: {
-      MEASURE_ADMIN: '/change/apply',
-      DEPT_LEADER: '/change/approval',
-      MEASURE_LEADER: '/change/approval',
-      VERIFIER_SELF: '/change/verifier',
-      VERIFIER_EXTERNAL: '/change/verifier'
-    }
-  },
-  {
-    type: 'sampling',
-    title: '抽检计划 202605',
-    count: 4,
-    unit: '件',
-    color: 'red',
-    roles: ['PLANNER'],
-    routeByRole: {
-      PLANNER: '/sampling/plan'
-    }
-  }
 ]
 
 const periodicRouteByRole: Partial<Record<RoleCode, string>> = {
@@ -165,6 +95,15 @@ const firstCheckRouteByRole: Partial<Record<RoleCode, string>> = {
   VERIFIER_EXTERNAL: '/firstcheck/verifier',
   CONFIRMER: '/firstcheck/confirmer',
   EXTERNAL_OPERATOR: '/scan'
+}
+
+const changeRouteByRole: Partial<Record<RoleCode, string>> = {
+  MEASURE_ADMIN: '/change/apply',
+  DEPT_LEADER: '/change/approval',
+  MEASURE_LEADER: '/change/approval',
+  RESPONSIBLE_ENGINEER: '/change/approval',
+  VERIFIER_SELF: '/change/verifier',
+  VERIFIER_EXTERNAL: '/change/verifier'
 }
 
 function scanActionByFirstCheckNode(nodeCode?: string) {
@@ -221,6 +160,44 @@ const firstCheckTodoEntries = computed<TodoDefinition[]>(() => {
         roles: [currentRole],
         routeByRole: { [currentRole]: path },
         query: buildFirstCheckQuery(task, currentRole)
+      }
+    })
+    .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
+})
+
+const changeTodoEntries = computed<TodoDefinition[]>(() => {
+  const currentRole = roleCode.value
+  const path = currentRole ? changeRouteByRole[currentRole] : undefined
+  const allowedNodes = currentRole ? changeNodeCodesByRole[currentRole] : undefined
+  if (!currentRole || !path || !allowedNodes) return []
+
+  const nodeSet = new Set<string>(allowedNodes)
+  const taskByOrder = new Map<string, WorkflowTask>()
+  workflowTasks.value
+    .filter((task) => isPendingWorkflowTask(task))
+    .filter((task) => matchesBusinessType(task.businessType, 'change'))
+    .filter((task) => nodeSet.has(task.nodeCode))
+    .filter((task) => {
+      const order = changeOrders.value[String(task.businessId)]
+      return order ? matchesChangeVerifierRole(order, currentRole) : true
+    })
+    .forEach((task) => taskByOrder.set(String(task.businessId), task))
+
+  return Array.from(taskByOrder.entries())
+    .map(([orderId, task]) => {
+      const order = changeOrders.value[orderId]
+      const typeLabel = order?.changeType ? changeTypeName(order.changeType) : undefined
+      return {
+        key: `change-${orderId}`,
+        type: 'change' as const,
+        title: `状态变更单 ${order?.orderNo || orderId}`,
+        detailTitle: [typeLabel, task.nodeName || changeNodeName(task.nodeCode)].filter(Boolean).join(' · '),
+        count: 1,
+        unit: '单',
+        color: 'blue' as TodoColor,
+        roles: [currentRole],
+        routeByRole: { [currentRole]: path },
+        query: { orderId }
       }
     })
     .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
@@ -368,53 +345,13 @@ const productSupportTodoEntries = computed<TodoDefinition[]>(() => {
     .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
 })
 
-function countWorkflowTasks(type: TodoType, fallback: number) {
-  if (type === 'periodic') {
-    if (periodicLoaded.value) return periodicTasks.value.length
-    return fallback
-  }
-  if (type === 'sampling') {
-    if (samplingLoaded.value) return samplingTasks.value.length
-    return fallback
-  }
-  if (type === 'productSupport') {
-    if (productSupportLoaded.value) return productSupportTasks.value.length
-    return fallback
-  }
-  if (!workflowLoaded.value || type === 'all') {
-    return fallback
-  }
-  if (type === 'firstcheck') {
-    const currentRole = roleCode.value
-    return workflowTasks.value
-      .filter((task) => isPendingWorkflowTask(task))
-      .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
-      .filter((task) => {
-        const order = firstCheckOrders.value[String(task.businessId)]
-        return order ? matchesFirstCheckVerifierRole(order, currentRole) : true
-      }).length
-  }
-  if (type === 'change') {
-    return workflowTasks.value.filter((task) => matchesBusinessType(task.businessType, 'change')).length
-  }
-  return fallback
-}
-
 const permittedTodos = computed(() => {
   const currentRole = roleCode.value
   if (!currentRole) return []
-  const fixedTodos = todoDefinitions
-    .filter((item) => item.roles.includes(currentRole))
-    .filter((item) => item.type !== 'firstcheck')
-    .filter((item) => item.type !== 'periodic')
-    .map((item) => ({
-      ...item,
-      count: countWorkflowTasks(item.type, item.count)
-    }))
   return [
-    ...fixedTodos,
     ...firstCheckTodoEntries.value,
     ...periodicTodoEntries.value,
+    ...changeTodoEntries.value,
     ...samplingTodoEntries.value,
     ...productSupportTodoEntries.value
   ]
@@ -451,7 +388,7 @@ const metrics = computed(() => {
     {
       title: '待办流程',
       value: firstcheck + periodic + change + sampling + productSupport,
-      note: `今日新增 ${Math.min(5, firstcheck + periodic + change + sampling + productSupport)}`
+      note: '数据来自当前角色实时待办'
     },
     {
       title: '未送检器具',
@@ -460,8 +397,8 @@ const metrics = computed(() => {
     },
     {
       title: '状态变更未完流程',
-      value: change > 0 ? 9 : 0,
-      note: change > 0 ? '封存 3 / 转移 4 / 报废 2' : '暂无状态变更待办'
+      value: change,
+      note: change > 0 ? `当前待处理 ${change} 单` : '暂无状态变更待办'
     }
   ]
   if (isVerifier.value) return baseMetrics.slice(0, 2)
@@ -509,22 +446,35 @@ async function loadWorkflowSummary() {
   const firstCheckTasks = workflowTasks.value
     .filter((task) => isPendingWorkflowTask(task))
     .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
-  const firstCheckDetails = await Promise.allSettled(
-    firstCheckTasks.map(async (task) => ({
-      orderId: String(task.businessId),
-      order: await getFirstCheckDetail(task.businessId)
-    }))
-  )
+  const changeTasks = workflowTasks.value
+    .filter((task) => isPendingWorkflowTask(task))
+    .filter((task) => matchesBusinessType(task.businessType, 'change'))
+  const [firstCheckDetails, changeDetails] = await Promise.all([
+    Promise.allSettled(
+      firstCheckTasks.map(async (task) => ({
+        orderId: String(task.businessId),
+        order: await getFirstCheckDetail(task.businessId)
+      }))
+    ),
+    Promise.allSettled(
+      changeTasks.map(async (task) => ({
+        orderId: String(task.businessId),
+        order: await getChangeOrderDetail(task.businessId)
+      }))
+    )
+  ])
   firstCheckOrders.value = firstCheckDetails.reduce<Record<string, FirstCheckOrder>>((next, item) => {
     if (item.status === 'fulfilled') {
       next[item.value.orderId] = item.value.order
     }
     return next
   }, {})
-  workflowLoaded.value = true
-  periodicLoaded.value = true
-  samplingLoaded.value = true
-  productSupportLoaded.value = true
+  changeOrders.value = changeDetails.reduce<Record<string, ChangeOrderVO>>((next, item) => {
+    if (item.status === 'fulfilled') {
+      next[item.value.orderId] = item.value.order
+    }
+    return next
+  }, {})
 }
 
 onMounted(loadWorkflowSummary)

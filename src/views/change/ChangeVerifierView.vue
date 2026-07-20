@@ -1,21 +1,28 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
+import { useRoute } from 'vue-router'
 import { getChangeOrderDetail, verifierHandleChange } from '@/api/change'
 import { listWorkflowTasks } from '@/api/workflow'
+import { useSessionStore } from '@/stores/session'
+import type { RoleCode } from '@/types/common'
 import type { ChangeOrderVO, ChangeVerifierHandleRequest } from '@/types/change'
 import type { WorkflowTask } from '@/types/workflow'
 import {
   changeTagColor,
+  changeNodeName,
   changeTypeName,
   display,
   formatDateTime,
+  matchesChangeVerifierRole,
   resolveItemSnapshot,
   type ChangeTaskRow
 } from '@/views/change/changeDisplayModel'
 import ChangeDetailDialog from '@/views/change/components/ChangeDetailDialog.vue'
-import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
+import { changeNodeCodesByRole, isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 
+const route = useRoute()
+const session = useSessionStore()
 const loading = ref(false)
 const rows = ref<ChangeTaskRow[]>([])
 const keyword = ref('')
@@ -30,7 +37,6 @@ const sourceOptions = [
   { label: '管理类别调整', value: 'category' },
   { label: '检定周期调整', value: 'cycle' },
   { label: '用前检定', value: 'precheck' },
-  { label: '周检报废退回', value: 'periodic_scrap_return' },
   { label: '非正常报废', value: 'scrap' },
   { label: '封存', value: 'seal' }
 ]
@@ -89,7 +95,8 @@ function toRow(task: WorkflowTask, order: ChangeOrderVO): ChangeTaskRow {
 async function loadRows() {
   loading.value = true
   try {
-    const nodeSet = new Set<string>(workflowNodeGroups.change.verifier)
+    const currentRole = session.user?.roleCode as RoleCode | undefined
+    const nodeSet = new Set<string>(currentRole ? changeNodeCodesByRole[currentRole] || [] : [])
     const tasks = (await listWorkflowTasks()).filter(
       (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change') && nodeSet.has(task.nodeCode)
     )
@@ -102,6 +109,10 @@ async function loadRows() {
     rows.value = details
       .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: ChangeOrderVO }> => item.status === 'fulfilled')
       .map((item) => toRow(item.value.task, item.value.order))
+      .filter((row) => matchesChangeVerifierRole(row.order, currentRole))
+    const targetOrderId = route.query.orderId ? String(route.query.orderId) : ''
+    const targetRow = targetOrderId ? rows.value.find((row) => String(row.order.id) === targetOrderId) : undefined
+    if (targetRow) openDetail(targetRow)
   } catch (error) {
     rows.value = []
     message.error(error instanceof Error ? error.message : '检定员状态变更待办加载失败')
@@ -197,7 +208,7 @@ onMounted(loadRows)
           <template v-if="column.key === 'changeType'">
             <a-tag :class="['tag', changeTagColor(record.order.changeType)]">{{ changeTypeName(record.order.changeType) }}</a-tag>
           </template>
-          <template v-else-if="column.key === 'nodeName'">{{ display(record.nodeName || record.nodeCode) }}</template>
+          <template v-else-if="column.key === 'nodeName'">{{ record.nodeName || changeNodeName(record.nodeCode) }}</template>
           <template v-else-if="column.key === 'deviceCode'">
             {{ display(snapshotOf(record.order).deviceCode || record.order.items?.[0]?.deviceId) }}
           </template>

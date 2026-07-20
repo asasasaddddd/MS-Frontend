@@ -40,6 +40,9 @@ export const changeNodes: WorkflowNode[] = [
   { code: 'submit', name: '变更申请', module: 'change', roles: ['MEASURE_ADMIN'], api: 'POST /api/change/submit' },
   { code: 'dept_leader_approve', name: '部门审批', module: 'change', roles: ['DEPT_LEADER'], api: 'POST /api/change/approve' },
   { code: 'measure_leader_review', name: '计量领导审批', module: 'change', roles: ['MEASURE_LEADER'], api: 'POST /api/change/approve' },
+  { code: 'responsible_engineer_review', name: '责任工程师审核', module: 'change', roles: ['RESPONSIBLE_ENGINEER'], api: 'POST /api/change/approve' },
+  { code: 'receive_dept_leader_confirm', name: '接收部门主管确认', module: 'change', roles: ['DEPT_LEADER'], api: 'POST /api/change/approve' },
+  { code: 'receive_admin_confirm', name: '接收管理员确认', module: 'change', roles: ['MEASURE_ADMIN'], api: 'POST /api/change/approve' },
   { code: 'verifier_handle', name: '检定员处理', module: 'change', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: 'POST /api/change/verifier-handle' }
 ]
 
@@ -74,10 +77,20 @@ export const workflowNodeGroups = {
   },
   change: {
     apply: ['submit'],
-    approval: ['dept_leader_approve', 'measure_leader_review'],
+    approval: ['dept_leader_approve', 'measure_leader_review', 'responsible_engineer_review', 'receive_dept_leader_confirm'],
+    receiveAdmin: ['receive_admin_confirm'],
     verifier: ['verifier_handle']
   }
 } as const
+
+export const changeNodeCodesByRole: Partial<Record<RoleCode, readonly string[]>> = {
+  MEASURE_ADMIN: ['receive_admin_confirm'],
+  DEPT_LEADER: ['dept_leader_approve', 'receive_dept_leader_confirm'],
+  MEASURE_LEADER: ['measure_leader_review'],
+  RESPONSIBLE_ENGINEER: ['responsible_engineer_review'],
+  VERIFIER_SELF: ['verifier_handle'],
+  VERIFIER_EXTERNAL: ['verifier_handle']
+}
 
 export function matchesBusinessType(value: string | undefined, module: WorkflowModule) {
   if (!value) return false

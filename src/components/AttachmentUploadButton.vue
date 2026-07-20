@@ -51,8 +51,6 @@ async function handleFileChange(event: Event) {
     const record = await uploadAttachment({
       file,
       fileName: file.name,
-      businessType: props.businessType,
-      businessId: props.businessId,
       attachmentGroupId: props.modelValue,
       remark: props.remark
     })

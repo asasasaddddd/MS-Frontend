@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
+import { useRoute } from 'vue-router'
 import { approveChange, getChangeOrderDetail, rejectChange } from '@/api/change'
 import { listWorkflowTasks } from '@/api/workflow'
 import { useSessionStore } from '@/stores/session'
+import type { RoleCode } from '@/types/common'
 import type { ChangeOrderVO } from '@/types/change'
 import type { WorkflowTask } from '@/types/workflow'
 import {
+  changeNodeName,
   changeStatusName,
   changeTagColor,
   changeTypeName,
@@ -17,9 +20,10 @@ import {
   type ChangeTaskRow
 } from '@/views/change/changeDisplayModel'
 import ChangeApprovalDialog from '@/views/change/components/ChangeApprovalDialog.vue'
-import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
+import { changeNodeCodesByRole, isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 
 const session = useSessionStore()
+const route = useRoute()
 const loading = ref(false)
 const submitting = ref(false)
 const rows = ref<ChangeTaskRow[]>([])
@@ -28,7 +32,11 @@ const keyword = ref('')
 const approvalOpen = ref(false)
 const activeOrders = ref<ChangeOrderVO[]>([])
 
-const pageTitle = computed(() => (session.user?.roleCode === 'MEASURE_LEADER' ? '计量领导待办' : '主管领导待办'))
+const pageTitle = computed(() => {
+  if (session.user?.roleCode === 'MEASURE_LEADER') return '计量领导待办'
+  if (session.user?.roleCode === 'RESPONSIBLE_ENGINEER') return '责任工程师待办'
+  return '主管领导待办'
+})
 const roleText = computed(() => `${session.user?.roleName || pageTitle.value} · ${session.user?.employeeName || session.user?.employeeId || '-'}`)
 
 const columns = [
@@ -36,6 +44,7 @@ const columns = [
   { title: '申请时间', key: 'applyTime', width: 160 },
   { title: '数量', key: 'itemCount', width: 86 },
   { title: '变更流程', key: 'changeType', width: 140 },
+  { title: '当前节点', key: 'nodeName', width: 160 },
   { title: '当前状态', key: 'status', width: 120 },
   { title: '操作', key: 'action', fixed: 'right', width: 100 }
 ]
@@ -99,7 +108,8 @@ async function loadRows() {
   loading.value = true
   selectedRowKeys.value = []
   try {
-    const nodeSet = new Set<string>(workflowNodeGroups.change.approval)
+    const currentRole = session.user?.roleCode as RoleCode | undefined
+    const nodeSet = new Set<string>(currentRole ? changeNodeCodesByRole[currentRole] || [] : [])
     const tasks = (await listWorkflowTasks()).filter(
       (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change') && nodeSet.has(task.nodeCode)
     )
@@ -112,6 +122,9 @@ async function loadRows() {
     rows.value = details
       .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: ChangeOrderVO }> => item.status === 'fulfilled')
       .map((item) => toRow(item.value.task, item.value.order))
+    const targetOrderId = route.query.orderId ? String(route.query.orderId) : ''
+    const targetRow = targetOrderId ? rows.value.find((row) => String(row.order.id) === targetOrderId) : undefined
+    if (targetRow) openDetail(targetRow)
   } catch (error) {
     rows.value = []
     message.error(error instanceof Error ? error.message : '状态变更待办加载失败')
@@ -228,7 +241,7 @@ onMounted(loadRows)
         :pagination="{ pageSize: 10, showSizeChanger: false }"
         :row-key="rowKey"
         :row-selection="rowSelection"
-        :scroll="{ x: 940 }"
+        :scroll="{ x: 1100 }"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
@@ -238,6 +251,7 @@ onMounted(loadRows)
           <template v-else-if="column.key === 'changeType'">
             <a-tag :class="['tag', changeTagColor(record.order.changeType)]">{{ changeTypeName(record.order.changeType) }}</a-tag>
           </template>
+          <template v-else-if="column.key === 'nodeName'">{{ record.nodeName || changeNodeName(record.nodeCode) }}</template>
           <template v-else-if="column.key === 'status'">
             <a-tag :class="['tag', statusTagColor(record.order.status)]">{{ changeStatusName(record.order.status) }}</a-tag>
           </template>

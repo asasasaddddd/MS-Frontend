@@ -5,11 +5,8 @@ export type ChangeType =
   | 'enable'
   | 'transfer'
   | 'category'
-  | 'category_change'
   | 'cycle'
-  | 'cycle_change'
   | 'scrap'
-  | 'abnormal_scrap'
   | 'precheck'
 
 export type ChangeOrderStatus =

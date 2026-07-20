@@ -1,6 +1,7 @@
 import type { ChangeItemSubmitRequest, ChangeItemVO, ChangeOrderVO, ChangeType } from '@/types/change'
 import type { DeviceVO } from '@/types/device'
 import type { EntityId } from '@/types/periodic'
+import type { RoleCode } from '@/types/common'
 
 export interface ChangeTypeMeta {
   value: ChangeType
@@ -44,10 +45,6 @@ export const changeTypeMetas: ChangeTypeMeta[] = [
 ]
 
 export function normalizeChangeType(value?: string): ChangeType | string | undefined {
-  if (!value) return value
-  if (value === 'category_change') return 'category'
-  if (value === 'cycle_change') return 'cycle'
-  if (value === 'abnormal_scrap') return 'scrap'
   return value
 }
 
@@ -140,6 +137,27 @@ export function changeStatusName(value?: string) {
     running: '流转中'
   }
   return value ? map[value] || value : '-'
+}
+
+export function changeNodeName(value?: string) {
+  const map: Record<string, string> = {
+    submit: '变更申请',
+    dept_leader_approve: '部门主管审批',
+    measure_leader_review: '计量领导审核',
+    responsible_engineer_review: '责任工程师审核',
+    receive_dept_leader_confirm: '接收部门主管确认',
+    receive_admin_confirm: '接收管理员确认',
+    verifier_handle: '检定员处理'
+  }
+  return value ? map[value] || value : '-'
+}
+
+export function matchesChangeVerifierRole(order: ChangeOrderVO, roleCode?: RoleCode) {
+  if (roleCode !== 'VERIFIER_SELF' && roleCode !== 'VERIFIER_EXTERNAL') return true
+  const requiresExternalVerifier =
+    normalizeChangeType(order.changeType) === 'scrap' ||
+    Boolean(order.items?.some((item) => item.sendOutRequired === 1))
+  return roleCode === 'VERIFIER_EXTERNAL' ? requiresExternalVerifier : !requiresExternalVerifier
 }
 
 export function changeTagColor(value?: string): ChangeTypeMeta['color'] {

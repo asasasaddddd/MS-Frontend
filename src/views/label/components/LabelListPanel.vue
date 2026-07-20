@@ -3,7 +3,7 @@ import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import QRCode from 'qrcode'
-import { listPrintedLabels, listUnprintedLabels, printLabelRecord } from '@/api/label'
+import { downloadLabelPdf, listPrintedLabels, listUnprintedLabels, printLabelRecord } from '@/api/label'
 import {
   getSelectedLabelRows,
   labelVerificationMethodName,
@@ -155,8 +155,27 @@ async function openPreview(row?: LabelPrintRecord) {
   previewOpen.value = true
 }
 
+function saveLabelPdf(blob: Blob, row: LabelPrintRecord) {
+  if (blob.size === 0) {
+    throw new Error('后端生成的标签 PDF 为空')
+  }
+
+  const objectUrl = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = objectUrl
+  link.download = `label-${String(row.deviceCode || row.id).replace(/[\\/:*?"<>|]/g, '-')}.pdf`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 0)
+}
+
 async function printRows(targets: LabelPrintRecord[]) {
-  await Promise.all(targets.map((row) => printLabelRecord(row.id)))
+  for (const row of targets) {
+    const pdf = await downloadLabelPdf(row.id)
+    saveLabelPdf(pdf, row)
+    await printLabelRecord(row.id)
+  }
   return true
 }
 
