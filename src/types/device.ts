@@ -9,6 +9,9 @@ export interface DeviceVO {
   materialCode?: string
   materialName?: string
   purchaseOrderNo?: string
+  supplierCode?: string
+  supplierName?: string
+  usageScenario?: string
   modelSpec?: string
   manageCategory?: string
   deviceStatus?: string

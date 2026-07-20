@@ -16,7 +16,6 @@ const form = reactive({
   quantity: 1,
   applyDeptName: session.user?.deptName || '',
   supplierName: session.user?.employeeName || '',
-  usageScenario: '',
   attachmentGroupId: undefined as AttachmentId | undefined,
   applyTime: new Date().toLocaleDateString('zh-CN'),
   remark: ''
@@ -29,7 +28,6 @@ function resetForm() {
   form.quantity = 1
   form.applyDeptName = session.user?.deptName || ''
   form.supplierName = session.user?.employeeName || ''
-  form.usageScenario = ''
   form.attachmentGroupId = undefined
   form.applyTime = new Date().toLocaleDateString('zh-CN')
   form.remark = ''
@@ -72,17 +70,11 @@ async function submit() {
     message.warning('请填写供应商名称')
     return
   }
-  if (!form.usageScenario.trim()) {
-    message.warning('请填写设备使用场景')
-    return
-  }
-
   submitting.value = true
   try {
     const orderId = await startFirstCheck({
       purchaseOrderNo: form.purchaseOrderNo.trim(),
       supplierName: form.supplierName.trim(),
-      usageScenario: form.usageScenario.trim(),
       attachmentGroupId: form.attachmentGroupId,
       applyDeptId: session.user?.deptId || form.applyDeptName.trim(),
       applyDeptName: form.applyDeptName.trim(),
@@ -131,10 +123,6 @@ async function submit() {
         </label>
         <label class="field"><span>使用部门</span><a-input v-model:value="form.applyDeptName" placeholder="填写使用部门" /></label>
         <label class="field"><span>供应商名称</span><a-input v-model:value="form.supplierName" placeholder="填写供应商名称" /></label>
-        <label class="field field-wide">
-          <span>设备使用场景</span>
-          <a-textarea v-model:value="form.usageScenario" :rows="3" placeholder="填写设备使用场景" />
-        </label>
         <label class="field">
           <span>附件</span>
           <AttachmentUploadButton
@@ -216,10 +204,6 @@ async function submit() {
   font-weight: 600;
 }
 
-.field-wide {
-  grid-column: span 2;
-}
-
 .po-input {
   width: calc(100% - 66px);
 }
@@ -243,10 +227,6 @@ async function submit() {
 @media (max-width: 980px) {
   .form-grid.cols-4 {
     grid-template-columns: 1fr;
-  }
-
-  .field-wide {
-    grid-column: auto;
   }
 }
 </style>

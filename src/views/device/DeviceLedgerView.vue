@@ -154,6 +154,8 @@ const detailFields = computed(() => {
     { label: '计量编号', value: displayValue(device.deviceCode) },
     { label: '设备名称', value: displayValue(device.deviceName) },
     { label: '规格型号', value: displayValue(device.modelSpec) },
+    { label: '供应商名称', value: displayValue(device.supplierName) },
+    { label: '设备使用场景', value: displayValue(device.usageScenario) },
     { label: '设备用途', value: displayValue(device.deviceUsage) },
     { label: '测量范围', value: displayValue(device.measureRange) },
     { label: '分度值', value: displayValue(device.resolution) },
@@ -352,13 +354,13 @@ async function exportLedger() {
       downloadCsv('计量台账_' + dateText + '.csv', basicHeaders, basicRows)
     } else {
       const detailHeaders = [
-        ...basicHeaders, '设备用途', '测量范围', '分度值', '准确度等级', '允许误差', '出厂日期',
+        ...basicHeaders, '供应商名称', '设备使用场景', '设备用途', '测量范围', '分度值', '准确度等级', '允许误差', '出厂日期',
         '学科大类', '学科小类', '是否强检', '标准器', '确认间隔', '专用项目',
         '是否通用设备', '检测费用（元）', '采购费用（元）', '存储位置',
         '计量检定员', '计量管理员', '计量确认员', '数据目录', '附件'
       ]
       const detailRows = exportDevices.map((device, index) => [
-        ...basicRows[index], device.deviceUsage, device.measureRange, device.resolution,
+        ...basicRows[index], device.supplierName, device.usageScenario, device.deviceUsage, device.measureRange, device.resolution,
         device.accuracyLevel || device.accuracy, device.allowedError, formatDate(device.factoryDate),
         device.subjectCategory, device.subjectSubCategory, yesNoText(device.isMandatory),
         device.standardDevice, device.confirmInterval, device.specialProject, yesNoText(device.isCommon),
