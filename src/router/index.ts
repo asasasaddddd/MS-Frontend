@@ -80,51 +80,51 @@ const metaByPath: Partial<Record<string, RouteRecordRaw['meta']>> = {
   },
   '/firstcheck/admin': {
     title: '首次检定待办',
-    breadcrumb: '首页 / 设备检定 / 首检'
+    breadcrumb: '首页 / 工作台 / 首次检定'
   },
   '/firstcheck/verifier': {
     title: '首检待办详情',
-    breadcrumb: '首页 / 设备检定 / 首检'
+    breadcrumb: '首页 / 工作台 / 首次检定'
   },
   '/firstcheck/engineer': {
     title: '首检单详情',
-    breadcrumb: '首页 / 设备检定 / 首检'
+    breadcrumb: '首页 / 工作台 / 首次检定'
   },
   '/firstcheck/confirmer': {
     title: '确认员首次检定待办',
-    breadcrumb: '首页 / 设备检定 / 首检'
+    breadcrumb: '首页 / 工作台 / 首次检定'
   },
   '/firstcheck/leader': {
     title: '主管领导待办',
-    breadcrumb: '首页 / 设备检定 / 首检'
+    breadcrumb: '首页 / 工作台 / 首次检定'
   },
   '/firstcheck/supplier': {
     title: '测量设备首次使用申请流程',
-    breadcrumb: '首页 / 设备检定 / 首检'
+    breadcrumb: '首页 / 工作台 / 首次检定'
   },
   '/periodic/admin': {
     title: '周检计量管理员详情单',
-    breadcrumb: '首页 / 设备检定 / 周检'
+    breadcrumb: '首页 / 工作台 / 周检'
   },
   '/periodic/verifier': {
     title: '周检检定员详情单',
-    breadcrumb: '首页 / 设备检定 / 周检'
+    breadcrumb: '首页 / 工作台 / 周检'
   },
   '/periodic/verifier-external': {
     title: '外委周检待办',
-    breadcrumb: '首页 / 设备检定 / 周检'
+    breadcrumb: '首页 / 工作台 / 周检'
   },
   '/periodic/responsible-engineer': {
     title: '责任工程师周检二次判定',
-    breadcrumb: '首页 / 设备检定 / 周检'
+    breadcrumb: '首页 / 工作台 / 周检'
   },
   '/periodic/external-operator': {
     title: '外扩周检待办',
-    breadcrumb: '首页 / 设备检定 / 周检'
+    breadcrumb: '首页 / 工作台 / 周检'
   },
   '/periodic/confirmer': {
     title: '周检待办详情',
-    breadcrumb: '首页 / 设备检定 / 周检'
+    breadcrumb: '首页 / 工作台 / 周检'
   },
   '/change/apply': {
     title: '状态变更申请',
@@ -156,27 +156,27 @@ const metaByPath: Partial<Record<string, RouteRecordRaw['meta']>> = {
   },
   '/sampling/plan': {
     title: 'C类物资抽检',
-    breadcrumb: '首页 / 设备检定 / C类物资抽检'
+    breadcrumb: '首页 / 工作台 / C类物资抽检'
   },
   '/sampling/admin': {
     title: 'C类物资抽检',
-    breadcrumb: '首页 / 设备检定 / C类物资抽检'
+    breadcrumb: '首页 / 工作台 / C类物资抽检'
   },
   '/sampling/verifier': {
     title: 'C类物资抽检',
-    breadcrumb: '首页 / 设备检定 / C类物资抽检'
+    breadcrumb: '首页 / 工作台 / C类物资抽检'
   },
   '/sampling/confirmer': {
     title: 'C类物资抽检',
-    breadcrumb: '首页 / 设备检定 / C类物资抽检'
+    breadcrumb: '首页 / 工作台 / C类物资抽检'
   },
   '/product-support/warehouse': {
     title: '产品配套送检清单',
-    breadcrumb: '首页 / 设备检定 / 产品配套检定'
+    breadcrumb: '首页 / 工作台 / 产品配套检定'
   },
   '/product-support/verifier': {
     title: '产品配套待办详情',
-    breadcrumb: '首页 / 设备检定 / 产品配套检定'
+    breadcrumb: '首页 / 工作台 / 产品配套检定'
   }
 }
 

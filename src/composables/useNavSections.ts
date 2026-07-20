@@ -42,6 +42,154 @@ const businessRoles: RoleCode[] = [
   'SUPPLIER'
 ]
 
+// 业务处理页只作为工作台待办的跳转目标，不直接出现在侧边栏。
+export const workflowRouteItems: NavItem[] = [
+  {
+    path: '/periodic/admin',
+    title: '周检',
+    description: '周检计划异常分流、转办确认员、取回实物',
+    module: 'periodic',
+    roles: ['MEASURE_ADMIN'],
+    nodes: [...workflowNodeGroups.periodic.admin]
+  },
+  {
+    path: '/periodic/verifier',
+    title: '周检',
+    description: '扫码接收、自检录入、打印标签、返回分厂',
+    module: 'periodic',
+    roles: ['VERIFIER_SELF'],
+    nodes: [...workflowNodeGroups.periodic.selfVerifier]
+  },
+  {
+    path: '/periodic/verifier-external',
+    title: '周检',
+    description: '外委送回、否通用检定信息和二次判定',
+    module: 'periodic',
+    roles: ['VERIFIER_EXTERNAL'],
+    nodes: [...workflowNodeGroups.periodic.externalVerifier]
+  },
+  {
+    path: '/periodic/responsible-engineer',
+    title: '周检',
+    description: '外委通用设备责任工程师二次判定',
+    module: 'periodic',
+    roles: ['RESPONSIBLE_ENGINEER'],
+    nodes: [...workflowNodeGroups.periodic.responsibleEngineer]
+  },
+  {
+    path: '/periodic/external-operator',
+    title: '周检',
+    description: '外扩扫码接收、通用设备检定信息填写',
+    module: 'periodic',
+    roles: ['EXTERNAL_OPERATOR'],
+    nodes: [...workflowNodeGroups.periodic.externalOperator]
+  },
+  {
+    path: '/periodic/confirmer',
+    title: '周检',
+    description: '否通用设备周检判定',
+    module: 'periodic',
+    roles: ['CONFIRMER'],
+    nodes: [...workflowNodeGroups.periodic.confirmer]
+  },
+  {
+    path: '/firstcheck/supplier',
+    title: '首检',
+    description: '供应商发起首检单',
+    module: 'firstcheck',
+    roles: ['SUPPLIER', 'PURCHASE_WAREHOUSE'],
+    nodes: [...workflowNodeGroups.firstcheck.supplier]
+  },
+  {
+    path: '/firstcheck/admin',
+    title: '首检',
+    description: '物资核实、转办确认员、赋码、领取实物',
+    module: 'firstcheck',
+    roles: ['MEASURE_ADMIN'],
+    nodes: [...workflowNodeGroups.firstcheck.admin]
+  },
+  {
+    path: '/firstcheck/leader',
+    title: '首检',
+    description: '审批首检管理类别',
+    module: 'firstcheck',
+    roles: ['DEPT_LEADER'],
+    nodes: [...workflowNodeGroups.firstcheck.leader]
+  },
+  {
+    path: '/firstcheck/engineer',
+    title: '首检',
+    description: '确认类别、检定方式和检定员',
+    module: 'firstcheck',
+    roles: ['RESPONSIBLE_ENGINEER'],
+    nodes: [...workflowNodeGroups.firstcheck.engineer]
+  },
+  {
+    path: '/firstcheck/verifier',
+    title: '首检',
+    description: '录入检定结果、打印首检标签',
+    module: 'firstcheck',
+    roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'],
+    nodes: [...workflowNodeGroups.firstcheck.verifier]
+  },
+  {
+    path: '/firstcheck/confirmer',
+    title: '首检',
+    description: '否通用设备报告确认',
+    module: 'firstcheck',
+    roles: ['CONFIRMER'],
+    nodes: [...workflowNodeGroups.firstcheck.confirmer]
+  },
+  {
+    path: '/sampling/plan',
+    title: 'C类物资抽检',
+    description: 'C类物资抽检计划编制与下发',
+    module: 'sampling',
+    roles: ['PLANNER'],
+    nodes: ['sampling_plan']
+  },
+  {
+    path: '/sampling/admin',
+    title: 'C类物资抽检',
+    description: 'C类抽检设备清点、异常分流和转发确认员',
+    module: 'sampling',
+    roles: ['MEASURE_ADMIN'],
+    nodes: ['admin_confirm']
+  },
+  {
+    path: '/sampling/verifier',
+    title: 'C类物资抽检',
+    description: 'C类抽检检定录入',
+    module: 'sampling',
+    roles: ['VERIFIER_SELF'],
+    nodes: ['verifier_verify']
+  },
+  {
+    path: '/sampling/confirmer',
+    title: 'C类物资抽检',
+    description: 'C类抽检否通用设备判定',
+    module: 'sampling',
+    roles: ['CONFIRMER'],
+    nodes: ['confirmer_confirm']
+  },
+  {
+    path: '/product-support/warehouse',
+    title: '产品配套检定',
+    description: '库房人员填写产品配套送检清单、抽检比例和送检明细',
+    module: 'productSupport',
+    roles: ['PURCHASE_WAREHOUSE'],
+    nodes: ['warehouse_submit']
+  },
+  {
+    path: '/product-support/verifier',
+    title: '产品配套检定',
+    description: '检定员填写产品配套检定信息并产生费用',
+    module: 'productSupport',
+    roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'],
+    nodes: ['verifier_verify']
+  }
+]
+
 export const navSections: NavSection[] = [
   {
     key: 'system',
@@ -68,156 +216,6 @@ export const navSections: NavSection[] = [
         module: 'workspace',
         roles: businessRoles,
         nodes: ['pending_tasks']
-      }
-    ]
-  },
-  {
-    key: 'device-inspection',
-    title: '设备检定',
-    items: [
-      {
-        path: '/periodic/admin',
-        title: '周检',
-        description: '周检计划异常分流、转办确认员、取回实物',
-        module: 'periodic',
-        roles: ['MEASURE_ADMIN'],
-        nodes: [...workflowNodeGroups.periodic.admin]
-      },
-      {
-        path: '/periodic/verifier',
-        title: '周检',
-        description: '扫码接收、自检录入、打印标签、返回分厂',
-        module: 'periodic',
-        roles: ['VERIFIER_SELF'],
-        nodes: [...workflowNodeGroups.periodic.selfVerifier]
-      },
-      {
-        path: '/periodic/verifier-external',
-        title: '周检',
-        description: '外委送回、否通用检定信息和二次判定',
-        module: 'periodic',
-        roles: ['VERIFIER_EXTERNAL'],
-        nodes: [...workflowNodeGroups.periodic.externalVerifier]
-      },
-      {
-        path: '/periodic/responsible-engineer',
-        title: '周检',
-        description: '外委通用设备责任工程师二次判定',
-        module: 'periodic',
-        roles: ['RESPONSIBLE_ENGINEER'],
-        nodes: [...workflowNodeGroups.periodic.responsibleEngineer]
-      },
-      {
-        path: '/periodic/external-operator',
-        title: '周检',
-        description: '外扩扫码接收、通用设备检定信息填写',
-        module: 'periodic',
-        roles: ['EXTERNAL_OPERATOR'],
-        nodes: [...workflowNodeGroups.periodic.externalOperator]
-      },
-      {
-        path: '/periodic/confirmer',
-        title: '周检',
-        description: '否通用设备周检判定',
-        module: 'periodic',
-        roles: ['CONFIRMER'],
-        nodes: [...workflowNodeGroups.periodic.confirmer]
-      },
-      {
-        path: '/firstcheck/supplier',
-        title: '首检',
-        description: '供应商发起首检单',
-        module: 'firstcheck',
-        roles: ['SUPPLIER', 'PURCHASE_WAREHOUSE'],
-        nodes: [...workflowNodeGroups.firstcheck.supplier]
-      },
-      {
-        path: '/firstcheck/admin',
-        title: '首检',
-        description: '物资核实、转办确认员、赋码、领取实物',
-        module: 'firstcheck',
-        roles: ['MEASURE_ADMIN'],
-        nodes: [...workflowNodeGroups.firstcheck.admin]
-      },
-      {
-        path: '/firstcheck/leader',
-        title: '首检',
-        description: '审批首检管理类别',
-        module: 'firstcheck',
-        roles: ['DEPT_LEADER'],
-        nodes: [...workflowNodeGroups.firstcheck.leader]
-      },
-      {
-        path: '/firstcheck/engineer',
-        title: '首检',
-        description: '确认类别、检定方式和检定员',
-        module: 'firstcheck',
-        roles: ['RESPONSIBLE_ENGINEER'],
-        nodes: [...workflowNodeGroups.firstcheck.engineer]
-      },
-      {
-        path: '/firstcheck/verifier',
-        title: '首检',
-        description: '录入检定结果、打印首检标签',
-        module: 'firstcheck',
-        roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'],
-        nodes: [...workflowNodeGroups.firstcheck.verifier]
-      },
-      {
-        path: '/firstcheck/confirmer',
-        title: '首检',
-        description: '否通用设备报告确认',
-        module: 'firstcheck',
-        roles: ['CONFIRMER'],
-        nodes: [...workflowNodeGroups.firstcheck.confirmer]
-      },
-      {
-        path: '/sampling/plan',
-        title: 'C类物资抽检',
-        description: 'C类物资抽检计划编制与下发',
-        module: 'sampling',
-        roles: ['PLANNER'],
-        nodes: ['sampling_plan']
-      },
-      {
-        path: '/sampling/admin',
-        title: 'C类物资抽检',
-        description: 'C类抽检设备清点、异常分流和转发确认员',
-        module: 'sampling',
-        roles: ['MEASURE_ADMIN'],
-        nodes: ['admin_confirm']
-      },
-      {
-        path: '/sampling/verifier',
-        title: 'C类物资抽检',
-        description: 'C类抽检检定录入',
-        module: 'sampling',
-        roles: ['VERIFIER_SELF'],
-        nodes: ['verifier_verify']
-      },
-      {
-        path: '/sampling/confirmer',
-        title: 'C类物资抽检',
-        description: 'C类抽检否通用设备判定',
-        module: 'sampling',
-        roles: ['CONFIRMER'],
-        nodes: ['confirmer_confirm']
-      },
-      {
-        path: '/product-support/warehouse',
-        title: '产品配套检定',
-        description: '库房人员填写产品配套送检清单、抽检比例和送检明细',
-        module: 'productSupport',
-        roles: ['PURCHASE_WAREHOUSE'],
-        nodes: ['warehouse_submit']
-      },
-      {
-        path: '/product-support/verifier',
-        title: '产品配套检定',
-        description: '检定员填写产品配套检定信息并产生费用',
-        module: 'productSupport',
-        roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'],
-        nodes: ['verifier_verify']
       }
     ]
   },
@@ -285,7 +283,7 @@ export const navSections: NavSection[] = [
   }
 ]
 
-export const allNavItems = navSections.flatMap((section) => section.items)
+export const allNavItems = [...workflowRouteItems, ...navSections.flatMap((section) => section.items)]
 
 function getNavDisplayKey(item: NavItem) {
   return `${item.module}:${item.title}`

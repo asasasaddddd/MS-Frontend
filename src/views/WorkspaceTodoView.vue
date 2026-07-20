@@ -20,8 +20,14 @@ import { changeNodeCodesByRole, isPendingWorkflowTask, matchesBusinessType } fro
 import { matchesFirstCheckVerifierRole } from '@/views/firstcheck/firstCheckVerifierModel'
 import { buildPeriodicPlanTodoGroups } from '@/views/periodic/periodicDisplayModel'
 import { changeNodeName, changeTypeName, matchesChangeVerifierRole } from '@/views/change/changeDisplayModel'
+import {
+  dedupeTodoEntriesByKey,
+  filterVisibleTodoEntries,
+  visibleTodoTypeValues,
+  type WorkspaceTodoType
+} from '@/views/workspaceTodoModel'
 
-type TodoType = 'all' | 'firstcheck' | 'periodic' | 'change' | 'sampling' | 'productSupport'
+type TodoType = WorkspaceTodoType
 type TodoColor = 'orange' | 'blue' | 'red' | 'green'
 
 interface TodoDefinition {
@@ -348,13 +354,15 @@ const productSupportTodoEntries = computed<TodoDefinition[]>(() => {
 const permittedTodos = computed(() => {
   const currentRole = roleCode.value
   if (!currentRole) return []
-  return [
-    ...firstCheckTodoEntries.value,
-    ...periodicTodoEntries.value,
-    ...changeTodoEntries.value,
-    ...samplingTodoEntries.value,
-    ...productSupportTodoEntries.value
-  ]
+  return filterVisibleTodoEntries(
+    dedupeTodoEntriesByKey([
+      ...firstCheckTodoEntries.value,
+      ...periodicTodoEntries.value,
+      ...changeTodoEntries.value,
+      ...samplingTodoEntries.value,
+      ...productSupportTodoEntries.value
+    ])
+  )
 })
 
 const filteredTodos = computed(() => {
@@ -401,9 +409,12 @@ const metrics = computed(() => {
       note: change > 0 ? `当前待处理 ${change} 单` : '暂无状态变更待办'
     }
   ]
-  if (isVerifier.value) return baseMetrics.slice(0, 2)
-  if (isSingleMetricOverview.value) return baseMetrics.slice(0, 1)
-  return baseMetrics
+  const roleMetrics = isVerifier.value
+    ? baseMetrics.slice(0, 2)
+    : isSingleMetricOverview.value
+      ? baseMetrics.slice(0, 1)
+      : baseMetrics
+  return roleMetrics.filter((metric) => metric.value > 0)
 })
 
 const pendingTotal = computed(() =>
@@ -414,8 +425,8 @@ const pendingTotal = computed(() =>
 )
 
 const visibleFilterOptions = computed(() => {
-  const types = new Set<TodoType>(['all', ...permittedTodos.value.map((item) => item.type)])
-  return filterOptions?.filter((option) => types.has(option.value as TodoType)) || []
+  const types = new Set<TodoType>(visibleTodoTypeValues(permittedTodos.value))
+  return filterOptions.filter((option) => types.has(option.value as TodoType))
 })
 
 function resetFilter() {
@@ -434,9 +445,9 @@ function openTodo(item: TodoDefinition) {
 async function loadWorkflowSummary() {
   const [workflowResult, periodicResult, samplingResult, productSupportResult] = await Promise.allSettled([
     listWorkflowTasks(),
-    listPeriodicMyTasks(),
-    listSamplingMyTasks(),
-    listProductSupportMyTasks()
+    listPeriodicMyTasks('pending'),
+    listSamplingMyTasks('pending'),
+    listProductSupportMyTasks('pending')
   ])
 
   workflowTasks.value = workflowResult.status === 'fulfilled' ? workflowResult.value : []
@@ -482,7 +493,7 @@ onMounted(loadWorkflowSummary)
 
 <template>
   <section class="todo-page">
-    <div v-if="route.path === '/todo'" class="metric-grid">
+    <div v-if="route.path === '/todo' && metrics.length > 0" class="metric-grid">
       <a-card v-for="metric in metrics" :key="metric.title" class="metric-card" :bordered="false">
         <span>{{ metric.title }}</span>
         <strong>{{ metric.value }}</strong>
