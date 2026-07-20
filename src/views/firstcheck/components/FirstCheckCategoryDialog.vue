@@ -165,6 +165,7 @@ async function submit() {
       orderId: order.id,
       isWithReport: form.isWithReport,
       reportFileId: form.reportFileId,
+      usageScenario: form.usageScenario.trim() || undefined,
       requestedCategory: form.requestedCategory,
       measureManagerId: session.user?.employeeId,
       measureManagerName: session.user?.employeeName,

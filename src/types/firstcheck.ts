@@ -199,6 +199,7 @@ export interface ConfirmCategoryRequest {
   orderId: number
   isWithReport: number
   reportFileId?: number
+  usageScenario?: string
   requestedCategory: ManageCategory
   measureManagerId?: string
   measureManagerName?: string
