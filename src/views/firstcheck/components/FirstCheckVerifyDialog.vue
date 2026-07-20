@@ -279,25 +279,6 @@ watch(
           </label>
           <label><span>合格数量</span><a-input-number v-model:value="form.qualifiedQuantity" :min="0" style="width:100%" /></label>
           <label><span>不合格数量</span><a-input-number v-model:value="form.unqualifiedQuantity" :min="0" style="width:100%" /></label>
-          <label>
-            <span>检定证书/报告附件</span>
-            <div class="attachment-actions">
-              <AttachmentUploadButton
-                v-model="form.certificateAttachmentGroupId"
-                business-type="FIRST_CHECK_CERTIFICATE"
-                :business-id="order?.id"
-                remark="首检检定证书附件"
-                button-text="上传检定证书"
-                size="small"
-              />
-              <AttachmentListButton
-                :group-id="form.certificateAttachmentGroupId"
-                button-text="查看已上传"
-                title="检定证书/报告附件"
-                size="small"
-              />
-            </div>
-          </label>
         </div>
       </section>
 
