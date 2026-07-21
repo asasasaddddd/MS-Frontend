@@ -268,7 +268,7 @@ export const navSections: NavSection[] = [
         title: '计量台账',
         description: '查看入账后的计量设备明细与完整履历',
         module: 'device',
-        roles: ['MEASURE_ADMIN', 'VERIFIER_SELF', 'VERIFIER_EXTERNAL', 'CONFIRMER', 'DEPT_LEADER', 'RESPONSIBLE_ENGINEER', 'MEASURE_LEADER'],
+        roles: ['SUPER_ADMIN', 'MEASURE_ADMIN', 'VERIFIER_SELF', 'VERIFIER_EXTERNAL', 'CONFIRMER', 'DEPT_LEADER', 'RESPONSIBLE_ENGINEER', 'MEASURE_LEADER'],
         nodes: ['device_ledger']
       },
       {

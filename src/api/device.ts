@@ -1,6 +1,12 @@
 import { request } from '@/api/request'
 import type { PageResult } from '@/types/common'
-import type { BusinessCaseDetailVO, DeviceBusinessEventVO, DevicePageQuery, DeviceVO } from '@/types/device'
+import type {
+  BusinessCaseDetailVO,
+  DeviceBusinessEventVO,
+  DeviceLedgerUpdateRequest,
+  DevicePageQuery,
+  DeviceVO
+} from '@/types/device'
 
 export function listDevicePage(query: DevicePageQuery = {}) {
   const { current = 1, size = 10, ...filters } = query
@@ -19,6 +25,14 @@ export function getDeviceByCode(deviceCode: string) {
   return request<DeviceVO>({
     url: `/device/${encodeURIComponent(deviceCode)}`,
     method: 'GET'
+  })
+}
+
+export function updateDeviceLedger(deviceId: string | number, data: DeviceLedgerUpdateRequest) {
+  return request<void>({
+    url: `/device/ledger/${encodeURIComponent(String(deviceId))}`,
+    method: 'PUT',
+    data
   })
 }
 

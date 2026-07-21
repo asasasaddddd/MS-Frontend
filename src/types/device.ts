@@ -58,6 +58,40 @@ export interface DeviceVO {
   remark?: string
 }
 
+export interface DeviceLedgerUpdateRequest {
+  deviceName: string
+  deviceAlias?: string
+  materialCode?: string
+  materialName?: string
+  purchaseOrderNo?: string
+  supplierCode?: string
+  supplierName?: string
+  usageScenario?: string
+  modelSpec?: string
+  deviceUsage?: string
+  measureRange?: string
+  resolution?: string
+  accuracyLevel?: string
+  allowedError?: string
+  manufacturer?: string
+  factoryCode?: string
+  factoryDate?: string
+  subjectCategory?: string
+  subjectSubCategory?: string
+  isMandatory?: number
+  isCommon?: number
+  standardDevice?: string
+  confirmInterval?: string
+  specialProject?: string
+  verificationMethod?: string
+  verificationCycleMonth?: number
+  lastVerificationDate?: string
+  validUntil?: string
+  technicalStatus?: string
+  storageLocation?: string
+  remark?: string
+}
+
 export interface DeviceBusinessEventVO {
   caseId: EntityId
   businessType?: string

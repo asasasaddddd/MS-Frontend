@@ -3,22 +3,28 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   ClockCircleOutlined,
+  CloseOutlined,
   DatabaseOutlined,
   DownloadOutlined,
+  EditOutlined,
   EyeOutlined,
   FileOutlined,
+  SaveOutlined,
   SearchOutlined
 } from '@ant-design/icons-vue'
 import { attachmentDownloadUrl, listAttachmentsByCaseId } from '@/api/attachment'
-import { getBusinessCaseDetail, getDeviceByCode, listDeviceBusinessEvents, listDevicePage } from '@/api/device'
+import { getBusinessCaseDetail, getDeviceByCode, listDeviceBusinessEvents, listDevicePage, updateDeviceLedger } from '@/api/device'
+import { useSessionStore } from '@/stores/session'
 import type {
   AttachmentCaseGroupVO,
   BusinessCaseDetailVO,
   CaseAttachmentFileVO,
   DeviceBusinessEventVO,
+  DeviceLedgerUpdateRequest,
   DevicePageQuery,
   DeviceVO
 } from '@/types/device'
+import DeviceLedgerEditForm from '@/views/device/DeviceLedgerEditForm.vue'
 import {
   deviceCategoryColor,
   deviceCategoryText,
@@ -73,6 +79,10 @@ const caseDetailOpen = ref(false)
 const dataCatalogOpen = ref(false)
 const exportMode = ref<'basic' | 'detail'>('basic')
 const measurementRows = ref<MeasurementRow[]>([])
+const editMode = ref(false)
+const savingLedger = ref(false)
+const editFormRef = ref<{ submit: () => void }>()
+const session = useSessionStore()
 
 const query = reactive({
   searchField: 'deviceCode' as SearchField,
@@ -123,6 +133,7 @@ const caseFlowRows = computed(() => (activeCase.value?.timeline || []).map(mapBu
 const attachmentSections = computed(() => caseAttachments.value.map(mapCaseAttachmentSection))
 const selectedRow = computed(() => rows.value.find((row) => row.key === String(selectedRowKeys.value[0])))
 const canOpenSelectedHistory = computed(() => selectedRowKeys.value.length === 1)
+const canEditLedger = computed(() => session.user?.roleCode === 'SUPER_ADMIN')
 const rowSelection = computed(() => ({
   selectedRowKeys: selectedRowKeys.value,
   onChange: (keys: Array<string | number>) => {
@@ -265,6 +276,36 @@ async function resolveFullDevice(row: DeviceLedgerRow) {
   }
 }
 
+function startEdit() {
+  if (!canEditLedger.value || !activeDevice.value) return
+  editMode.value = true
+}
+
+function cancelEdit() {
+  editMode.value = false
+}
+
+async function saveLedger(payload: DeviceLedgerUpdateRequest) {
+  const device = activeDevice.value
+  if (!device?.id) return
+  savingLedger.value = true
+  try {
+    await updateDeviceLedger(device.id, payload)
+    const refreshed = device.deviceCode ? await getDeviceByCode(device.deviceCode) : undefined
+    if (refreshed) {
+      activeDevice.value = refreshed
+      const index = devices.value.findIndex((item) => item.id === refreshed.id)
+      if (index >= 0) devices.value.splice(index, 1, refreshed)
+    }
+    editMode.value = false
+    message.success('台账已保存')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '台账保存失败')
+  } finally {
+    savingLedger.value = false
+  }
+}
+
 async function loadBusinessEvents(deviceCode?: string) {
   if (!deviceCode) return
   historyLoading.value = true
@@ -298,6 +339,7 @@ async function openCaseDetail(caseId: string | number) {
 }
 
 async function openDetail(row: DeviceLedgerRow) {
+  editMode.value = false
   detailOpen.value = true
   await resolveFullDevice(row)
 }
@@ -462,10 +504,33 @@ onMounted(loadDevices)
       </a-table>
     </section>
 
-    <a-drawer v-model:open="detailOpen" :width="600" placement="right" class="ledger-drawer">
-      <template #title><span class="drawer-title"><EyeOutlined />设备详情</span></template>
+    <a-drawer
+      v-model:open="detailOpen"
+      :width="editMode ? 860 : 600"
+      placement="right"
+      class="ledger-drawer"
+      @close="cancelEdit"
+    >
+      <template #title>
+        <span class="drawer-title"><EyeOutlined />{{ editMode ? '编辑设备台账' : '设备详情' }}</span>
+      </template>
+      <template #extra>
+        <a-space v-if="canEditLedger && activeDevice">
+          <a-button v-if="!editMode" @click="startEdit"><EditOutlined />编辑</a-button>
+          <template v-else>
+            <a-button :disabled="savingLedger" @click="cancelEdit"><CloseOutlined />取消</a-button>
+            <a-button type="primary" :loading="savingLedger" @click="editFormRef?.submit()"><SaveOutlined />保存台账</a-button>
+          </template>
+        </a-space>
+      </template>
       <a-spin :spinning="detailLoading">
-        <div v-if="activeDevice" class="detail-grid">
+        <DeviceLedgerEditForm
+          v-if="activeDevice && editMode"
+          ref="editFormRef"
+          :device="activeDevice"
+          @submit="saveLedger"
+        />
+        <div v-else-if="activeDevice" class="detail-grid">
           <div v-for="field in detailFields" :key="field.label" class="detail-field">
             <label>{{ field.label }}</label>
             <div class="detail-value">

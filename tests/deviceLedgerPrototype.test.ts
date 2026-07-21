@@ -31,3 +31,6 @@ for (const text of [
 }
 
 assert.equal(source.includes('参与事件'), false)
+assert.match(source, /SUPER_ADMIN/)
+assert.match(source, /DeviceLedgerEditForm/)
+assert.match(source, /保存台账/)
