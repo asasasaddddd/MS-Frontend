@@ -9,7 +9,6 @@ export type FirstCheckNodeCode =
   | 'external_sendout'
   | 'verifier_return_verify'
   | 'verifier_verify'
-  | 'assign_code'
 
 export type ManageCategory = 'A类' | 'B类' | 'C类'
 export type VerificationType = 'self_check' | 'external_commission'
@@ -172,28 +171,6 @@ export interface BatchOperationResult {
   }>
 }
 
-export interface DeviceCodePreview {
-  index?: number
-  deviceCode: string
-  deviceName?: string
-  modelSpec?: string
-  manufacturer?: string
-  subjectSubcategory?: string
-}
-
-export interface AssignCodeRequest {
-  orderId: number
-  codeAssigns: Array<{
-    deviceCode: string
-  }>
-  opinion?: string
-}
-
-export interface BatchAssignCodesRequest {
-  orderId: number
-  deviceCodes: string[]
-}
-
 export interface ConfirmCategoryRequest {
   orderId: number
   isWithReport: number
@@ -220,13 +197,34 @@ export interface ConfirmVerificationTypeRequest {
   opinion?: string
 }
 
-export interface VerifierVerifyRequest {
+export interface DeviceCodeReservationRequest {
   orderId: number
+  subjectSubcategory: string
+  identifierCode?: string
+  qualifiedQuantity: number
+}
+
+export interface DeviceCodeReservation {
+  reservationId: string
+  expiresAt: string
+  deviceCodes: string[]
+}
+
+export interface QualifiedFirstCheckDeviceRequest {
+  deviceCode: string
+  factoryCode?: string
+  factoryDate?: string
+  verificationDate: string
+  certificateAttachmentGroupId?: string
+}
+
+export interface VerifierVerifyAndAssignRequest {
+  orderId: number
+  reservationId: string
   verificationResult: VerificationResult
-  qualifiedQuantity?: number
-  unqualifiedQuantity?: number
+  qualifiedQuantity: number
+  unqualifiedQuantity: number
   confirmerId?: string
-  certificateAttachmentGroupId?: AttachmentId
   deviceName?: string
   modelSpec?: string
   deviceUsage?: string
@@ -235,8 +233,6 @@ export interface VerifierVerifyRequest {
   precisionLevel?: string
   allowedError?: string
   manufacturer?: string
-  factoryCode?: string
-  factoryDate?: string
   subjectCategory?: string
   subjectSubcategory?: string
   deviceStatus?: string
@@ -245,12 +241,18 @@ export interface VerifierVerifyRequest {
   confirmInterval?: string
   specialProject?: string
   verificationCycleMonth?: number
-  verificationDate?: string
-  validUntil?: string
   storageLocation?: string
   verificationOpinion?: string
-  verificationUnitPrice: number
+  verificationUnitPrice?: number
   opinion?: string
+  qualifiedDevices: QualifiedFirstCheckDeviceRequest[]
+}
+
+export interface AssignedFirstCheckDevice {
+  deviceId: string
+  deviceCode: string
+  validUntil?: string
+  labelRecordId?: string
 }
 
 export interface FirstCheckAdminRow {

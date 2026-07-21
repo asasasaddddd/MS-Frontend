@@ -1,11 +1,26 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { verifierVerifyFirstCheck } from '@/api/firstcheck'
+import {
+  reserveDeviceCodesFirstCheck,
+  verifierVerifyAndAssignFirstCheck
+} from '@/api/firstcheck'
 import { listUsersByDeptAndRole, type SysUserVO } from '@/api/system'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
-import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
-import type { AttachmentId, FirstCheckOrder, VerificationResult, VerifierVerifyRequest } from '@/types/firstcheck'
+import FirstCheckQualifiedDeviceTable from '@/views/firstcheck/components/FirstCheckQualifiedDeviceTable.vue'
+import {
+  applyDeviceCodeReservation,
+  invalidateDeviceCodeReservation,
+  recalculateQualifiedDeviceValidity,
+  resizeQualifiedDeviceRows,
+  type QualifiedFirstCheckDeviceRow
+} from '@/views/firstcheck/firstCheckQualifiedDeviceModel'
+import type {
+  DeviceCodeReservation,
+  FirstCheckOrder,
+  VerificationResult,
+  VerifierVerifyAndAssignRequest
+} from '@/types/firstcheck'
 
 const props = defineProps<{
   open: boolean
@@ -18,15 +33,20 @@ const emit = defineEmits<{
 }>()
 
 const submitting = defineModel<boolean>('submitting', { default: false })
+const reserving = ref(false)
 const loadingConfirmers = ref(false)
 const confirmers = ref<SysUserVO[]>([])
+const qualifiedDevices = ref<QualifiedFirstCheckDeviceRow[]>([])
+const reservation = ref<DeviceCodeReservation>()
+const reservationClock = ref(Date.now())
+let reservationTimer: ReturnType<typeof setInterval> | undefined
+let resetting = false
 
 const form = reactive({
   verificationResult: 'qualified' as VerificationResult,
   qualifiedQuantity: undefined as number | undefined,
   unqualifiedQuantity: 0,
   confirmerId: undefined as string | undefined,
-  certificateAttachmentGroupId: undefined as AttachmentId | undefined,
   deviceName: '',
   modelSpec: '',
   deviceUsage: undefined as string | undefined,
@@ -35,8 +55,6 @@ const form = reactive({
   precisionLevel: '',
   allowedError: '',
   manufacturer: '',
-  factoryCode: '',
-  factoryDate: '',
   subjectCategory: undefined as string | undefined,
   subjectSubcategory: undefined as string | undefined,
   deviceStatus: 'in_use',
@@ -44,9 +62,7 @@ const form = reactive({
   standardDevice: '否',
   confirmInterval: '周期检定',
   specialProject: '',
-  verificationCycleMonth: 12,
-  verificationDate: '',
-  validUntil: '',
+  verificationCycleMonth: 12 as number | undefined,
   storageLocation: '',
   verificationUnitPrice: undefined as number | undefined,
   verificationOpinion: '检定完成',
@@ -60,8 +76,12 @@ const subjectSubcategoryOptions = [
   { label: '卡尺 050102', value: '050102' }
 ]
 
+const isExternalCommission = computed(
+  () => props.order?.verificationType === 'external_commission'
+)
+
 const requiresConfirmer = computed(
-  () => props.order?.verificationType === 'external_commission' && props.order?.isCommon === 0
+  () => isExternalCommission.value && props.order?.isCommon === 0
 )
 
 const confirmerOptions = computed(() =>
@@ -70,6 +90,22 @@ const confirmerOptions = computed(() =>
     value: user.employeeId
   }))
 )
+
+const reservationReady = computed(() => {
+  const current = reservation.value
+  if (!current?.reservationId || current.deviceCodes.length !== qualifiedDevices.value.length) return false
+  const expiresAt = new Date(current.expiresAt).getTime()
+  if (!Number.isFinite(expiresAt) || expiresAt <= reservationClock.value) return false
+  return qualifiedDevices.value.every(
+    (row, index) => row.deviceCode === current.deviceCodes[index]
+  )
+})
+
+const reservationLabel = computed(() => {
+  if (!reservation.value) return '未生成'
+  if (!reservationReady.value) return '已失效'
+  return `已生成 ${reservation.value.deviceCodes.length} 个`
+})
 
 function normalizeSubjectSubcategory(value?: string) {
   if (!value) return undefined
@@ -83,13 +119,27 @@ function normalizeSubjectSubcategory(value?: string) {
   return aliasMap[value]
 }
 
-const previewRows = computed(() => {
-  const total = Math.max(1, Math.min(Number(form.qualifiedQuantity || props.order?.quantity || 1), 3))
-  return Array.from({ length: total }, (_, index) => ({ index: index + 1 }))
-})
+function today() {
+  const value = new Date()
+  const local = new Date(value.getTime() - value.getTimezoneOffset() * 60_000)
+  return local.toISOString().slice(0, 10)
+}
 
 function close() {
   emit('update:open', false)
+}
+
+function stopReservationClock() {
+  if (reservationTimer) clearInterval(reservationTimer)
+  reservationTimer = undefined
+}
+
+function startReservationClock() {
+  stopReservationClock()
+  reservationClock.value = Date.now()
+  reservationTimer = setInterval(() => {
+    reservationClock.value = Date.now()
+  }, 15_000)
 }
 
 function display(value: unknown) {
@@ -114,12 +164,17 @@ function commonText(value?: number) {
   return '-'
 }
 
+function clearReservation() {
+  reservation.value = undefined
+  qualifiedDevices.value = invalidateDeviceCodeReservation(qualifiedDevices.value)
+}
+
 function resetForm(order?: FirstCheckOrder) {
+  resetting = true
   form.verificationResult = (order?.verificationResult as VerificationResult) || 'qualified'
   form.qualifiedQuantity = order?.qualifiedQuantity ?? order?.quantity ?? undefined
   form.unqualifiedQuantity = order?.unqualifiedQuantity ?? 0
   form.confirmerId = order?.confirmerId
-  form.certificateAttachmentGroupId = order?.certificateAttachmentGroupId
   form.deviceName = order?.deviceName || ''
   form.modelSpec = order?.modelSpec || ''
   form.deviceUsage = order?.deviceUsage
@@ -128,8 +183,6 @@ function resetForm(order?: FirstCheckOrder) {
   form.precisionLevel = order?.precisionLevel || ''
   form.allowedError = order?.allowedError || ''
   form.manufacturer = order?.manufacturer || ''
-  form.factoryCode = order?.factoryCode || ''
-  form.factoryDate = order?.factoryDate || ''
   form.subjectCategory = order?.subjectCategory
   form.subjectSubcategory = normalizeSubjectSubcategory(order?.subjectSubcategory)
   form.deviceStatus = order?.deviceStatus === 'sealed' ? 'sealed' : 'in_use'
@@ -137,13 +190,22 @@ function resetForm(order?: FirstCheckOrder) {
   form.standardDevice = order?.standardDevice === '是' ? '是' : '否'
   form.confirmInterval = order?.confirmInterval === '一次检定' ? '一次检定' : '周期检定'
   form.specialProject = order?.specialProject || ''
-  form.verificationCycleMonth = order?.verificationCycleMonth || 12
-  form.verificationDate = order?.verificationDate || new Date().toISOString().slice(0, 10)
-  form.validUntil = order?.validUntil || ''
+  form.verificationCycleMonth = form.confirmInterval === '一次检定'
+    ? undefined
+    : order?.verificationCycleMonth || 12
   form.storageLocation = order?.storageLocation || ''
   form.verificationUnitPrice = order?.verificationUnitPrice
   form.verificationOpinion = order?.verificationOpinion || '检定完成'
   form.opinion = '检定完成'
+  reservation.value = undefined
+  qualifiedDevices.value = resizeQualifiedDeviceRows(
+    [],
+    Number(form.qualifiedQuantity || 0),
+    today(),
+    form.confirmInterval,
+    form.verificationCycleMonth
+  )
+  resetting = false
 }
 
 async function loadConfirmers(order?: FirstCheckOrder) {
@@ -175,82 +237,147 @@ async function loadConfirmers(order?: FirstCheckOrder) {
   }
 }
 
-function compactPayload(payload: VerifierVerifyRequest): VerifierVerifyRequest {
-  return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== '' && value !== undefined)) as VerifierVerifyRequest
-}
-
-async function submit() {
+async function generateDeviceCodes() {
   const order = props.order
+  const qualifiedQuantity = Number(form.qualifiedQuantity || 0)
   if (!order) return
-  if (!form.verificationResult) {
-    message.warning('请选择检定结果')
+  if (qualifiedQuantity <= 0) {
+    message.warning('合格数量必须大于 0')
     return
   }
-
-  const quantity = Number(order.quantity || 0)
-  const qualified = Number(form.qualifiedQuantity || 0)
-  const unqualified = Number(form.unqualifiedQuantity || 0)
-  if (quantity > 0 && qualified + unqualified > quantity) {
-    message.warning('合格数量和不合格数量不能超过申请数量')
-    return
-  }
-
-  if (requiresConfirmer.value && !form.confirmerId) {
-    message.warning('外委否通用设备请选择确认员')
-    return
-  }
-
   if (!/^\d{6}$/.test(form.subjectSubcategory || '')) {
     message.warning('请选择 6 位学科小类编码')
     return
   }
 
-  if (form.verificationUnitPrice === undefined || form.verificationUnitPrice === null) {
-    message.warning('请填写单台检定费用')
-    return
+  reserving.value = true
+  try {
+    const result = await reserveDeviceCodesFirstCheck({
+      orderId: order.id,
+      subjectSubcategory: form.subjectSubcategory!,
+      qualifiedQuantity
+    })
+    qualifiedDevices.value = applyDeviceCodeReservation(
+      qualifiedDevices.value,
+      result.deviceCodes
+    )
+    reservation.value = result
+    message.success(`已生成 ${result.deviceCodes.length} 个正式计量编号`)
+  } catch (error) {
+    clearReservation()
+    message.error(error instanceof Error ? error.message : '计量编号生成失败')
+  } finally {
+    reserving.value = false
   }
+}
+
+function optionalText(value: string) {
+  const normalized = value.trim()
+  return normalized || undefined
+}
+
+function buildPayload(order: FirstCheckOrder): VerifierVerifyAndAssignRequest {
+  return {
+    orderId: order.id,
+    reservationId: reservation.value!.reservationId,
+    verificationResult: form.verificationResult,
+    qualifiedQuantity: Number(form.qualifiedQuantity || 0),
+    unqualifiedQuantity: Number(form.unqualifiedQuantity || 0),
+    confirmerId: requiresConfirmer.value ? form.confirmerId : undefined,
+    deviceName: optionalText(form.deviceName),
+    modelSpec: optionalText(form.modelSpec),
+    deviceUsage: form.deviceUsage,
+    measureRange: optionalText(form.measureRange),
+    resolution: optionalText(form.resolution),
+    precisionLevel: optionalText(form.precisionLevel),
+    allowedError: optionalText(form.allowedError),
+    manufacturer: optionalText(form.manufacturer),
+    subjectCategory: form.subjectCategory,
+    subjectSubcategory: form.subjectSubcategory,
+    deviceStatus: form.deviceStatus,
+    isMandatory: form.isMandatory,
+    standardDevice: form.standardDevice,
+    confirmInterval: form.confirmInterval,
+    specialProject: optionalText(form.specialProject),
+    verificationCycleMonth: form.confirmInterval === '一次检定'
+      ? undefined
+      : form.verificationCycleMonth,
+    storageLocation: optionalText(form.storageLocation),
+    verificationOpinion: optionalText(form.verificationOpinion),
+    verificationUnitPrice: isExternalCommission.value
+      ? form.verificationUnitPrice
+      : undefined,
+    opinion: optionalText(form.opinion),
+    qualifiedDevices: qualifiedDevices.value.map((row) => ({
+      deviceCode: row.deviceCode,
+      factoryCode: optionalText(row.factoryCode),
+      factoryDate: row.factoryDate || undefined,
+      verificationDate: row.verificationDate,
+      certificateAttachmentGroupId: row.certificateAttachmentGroupId === undefined
+        ? undefined
+        : String(row.certificateAttachmentGroupId)
+    }))
+  }
+}
+
+function validateSubmission(order: FirstCheckOrder) {
+  const quantity = Number(order.quantity || 0)
+  const qualified = Number(form.qualifiedQuantity || 0)
+  const unqualified = Number(form.unqualifiedQuantity || 0)
+  if (qualified <= 0 || qualified + unqualified !== quantity) {
+    message.warning('合格数量与不合格数量之和必须等于申请数量，且至少有 1 台合格设备')
+    return false
+  }
+  if (requiresConfirmer.value && !form.confirmerId) {
+    message.warning('外委否通用设备请选择确认员')
+    return false
+  }
+  if (!/^\d{6}$/.test(form.subjectSubcategory || '')) {
+    message.warning('请选择 6 位学科小类编码')
+    return false
+  }
+  if (!form.deviceName.trim()) {
+    message.warning('请填写设备名称')
+    return false
+  }
+  if (form.confirmInterval !== '一次检定' && !form.verificationCycleMonth) {
+    message.warning('周期检定设备请选择检定周期')
+    return false
+  }
+  if (isExternalCommission.value && form.verificationUnitPrice === undefined) {
+    message.warning('请填写单台检定费用')
+    return false
+  }
+  if (!reservationReady.value) {
+    message.warning('请先生成有效的正式计量编号')
+    return false
+  }
+  if (qualifiedDevices.value.some((row) => !row.verificationDate)) {
+    message.warning('每台合格设备都必须填写检定日期')
+    return false
+  }
+  if (
+    isExternalCommission.value
+    && qualifiedDevices.value.some((row) => !row.certificateAttachmentGroupId)
+  ) {
+    message.warning('外委设备必须逐台上传检定证书')
+    return false
+  }
+  return true
+}
+
+async function submit() {
+  const order = props.order
+  if (!order || !validateSubmission(order)) return
 
   submitting.value = true
   try {
-    await verifierVerifyFirstCheck(
-      compactPayload({
-        orderId: order.id,
-        verificationResult: form.verificationResult,
-        qualifiedQuantity: qualified,
-        unqualifiedQuantity: unqualified,
-        confirmerId: requiresConfirmer.value ? form.confirmerId : undefined,
-        certificateAttachmentGroupId: form.certificateAttachmentGroupId,
-        deviceName: form.deviceName,
-        modelSpec: form.modelSpec,
-        deviceUsage: form.deviceUsage,
-        measureRange: form.measureRange,
-        resolution: form.resolution,
-        precisionLevel: form.precisionLevel,
-        allowedError: form.allowedError,
-        manufacturer: form.manufacturer,
-        factoryCode: form.factoryCode,
-        factoryDate: form.factoryDate,
-        subjectCategory: form.subjectCategory,
-        subjectSubcategory: form.subjectSubcategory,
-        deviceStatus: form.deviceStatus,
-        isMandatory: form.isMandatory,
-        standardDevice: form.standardDevice,
-        confirmInterval: form.confirmInterval,
-        specialProject: form.specialProject,
-        verificationCycleMonth: form.verificationCycleMonth,
-        verificationDate: form.verificationDate,
-        validUntil: form.validUntil,
-        storageLocation: form.storageLocation,
-        verificationOpinion: form.verificationOpinion,
-        verificationUnitPrice: form.verificationUnitPrice,
-        opinion: form.opinion
-      })
-    )
-    message.success('检定信息已提交，流程已按首检规则流转')
+    const assigned = await verifierVerifyAndAssignFirstCheck(buildPayload(order))
+    message.success(`检定与赋码已完成，共生成 ${assigned.length} 台设备`)
     emit('success')
     close()
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '检定信息提交失败')
+    message.error(error instanceof Error ? error.message : '检定与赋码提交失败')
   } finally {
     submitting.value = false
   }
@@ -259,11 +386,52 @@ async function submit() {
 watch(
   () => props.open,
   async (open) => {
-    if (!open) return
+    if (!open) {
+      stopReservationClock()
+      return
+    }
+    startReservationClock()
     resetForm(props.order)
     await loadConfirmers(props.order)
   }
 )
+
+watch(
+  () => form.qualifiedQuantity,
+  (value) => {
+    if (resetting) return
+    qualifiedDevices.value = resizeQualifiedDeviceRows(
+      qualifiedDevices.value,
+      Number(value || 0),
+      today(),
+      form.confirmInterval,
+      form.verificationCycleMonth
+    )
+    clearReservation()
+  }
+)
+
+watch(
+  () => form.subjectSubcategory,
+  () => {
+    if (!resetting) clearReservation()
+  }
+)
+
+watch(
+  [() => form.confirmInterval, () => form.verificationCycleMonth],
+  ([confirmInterval]) => {
+    if (resetting) return
+    if (confirmInterval === '一次检定') form.verificationCycleMonth = undefined
+    qualifiedDevices.value = recalculateQualifiedDeviceValidity(
+      qualifiedDevices.value,
+      form.confirmInterval,
+      form.verificationCycleMonth
+    )
+  }
+)
+
+onUnmounted(stopReservationClock)
 </script>
 
 <template>
@@ -283,7 +451,9 @@ watch(
         </div>
         <div class="dialog-title-actions">
           <a-button @click="close">取消</a-button>
-          <a-button type="primary" :loading="submitting" @click="submit">提交</a-button>
+          <a-button type="primary" :loading="submitting" :disabled="!reservationReady" @click="submit">
+            提交检定并赋码
+          </a-button>
         </div>
       </div>
     </template>
@@ -330,7 +500,7 @@ watch(
               ]"
             />
           </label>
-          <label><span>合格数量</span><a-input-number v-model:value="form.qualifiedQuantity" :min="0" style="width:100%" /></label>
+          <label><span>合格数量</span><a-input-number v-model:value="form.qualifiedQuantity" :min="1" style="width:100%" /></label>
           <label><span>不合格数量</span><a-input-number v-model:value="form.unqualifiedQuantity" :min="0" style="width:100%" /></label>
           <label v-if="requiresConfirmer">
             <span>确认员</span>
@@ -347,9 +517,7 @@ watch(
       </section>
 
       <section class="panel">
-        <div class="panel-header">
-          <h2>入库设备信息</h2>
-        </div>
+        <div class="panel-header"><h2>入库设备信息</h2></div>
         <div class="form-grid cols-4">
           <label><span>设备名称</span><a-input v-model:value="form.deviceName" placeholder="填写设备名称" /></label>
           <label><span>规格型号</span><a-input v-model:value="form.modelSpec" placeholder="填写规格型号" /></label>
@@ -370,7 +538,6 @@ watch(
           <label><span>准确度等级</span><a-input v-model:value="form.precisionLevel" placeholder="填写准确度等级" /></label>
           <label><span>允许误差</span><a-input v-model:value="form.allowedError" placeholder="填写允许误差" /></label>
           <label><span>生产厂家</span><a-input v-model:value="form.manufacturer" placeholder="填写生产厂家" /></label>
-          <label><span>出厂日期</span><a-input v-model:value="form.factoryDate" type="date" /></label>
           <label>
             <span>学科大类</span>
             <a-select
@@ -386,11 +553,7 @@ watch(
           </label>
           <label>
             <span>学科小类</span>
-            <a-select
-              v-model:value="form.subjectSubcategory"
-              placeholder="请选择"
-              :options="subjectSubcategoryOptions"
-            />
+            <a-select v-model:value="form.subjectSubcategory" placeholder="请选择" :options="subjectSubcategoryOptions" />
           </label>
           <label>
             <span>设备状态</span>
@@ -437,6 +600,7 @@ watch(
             <span>检定周期</span>
             <a-select
               v-model:value="form.verificationCycleMonth"
+              :disabled="form.confirmInterval === '一次检定'"
               :options="[
                 { label: '12', value: 12 },
                 { label: '6', value: 6 },
@@ -444,7 +608,7 @@ watch(
               ]"
             />
           </label>
-          <label>
+          <label v-if="isExternalCommission">
             <span>单台检定费用（元）</span>
             <a-input-number
               v-model:value="form.verificationUnitPrice"
@@ -462,41 +626,22 @@ watch(
       </section>
 
       <section class="panel">
-        <a-table :data-source="previewRows" :pagination="false" row-key="index" size="small" :scroll="{ x: 980 }">
-          <a-table-column title="序号" data-index="index" :width="70" />
-          <a-table-column title="计量编号">
-            <template #default>
-              <a-input placeholder="管理员赋码阶段生成" disabled />
-            </template>
-          </a-table-column>
-          <a-table-column title="检定日期">
-            <template #default>
-              <a-input v-model:value="form.verificationDate" type="date" />
-            </template>
-          </a-table-column>
-          <a-table-column title="有效期">
-            <template #default>
-              <a-input v-model:value="form.validUntil" type="date" />
-            </template>
-          </a-table-column>
-          <a-table-column title="出厂编号">
-            <template #default>
-              <a-input v-model:value="form.factoryCode" />
-            </template>
-          </a-table-column>
-          <a-table-column title="上传检定证书">
-            <template #default>
-              <AttachmentUploadButton
-                v-model="form.certificateAttachmentGroupId"
-                business-type="FIRST_CHECK_CERTIFICATE"
-                :business-id="order?.id"
-                remark="首检检定证书附件"
-                button-text="上传"
-                size="small"
-              />
-            </template>
-          </a-table-column>
-        </a-table>
+        <div class="panel-header">
+          <div>
+            <h2>合格设备逐台信息</h2>
+            <span class="panel-subtitle">{{ reservationLabel }}</span>
+          </div>
+          <a-button type="primary" ghost :loading="reserving" @click="generateDeviceCodes">
+            {{ reservation ? '重新生成计量编号' : '生成计量编号' }}
+          </a-button>
+        </div>
+        <FirstCheckQualifiedDeviceTable
+          v-model:rows="qualifiedDevices"
+          :order-id="order?.id"
+          :attachment-required="isExternalCommission"
+          :confirm-interval="form.confirmInterval"
+          :verification-cycle-month="form.verificationCycleMonth"
+        />
       </section>
     </div>
   </a-modal>
@@ -565,6 +710,13 @@ watch(
   font-size: 16px;
 }
 
+.panel-subtitle {
+  display: block;
+  margin-top: 3px;
+  color: #667085;
+  font-size: 12px;
+}
+
 .form-grid {
   display: grid;
   gap: 12px;
@@ -585,13 +737,6 @@ watch(
 .form-grid span {
   color: #667085;
   font-size: 12px;
-}
-
-.attachment-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
 }
 
 .span-2 {

@@ -31,7 +31,7 @@ assert.doesNotMatch(workspace, /CONFIRMER: '\/firstcheck\/confirmer'/)
 
 const types = source('../src/types/firstcheck.ts')
 const confirmCategoryType = types.match(/export interface ConfirmCategoryRequest \{[\s\S]*?\n\}/)?.[0] || ''
-const verifierType = types.match(/export interface VerifierVerifyRequest \{[\s\S]*?\n\}/)?.[0] || ''
+const verifierType = types.match(/export interface VerifierVerifyAndAssignRequest \{[\s\S]*?\n\}/)?.[0] || ''
 assert.doesNotMatch(confirmCategoryType, /confirmerId|confirmerName/)
 assert.match(verifierType, /confirmerId\?: string/)
 

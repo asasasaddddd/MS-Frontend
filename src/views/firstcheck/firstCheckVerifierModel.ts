@@ -6,14 +6,12 @@ export type FirstCheckVerifierStatusKey =
   | 'sent_out'
   | 'wait_sendout_return'
   | 'verifier_verify'
-  | 'assign_code'
   | 'unknown'
 
 export type FirstCheckVerifierAction =
   | 'scan_receive'
   | 'scan_sendout_return'
   | 'verify'
-  | 'assign_code'
   | 'wait'
 
 export interface FirstCheckVerifierStatusSource {
@@ -48,8 +46,6 @@ function workflowNodeCode(source: FirstCheckVerifierStatusSource) {
 export function resolveFirstCheckVerifierStatus(source: FirstCheckVerifierStatusSource): FirstCheckVerifierResolvedStatus {
   const nodeCode = workflowNodeCode(source)
   const scanStatus = source.scanStatus || ''
-
-  if (nodeCode === 'assign_code') return { statusKey: 'assign_code', statusLabel: '待赋码', statusColor: 'cyan' }
 
   if (nodeCode === 'verifier_receive' || scanStatus === 'wait_receive') {
     return { statusKey: 'wait_receive', statusLabel: '待接收', statusColor: 'orange' }
@@ -88,7 +84,6 @@ export function firstCheckVerifierAction(source: FirstCheckVerifierStatusSource)
   if (status.statusKey === 'wait_receive') return 'scan_receive'
   if (status.statusKey === 'wait_sendout_return') return 'scan_sendout_return'
   if (status.statusKey === 'verifier_verify') return 'verify'
-  if (status.statusKey === 'assign_code') return 'assign_code'
   return 'wait'
 }
 

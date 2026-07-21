@@ -1,16 +1,16 @@
 import { request } from '@/api/request'
 import type {
   ApproveRequest,
-  AssignCodeRequest,
-  BatchAssignCodesRequest,
+  AssignedFirstCheckDevice,
   BatchDeptLeaderApproveRequest,
   BatchOperationResult,
   ConfirmCategoryRequest,
   ConfirmVerificationTypeRequest,
-  DeviceCodePreview,
+  DeviceCodeReservation,
+  DeviceCodeReservationRequest,
   FirstCheckOrder,
   StartFirstCheckRequest,
-  VerifierVerifyRequest
+  VerifierVerifyAndAssignRequest
 } from '@/types/firstcheck'
 
 export function startFirstCheck(data: StartFirstCheckRequest) {
@@ -84,32 +84,17 @@ export function engineerConfirmTypeFirstCheck(data: ConfirmVerificationTypeReque
   })
 }
 
-export function verifierVerifyFirstCheck(data: VerifierVerifyRequest) {
-  return request<void>({
-    url: '/firstcheck/verifier-verify',
+export function reserveDeviceCodesFirstCheck(data: DeviceCodeReservationRequest) {
+  return request<DeviceCodeReservation>({
+    url: '/firstcheck/device-code-reservations',
     method: 'POST',
     data
   })
 }
 
-export function previewDeviceCodesFirstCheck(orderId: number) {
-  return request<DeviceCodePreview[]>({
-    url: `/firstcheck/preview-device-codes/${orderId}`,
-    method: 'GET'
-  })
-}
-
-export function assignCodeFirstCheck(data: AssignCodeRequest) {
-  return request<void>({
-    url: '/firstcheck/assign-code',
-    method: 'POST',
-    data
-  })
-}
-
-export function batchAssignCodesFirstCheck(data: BatchAssignCodesRequest) {
-  return request<void>({
-    url: '/firstcheck/batch-assign-codes',
+export function verifierVerifyAndAssignFirstCheck(data: VerifierVerifyAndAssignRequest) {
+  return request<AssignedFirstCheckDevice[]>({
+    url: '/firstcheck/verifier-verify-and-assign',
     method: 'POST',
     data
   })

@@ -17,8 +17,7 @@ export const firstCheckNodes: WorkflowNode[] = [
   { code: 'verifier_receive', name: '检定员扫码接收', module: 'firstcheck', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: '公共扫码模块' },
   { code: 'external_sendout', name: '外扩人员外委送出', module: 'firstcheck', roles: ['EXTERNAL_OPERATOR'], api: 'POST /api/scan/firstcheck/sendout' },
   { code: 'verifier_return_verify', name: '检定员外委送回接收', module: 'firstcheck', roles: ['VERIFIER_EXTERNAL'], api: 'POST /api/scan/firstcheck/sendout-return' },
-  { code: 'verifier_verify', name: '检定员录入', module: 'firstcheck', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: 'POST /api/firstcheck/verifier-verify' },
-  { code: 'assign_code', name: '待赋码', module: 'firstcheck', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: 'POST /api/firstcheck/assign-code' }
+  { code: 'verifier_verify', name: '检定录入与逐台赋码', module: 'firstcheck', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: 'POST /api/firstcheck/verifier-verify-and-assign' }
 ]
 
 export const periodicNodes: WorkflowNode[] = [
@@ -56,7 +55,7 @@ export const workflowNodeGroups = {
     admin: ['manager_check'],
     leader: ['dept_leader_approve'],
     engineer: ['engineer_confirm_type'],
-    verifier: ['verifier_receive', 'verifier_return_verify', 'verifier_verify', 'assign_code'],
+    verifier: ['verifier_receive', 'verifier_return_verify', 'verifier_verify'],
     externalOperator: ['external_sendout']
   },
   periodic: {

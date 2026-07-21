@@ -8,7 +8,6 @@ import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { WorkflowTask } from '@/types/workflow'
 import { useSessionStore } from '@/stores/session'
 import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
-import FirstCheckAssignCodeDialog from '@/views/firstcheck/components/FirstCheckAssignCodeDialog.vue'
 import FirstCheckHistoryPanel from '@/views/firstcheck/components/FirstCheckHistoryPanel.vue'
 import FirstCheckVerifyDialog from '@/views/firstcheck/components/FirstCheckVerifyDialog.vue'
 import {
@@ -43,7 +42,6 @@ const selectedRowKeys = ref<string[]>([])
 const statusFilter = ref<StatusFilter>('all')
 const keyword = ref('')
 const verifyOpen = ref(false)
-const assignOpen = ref(false)
 const activeRow = ref<VerifierRow>()
 const activeTab = ref(route.query.tab === 'history' ? 'history' : 'todo')
 
@@ -65,7 +63,6 @@ const statusOptions = [
   { label: '待外委送出', value: 'wait_sendout' },
   { label: '已外委送出', value: 'sent_out' },
   { label: '待外委送回', value: 'wait_sendout_return' },
-  { label: '待赋码', value: 'assign_code' },
 ]
 
 const columns = [
@@ -101,8 +98,7 @@ const metrics = computed(() => {
     verifyCount: countByStatus('verifier_verify'),
     waitSendoutCount: countByStatus('wait_sendout'),
     sentOutCount: countByStatus('sent_out'),
-    returnCount: countByStatus('wait_sendout_return'),
-    assignCount: countByStatus('assign_code')
+    returnCount: countByStatus('wait_sendout_return')
   }
 })
 
@@ -242,10 +238,6 @@ async function handleAction(row: VerifierRow) {
     openVerify(row)
     return
   }
-  if (action === 'assign_code') {
-    assignOpen.value = true
-    return
-  }
   message.info('当前节点暂不属于检定员可处理动作，请等待流程流转')
 }
 
@@ -276,7 +268,6 @@ onMounted(loadRows)
         <a-tag class="tag blue">待外委送出 {{ metrics.waitSendoutCount }}</a-tag>
         <a-tag class="tag blue">已外委送出 {{ metrics.sentOutCount }}</a-tag>
         <a-tag class="tag blue">待外委送回 {{ metrics.returnCount }}</a-tag>
-        <a-tag class="tag cyan">待赋码 {{ metrics.assignCount }}</a-tag>
       </div>
     </div>
 
@@ -349,7 +340,6 @@ onMounted(loadRows)
       :order="activeRow?.order"
       @success="loadRows"
     />
-    <FirstCheckAssignCodeDialog v-model:open="assignOpen" :order="activeRow?.order" @success="loadRows" />
   </section>
 </template>
 
