@@ -5,6 +5,7 @@ import type {
   DeviceBusinessEventVO,
   DeviceLedgerUpdateRequest,
   DevicePageQuery,
+  DeviceStorageLocationUpdateRequest,
   DeviceVO
 } from '@/types/device'
 
@@ -31,6 +32,17 @@ export function getDeviceByCode(deviceCode: string) {
 export function updateDeviceLedger(deviceId: string | number, data: DeviceLedgerUpdateRequest) {
   return request<void>({
     url: `/device/ledger/${encodeURIComponent(String(deviceId))}`,
+    method: 'PUT',
+    data
+  })
+}
+
+export function updateDeviceStorageLocation(
+  deviceId: string | number,
+  data: DeviceStorageLocationUpdateRequest
+) {
+  return request<void>({
+    url: `/device/ledger/${encodeURIComponent(String(deviceId))}/storage-location`,
     method: 'PUT',
     data
   })

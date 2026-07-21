@@ -4,6 +4,7 @@ import { message } from 'ant-design-vue'
 import {
   ClockCircleOutlined,
   CloseOutlined,
+  CheckOutlined,
   DatabaseOutlined,
   DownloadOutlined,
   EditOutlined,
@@ -13,7 +14,14 @@ import {
   SearchOutlined
 } from '@ant-design/icons-vue'
 import { attachmentDownloadUrl, listAttachmentsByCaseId } from '@/api/attachment'
-import { getBusinessCaseDetail, getDeviceByCode, listDeviceBusinessEvents, listDevicePage, updateDeviceLedger } from '@/api/device'
+import {
+  getBusinessCaseDetail,
+  getDeviceByCode,
+  listDeviceBusinessEvents,
+  listDevicePage,
+  updateDeviceLedger,
+  updateDeviceStorageLocation
+} from '@/api/device'
 import { useSessionStore } from '@/stores/session'
 import type {
   AttachmentCaseGroupVO,
@@ -82,6 +90,9 @@ const measurementRows = ref<MeasurementRow[]>([])
 const editMode = ref(false)
 const savingLedger = ref(false)
 const editFormRef = ref<{ submit: () => void }>()
+const editingStorageLocation = ref(false)
+const storageLocationValue = ref('')
+const savingStorageLocation = ref(false)
 const session = useSessionStore()
 
 const query = reactive({
@@ -134,6 +145,13 @@ const attachmentSections = computed(() => caseAttachments.value.map(mapCaseAttac
 const selectedRow = computed(() => rows.value.find((row) => row.key === String(selectedRowKeys.value[0])))
 const canOpenSelectedHistory = computed(() => selectedRowKeys.value.length === 1)
 const canEditLedger = computed(() => session.user?.roleCode === 'SUPER_ADMIN')
+const canEditStorageLocation = computed(() => {
+  const user = session.user
+  const device = activeDevice.value
+  if (!user || user.roleCode !== 'MEASURE_ADMIN' || !device) return false
+  const sameDepartment = Boolean(user.deptId && device.deptId && user.deptId === device.deptId)
+  return user.employeeId === device.measureManagerId || sameDepartment
+})
 const rowSelection = computed(() => ({
   selectedRowKeys: selectedRowKeys.value,
   onChange: (keys: Array<string | number>) => {
@@ -188,7 +206,7 @@ const detailFields = computed(() => {
     { label: '检测费用（元）', value: verificationCostText(device) },
     { label: '采购费用（元）', value: displayValue(device.purchaseCost) },
     { label: '使用部门', value: displayValue(device.deptName) },
-    { label: '存储位置', value: displayValue(device.storageLocation) },
+    { key: 'storageLocation', label: '存储位置', value: displayValue(device.storageLocation) },
     { label: '计量检定员', value: personText(device.verifierName, device.verifierId) },
     { label: '计量管理员', value: personText(device.measureManagerName, device.measureManagerId) },
     { label: '计量确认员', value: personText(device.confirmEngineerName, device.confirmEngineerId) }
@@ -285,6 +303,44 @@ function cancelEdit() {
   editMode.value = false
 }
 
+function startStorageLocationEdit() {
+  if (!canEditStorageLocation.value || !activeDevice.value) return
+  storageLocationValue.value = activeDevice.value.storageLocation || ''
+  editingStorageLocation.value = true
+}
+
+function cancelStorageLocationEdit() {
+  editingStorageLocation.value = false
+  storageLocationValue.value = ''
+}
+
+async function saveStorageLocation() {
+  const device = activeDevice.value
+  const storageLocation = storageLocationValue.value.trim()
+  if (!device?.id) return
+  if (!storageLocation) {
+    message.warning('请填写存储位置')
+    return
+  }
+
+  savingStorageLocation.value = true
+  try {
+    await updateDeviceStorageLocation(device.id, { storageLocation })
+    const refreshed = device.deviceCode ? await getDeviceByCode(device.deviceCode) : undefined
+    if (refreshed) {
+      activeDevice.value = refreshed
+      const index = devices.value.findIndex((item) => item.id === refreshed.id)
+      if (index >= 0) devices.value.splice(index, 1, refreshed)
+    }
+    cancelStorageLocationEdit()
+    message.success('存储位置已保存')
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '存储位置保存失败')
+  } finally {
+    savingStorageLocation.value = false
+  }
+}
+
 async function saveLedger(payload: DeviceLedgerUpdateRequest) {
   const device = activeDevice.value
   if (!device?.id) return
@@ -340,6 +396,7 @@ async function openCaseDetail(caseId: string | number) {
 
 async function openDetail(row: DeviceLedgerRow) {
   editMode.value = false
+  cancelStorageLocationEdit()
   detailOpen.value = true
   await resolveFullDevice(row)
 }
@@ -534,7 +591,47 @@ onMounted(loadDevices)
           <div v-for="field in detailFields" :key="field.label" class="detail-field">
             <label>{{ field.label }}</label>
             <div class="detail-value">
-              <a-tag v-if="field.tag" :class="['ledger-tag', field.tag]">{{ field.value }}</a-tag>
+              <template v-if="field.key === 'storageLocation' && canEditStorageLocation">
+                <div v-if="editingStorageLocation" class="storage-location-editor">
+                  <a-input
+                    v-model:value="storageLocationValue"
+                    class="storage-location-input"
+                    :maxlength="128"
+                    placeholder="请输入存储位置"
+                    @pressEnter="saveStorageLocation"
+                  />
+                  <a-tooltip title="保存存储位置">
+                    <a-button
+                      type="primary"
+                      size="small"
+                      :loading="savingStorageLocation"
+                      aria-label="保存存储位置"
+                      @click="saveStorageLocation"
+                    >
+                      <CheckOutlined />
+                    </a-button>
+                  </a-tooltip>
+                  <a-tooltip title="取消修改">
+                    <a-button
+                      size="small"
+                      :disabled="savingStorageLocation"
+                      aria-label="取消修改存储位置"
+                      @click="cancelStorageLocationEdit"
+                    >
+                      <CloseOutlined />
+                    </a-button>
+                  </a-tooltip>
+                </div>
+                <div v-else class="storage-location-display">
+                  <span>{{ field.value }}</span>
+                  <a-tooltip title="修改存储位置">
+                    <a-button type="text" size="small" aria-label="修改存储位置" @click="startStorageLocationEdit">
+                      <EditOutlined />
+                    </a-button>
+                  </a-tooltip>
+                </div>
+              </template>
+              <a-tag v-else-if="field.tag" :class="['ledger-tag', field.tag]">{{ field.value }}</a-tag>
               <span v-else>{{ field.value }}</span>
             </div>
           </div>
@@ -919,6 +1016,26 @@ onMounted(loadDevices)
   border: 1px solid #e5eaf1;
   border-radius: 8px;
   background: #f8fafc;
+}
+
+.storage-location-display,
+.storage-location-editor {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: 6px;
+}
+
+.storage-location-display span {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+}
+
+.storage-location-input {
+  min-width: 0;
+  flex: 1;
 }
 
 .timeline-card-link {

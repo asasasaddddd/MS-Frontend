@@ -92,6 +92,10 @@ export interface DeviceLedgerUpdateRequest {
   remark?: string
 }
 
+export interface DeviceStorageLocationUpdateRequest {
+  storageLocation: string
+}
+
 export interface DeviceBusinessEventVO {
   caseId: EntityId
   businessType?: string
