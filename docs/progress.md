@@ -223,3 +223,10 @@
 - `generatePeriodicTestPlan` 接收强类型 `PeriodicTestPlanScenario`，并通过 `scenario` 查询参数调用真实后端接口。
 - 二次确认和成功提示按当前选择动态显示，不再固定描述为自检。
 - 前端契约测试已覆盖三个场景编码、中文选项和 API 参数；直接 Node 契约测试、`npm run typecheck`、`npm run build` 通过。
+# 2026-07-22 首检分类规则调整
+
+- 管理员选择带报告不再强制上传报告附件；分类弹窗保留报告字段和可选附件能力。
+- 责任工程师选择自检时通用设备控件禁用，切换到自检自动固定为“是”，请求提交再次固定 `isCommon=1`。
+- 外委时通用/否通用控件保持可用，由后端校验必填和值域。
+- 新增 `tests/firstCheckClassificationRulesContract.test.ts` 固化前端契约。
+- 验证通过：38 个契约测试、`npm run typecheck`、`npm run build`、`git diff --check`。

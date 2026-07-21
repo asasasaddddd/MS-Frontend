@@ -105,7 +105,7 @@ async function submit() {
     await engineerConfirmTypeFirstCheck({
       orderId: order.id,
       verificationType: form.verificationType,
-      isCommon: form.isCommon,
+      isCommon: form.verificationType === 'self_check' ? 1 : form.isCommon,
       selfVerifierId: form.verificationType === 'self_check' ? form.selfVerifierId : undefined,
       selfVerifierName: form.verificationType === 'self_check' ? selfVerifier?.employeeName : undefined,
       externalVerifierId: form.verificationType === 'external_commission' ? form.externalVerifierId : undefined,
@@ -156,6 +156,15 @@ function returnOrder() {
     }
   })
 }
+
+watch(
+  () => form.verificationType,
+  (verificationType) => {
+    if (verificationType === 'self_check') {
+      form.isCommon = 1
+    }
+  }
+)
 
 watch(
   () => props.open,
@@ -222,6 +231,7 @@ watch(
             <span>通用设备</span>
             <a-select
               v-model:value="form.isCommon"
+              :disabled="form.verificationType === 'self_check'"
               :options="[
                 { label: '是', value: 1 },
                 { label: '否', value: 0 }
