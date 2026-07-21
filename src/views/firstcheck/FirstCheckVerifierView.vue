@@ -9,6 +9,7 @@ import type { WorkflowTask } from '@/types/workflow'
 import { useSessionStore } from '@/stores/session'
 import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
 import FirstCheckAssignCodeDialog from '@/views/firstcheck/components/FirstCheckAssignCodeDialog.vue'
+import FirstCheckHistoryPanel from '@/views/firstcheck/components/FirstCheckHistoryPanel.vue'
 import FirstCheckVerifyDialog from '@/views/firstcheck/components/FirstCheckVerifyDialog.vue'
 import {
   canOpenFirstCheckVerify,
@@ -44,6 +45,7 @@ const keyword = ref('')
 const verifyOpen = ref(false)
 const assignOpen = ref(false)
 const activeRow = ref<VerifierRow>()
+const activeTab = ref(route.query.tab === 'history' ? 'history' : 'todo')
 
 const routeOrderId = computed(() => {
   const value = route.query.orderId
@@ -256,6 +258,12 @@ onMounted(loadRows)
 
 <template>
   <section class="firstcheck-verifier-page">
+    <a-tabs v-model:active-key="activeTab">
+      <a-tab-pane key="todo" tab="当前待办" />
+      <a-tab-pane key="history" tab="已办" />
+    </a-tabs>
+
+    <template v-if="activeTab === 'todo'">
     <div class="summary-line">
       <a-card class="metric" :bordered="false">
         <span>首检待办</span>
@@ -333,6 +341,13 @@ onMounted(loadRows)
         </template>
       </a-table>
     </a-card>
+    </template>
+
+    <FirstCheckHistoryPanel
+      v-else
+      :role-code="session.user?.roleCode || 'VERIFIER_SELF'"
+      :order-id="routeOrderId"
+    />
 
     <FirstCheckVerifyDialog
       v-model:open="verifyOpen"

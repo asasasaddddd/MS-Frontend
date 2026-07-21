@@ -8,6 +8,7 @@ import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { WorkflowTask } from '@/types/workflow'
 import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
 import FirstCheckEngineerDialog from '@/views/firstcheck/components/FirstCheckEngineerDialog.vue'
+import FirstCheckHistoryPanel from '@/views/firstcheck/components/FirstCheckHistoryPanel.vue'
 
 interface EngineerRow {
   key: number
@@ -23,6 +24,7 @@ const statusFilter = ref('all')
 const keyword = ref('')
 const engineerOpen = ref(false)
 const activeRow = ref<EngineerRow>()
+const activeTab = ref(route.query.tab === 'history' ? 'history' : 'todo')
 
 const routeOrderId = computed(() => {
   const value = route.query.orderId
@@ -130,6 +132,12 @@ onMounted(loadRows)
 
 <template>
   <section class="firstcheck-engineer-page">
+    <a-tabs v-model:active-key="activeTab">
+      <a-tab-pane key="todo" tab="当前待办" />
+      <a-tab-pane key="history" tab="已办" />
+    </a-tabs>
+
+    <template v-if="activeTab === 'todo'">
     <div class="summary-line">
       <a-card class="metric" :bordered="false">
         <span>首检待办</span>
@@ -176,6 +184,9 @@ onMounted(loadRows)
         </template>
       </a-table>
     </a-card>
+    </template>
+
+    <FirstCheckHistoryPanel v-else role-code="RESPONSIBLE_ENGINEER" :order-id="routeOrderId" />
 
     <FirstCheckEngineerDialog v-model:open="engineerOpen" :order="activeRow?.order" @success="loadRows" />
   </section>

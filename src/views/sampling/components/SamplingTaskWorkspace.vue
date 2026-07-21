@@ -40,7 +40,7 @@ const session = useSessionStore()
 
 const loading = ref(false)
 const submitting = ref(false)
-const activeTab = ref<ActiveTab>('todo')
+const activeTab = ref<ActiveTab>(route.query.tab === 'history' ? 'history' : 'todo')
 const statusFilter = ref<string>('all')
 const keyword = ref('')
 const currentTasks = ref<SamplingTaskVO[]>([])

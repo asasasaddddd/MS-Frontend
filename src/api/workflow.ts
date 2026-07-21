@@ -7,3 +7,10 @@ export function listWorkflowTasks() {
     method: 'GET'
   })
 }
+
+export function listWorkflowHistory() {
+  return request<WorkflowTask[]>({
+    url: '/workflow/my-history',
+    method: 'GET'
+  })
+}

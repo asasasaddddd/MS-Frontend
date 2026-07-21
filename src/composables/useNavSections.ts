@@ -260,7 +260,7 @@ export const navSections: NavSection[] = [
         title: '标签打印',
         description: '集中处理待打印标签、已打印标签和重复打印次数',
         module: 'label',
-        roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL', 'MEASURE_ADMIN', 'SUPPLIER'],
+        roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL', 'SUPPLIER'],
         nodes: ['print_label', 'label_print_record']
       },
       {

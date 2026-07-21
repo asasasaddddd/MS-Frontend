@@ -8,6 +8,7 @@ import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { WorkflowTask } from '@/types/workflow'
 import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
 import FirstCheckLeaderDialog from '@/views/firstcheck/components/FirstCheckLeaderDialog.vue'
+import FirstCheckHistoryPanel from '@/views/firstcheck/components/FirstCheckHistoryPanel.vue'
 
 interface LeaderRow {
   key: string
@@ -24,6 +25,7 @@ const selectedRowKeys = ref<string[]>([])
 const keyword = ref('')
 const leaderOpen = ref(false)
 const activeRow = ref<LeaderRow>()
+const activeTab = ref(route.query.tab === 'history' ? 'history' : 'todo')
 
 const routeOrderId = computed(() => {
   const value = route.query.orderId
@@ -151,6 +153,12 @@ onMounted(loadRows)
 
 <template>
   <section class="firstcheck-leader-page">
+    <a-tabs v-model:active-key="activeTab">
+      <a-tab-pane key="todo" tab="当前待办" />
+      <a-tab-pane key="history" tab="已办" />
+    </a-tabs>
+
+    <template v-if="activeTab === 'todo'">
     <div class="summary-line">
       <a-card class="metric" :bordered="false">
         <span>首检待办</span>
@@ -203,6 +211,9 @@ onMounted(loadRows)
         </template>
       </a-table>
     </a-card>
+    </template>
+
+    <FirstCheckHistoryPanel v-else role-code="DEPT_LEADER" :order-id="routeOrderId" />
 
     <FirstCheckLeaderDialog v-model:open="leaderOpen" :order="activeRow?.order" @success="loadRows" />
   </section>

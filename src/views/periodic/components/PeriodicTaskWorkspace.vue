@@ -73,7 +73,7 @@ const submitting = ref(false)
 const generatingTestPlan = ref(false)
 const testPlanScenario = ref<PeriodicTestPlanScenario>('self')
 const exceptionChangeSubmitting = ref(false)
-const activeTab = ref<ActiveTab>('todo')
+const activeTab = ref<ActiveTab>(route.query.tab === 'history' ? 'history' : 'todo')
 const statusFilter = ref<string>('all')
 const keyword = ref('')
 const currentTasks = ref<PeriodicTaskVO[]>([])
@@ -572,7 +572,7 @@ watch(routePlanId, () => {
       </template>
 
       <div class="task-filter">
-        <a-tabs v-if="role !== 'admin'" v-model:activeKey="activeTab" class="task-tabs">
+        <a-tabs v-model:activeKey="activeTab" class="task-tabs">
           <a-tab-pane key="todo" tab="当前待办" />
           <a-tab-pane key="history" tab="参与记录" />
         </a-tabs>

@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 
 import {
+  firstCheckNodeCodesByRole,
   getRoleWorkflowNodes,
   getWorkflowNode,
+  matchesWorkflowTaskRole,
   workflowNodeGroups
 } from '../src/workflows/metrologyWorkflow.ts'
 
@@ -19,3 +21,8 @@ assert.deepEqual(responsibleSecondJudgeNode?.roles, ['RESPONSIBLE_ENGINEER'])
 
 const externalThirdJudgeNode = getWorkflowNode('periodic', 'external_third_judge')
 assert.deepEqual(externalThirdJudgeNode?.roles, ['VERIFIER_EXTERNAL'])
+
+assert.deepEqual(firstCheckNodeCodesByRole.MEASURE_ADMIN, ['manager_check'])
+assert.equal(matchesWorkflowTaskRole({ nodeCode: 'manager_check' }, 'firstcheck', 'MEASURE_ADMIN'), true)
+assert.equal(matchesWorkflowTaskRole({ nodeCode: 'verifier_verify' }, 'firstcheck', 'MEASURE_ADMIN'), false)
+assert.equal(matchesWorkflowTaskRole({ nodeCode: 'verifier_verify' }, 'firstcheck', 'VERIFIER_SELF'), true)

@@ -1,0 +1,217 @@
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { message } from 'ant-design-vue'
+import { getFirstCheckDetail } from '@/api/firstcheck'
+import { listWorkflowHistory } from '@/api/workflow'
+import AttachmentListButton from '@/components/AttachmentListButton.vue'
+import type { FirstCheckOrder } from '@/types/firstcheck'
+import type { WorkflowTask } from '@/types/workflow'
+import { matchesBusinessType, matchesWorkflowTaskRole } from '@/workflows/metrologyWorkflow'
+import { matchesFirstCheckVerifierRole } from '@/views/firstcheck/firstCheckVerifierModel'
+
+interface HistoryRow {
+  key: string
+  task: WorkflowTask
+  order: FirstCheckOrder
+}
+
+const props = defineProps<{
+  roleCode: string
+  orderId?: string
+}>()
+
+const loading = ref(false)
+const rows = ref<HistoryRow[]>([])
+const detailOpen = ref(false)
+const activeRow = ref<HistoryRow>()
+
+const columns = [
+  { title: '首检编号', dataIndex: ['order', 'orderNo'], key: 'orderNo', width: 170 },
+  { title: '设备名称', dataIndex: ['order', 'deviceName'], key: 'deviceName', width: 160 },
+  { title: '数量', dataIndex: ['order', 'quantity'], key: 'quantity', width: 86 },
+  { title: '使用部门', dataIndex: ['order', 'applyDeptName'], key: 'applyDeptName', width: 160 },
+  { title: '本人已办节点', dataIndex: ['task', 'nodeName'], key: 'nodeName', width: 170 },
+  { title: '处理结果', dataIndex: ['task', 'action'], key: 'action', width: 110 },
+  { title: '完成时间', dataIndex: ['task', 'completedAt'], key: 'completedAt', width: 180 },
+  { title: '当前流转节点', dataIndex: ['order', 'currentNodeName'], key: 'currentNodeName', width: 180 },
+  { title: '操作', key: 'operation', fixed: 'right', width: 90 }
+]
+
+function display(value: unknown) {
+  if (value === null || value === undefined || value === '') return '-'
+  return String(value)
+}
+
+function dateTime(value?: string) {
+  if (!value) return '-'
+  return value.replace('T', ' ').slice(0, 19)
+}
+
+function actionName(action?: string) {
+  const names: Record<string, string> = {
+    approve: '同意',
+    reject: '驳回',
+    return: '退回',
+    complete: '完成',
+    submit: '提交'
+  }
+  return action ? names[action.toLowerCase()] || '已处理' : '已处理'
+}
+
+function openDetail(row: HistoryRow) {
+  activeRow.value = row
+  detailOpen.value = true
+}
+
+async function loadRows() {
+  loading.value = true
+  try {
+    const taskByOrder = new Map<string, WorkflowTask>()
+    const tasks = (await listWorkflowHistory())
+      .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
+      .filter((task) => matchesWorkflowTaskRole(task, 'firstcheck', props.roleCode))
+      .filter((task) => !props.orderId || String(task.businessId) === props.orderId)
+
+    tasks.forEach((task) => {
+      const orderId = String(task.businessId)
+      if (!taskByOrder.has(orderId)) taskByOrder.set(orderId, task)
+    })
+
+    const details = await Promise.allSettled(
+      Array.from(taskByOrder.values()).map(async (task) => ({
+        task,
+        order: await getFirstCheckDetail(task.businessId)
+      }))
+    )
+    rows.value = details
+      .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: FirstCheckOrder }> => item.status === 'fulfilled')
+      .filter((item) => matchesFirstCheckVerifierRole(item.value.order, props.roleCode))
+      .map((item) => ({
+        key: String(item.value.task.businessId),
+        task: item.value.task,
+        order: item.value.order
+      }))
+  } catch (error) {
+    rows.value = []
+    message.error(error instanceof Error ? error.message : '首检已办加载失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(loadRows)
+</script>
+
+<template>
+  <a-card class="history-panel" :bordered="false">
+    <template #title><h2>首检已办记录</h2></template>
+    <a-table
+      :columns="columns"
+      :data-source="rows"
+      :loading="loading"
+      :pagination="{ pageSize: 10, showSizeChanger: false }"
+      :scroll="{ x: 1300 }"
+      row-key="key"
+      size="middle"
+    >
+      <template #bodyCell="{ column, record }">
+        <template v-if="column.key === 'orderNo'">{{ display(record.order.orderNo) }}</template>
+        <template v-else-if="column.key === 'deviceName'">{{ display(record.order.deviceName) }}</template>
+        <template v-else-if="column.key === 'quantity'">{{ display(record.order.quantity) }}</template>
+        <template v-else-if="column.key === 'applyDeptName'">{{ display(record.order.applyDeptName) }}</template>
+        <template v-else-if="column.key === 'nodeName'">{{ display(record.task.nodeName) }}</template>
+        <template v-else-if="column.key === 'action'">
+          <a-tag color="green">{{ actionName(record.task.action) }}</a-tag>
+        </template>
+        <template v-else-if="column.key === 'completedAt'">{{ dateTime(record.task.completedAt) }}</template>
+        <template v-else-if="column.key === 'currentNodeName'">
+          <a-tag color="blue">{{ display(record.order.currentNodeName || record.order.currentNode) }}</a-tag>
+        </template>
+        <template v-else-if="column.key === 'operation'">
+          <a-button type="link" @click="openDetail(record)">查看</a-button>
+        </template>
+      </template>
+    </a-table>
+  </a-card>
+
+  <a-modal v-model:open="detailOpen" title="首检已办详情" width="920px" :footer="null">
+    <div v-if="activeRow" class="history-detail-grid">
+      <div><span>首检编号</span><strong>{{ display(activeRow.order.orderNo) }}</strong></div>
+      <div><span>当前流转节点</span><strong>{{ display(activeRow.order.currentNodeName || activeRow.order.currentNode) }}</strong></div>
+      <div><span>本人已办节点</span><strong>{{ display(activeRow.task.nodeName) }}</strong></div>
+      <div><span>本人处理结果</span><strong>{{ actionName(activeRow.task.action) }}</strong></div>
+      <div class="full"><span>本人处理意见</span><strong>{{ display(activeRow.task.opinion) }}</strong></div>
+      <div><span>设备名称</span><strong>{{ display(activeRow.order.deviceName) }}</strong></div>
+      <div><span>规格型号</span><strong>{{ display(activeRow.order.modelSpec) }}</strong></div>
+      <div><span>物料编码</span><strong>{{ display(activeRow.order.materialCode) }}</strong></div>
+      <div><span>物料描述</span><strong>{{ display(activeRow.order.materialName) }}</strong></div>
+      <div><span>数量</span><strong>{{ display(activeRow.order.quantity) }}</strong></div>
+      <div><span>使用部门</span><strong>{{ display(activeRow.order.applyDeptName) }}</strong></div>
+      <div>
+        <span>供应商附件</span>
+        <AttachmentListButton :group-id="activeRow.order.attachmentGroupId" title="供应商申请附件" size="small" />
+      </div>
+      <div>
+        <span>检定证书</span>
+        <AttachmentListButton :group-id="activeRow.order.certificateAttachmentGroupId" title="检定证书/报告附件" size="small" />
+      </div>
+    </div>
+  </a-modal>
+</template>
+
+<style scoped>
+.history-panel {
+  overflow: hidden;
+  border: 1px solid #e5eaf1;
+  border-radius: 8px;
+}
+
+.history-panel :deep(.ant-card-body) {
+  padding: 0;
+}
+
+.history-panel h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.history-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid #e5eaf1;
+  border-left: 1px solid #e5eaf1;
+}
+
+.history-detail-grid > div {
+  min-height: 72px;
+  padding: 14px 12px;
+  border-right: 1px solid #e5eaf1;
+  border-bottom: 1px solid #e5eaf1;
+}
+
+.history-detail-grid .full {
+  grid-column: 1 / -1;
+}
+
+.history-detail-grid span {
+  display: block;
+  margin-bottom: 8px;
+  color: #667085;
+  font-size: 12px;
+}
+
+.history-detail-grid strong {
+  color: #172033;
+  font-size: 15px;
+}
+
+@media (max-width: 760px) {
+  .history-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-detail-grid .full {
+    grid-column: auto;
+  }
+}
+</style>

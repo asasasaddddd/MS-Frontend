@@ -4,10 +4,10 @@ import { useRoute, useRouter } from 'vue-router'
 import type { SelectProps } from 'ant-design-vue'
 import { getFirstCheckDetail } from '@/api/firstcheck'
 import { getChangeOrderDetail } from '@/api/change'
-import { listWorkflowTasks } from '@/api/workflow'
-import { listPeriodicMyTasks } from '@/api/periodic'
-import { listSamplingMyTasks } from '@/api/sampling'
-import { listProductSupportMyTasks } from '@/api/productSupport'
+import { listWorkflowHistory, listWorkflowTasks } from '@/api/workflow'
+import { listPeriodicMyHistory, listPeriodicMyTasks } from '@/api/periodic'
+import { listSamplingMyHistory, listSamplingMyTasks } from '@/api/sampling'
+import { listProductSupportMyHistory, listProductSupportMyTasks } from '@/api/productSupport'
 import { roleNameMap, type RoleCode } from '@/types/common'
 import type { WorkflowTask } from '@/types/workflow'
 import type { PeriodicTaskVO } from '@/types/periodic'
@@ -16,7 +16,12 @@ import type { ProductSupportOrderVO } from '@/types/productSupport'
 import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { ChangeOrderVO } from '@/types/change'
 import { useSessionStore } from '@/stores/session'
-import { changeNodeCodesByRole, isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
+import {
+  changeNodeCodesByRole,
+  isPendingWorkflowTask,
+  matchesBusinessType,
+  matchesWorkflowTaskRole
+} from '@/workflows/metrologyWorkflow'
 import { matchesFirstCheckVerifierRole } from '@/views/firstcheck/firstCheckVerifierModel'
 import { buildPeriodicPlanTodoGroups } from '@/views/periodic/periodicDisplayModel'
 import { changeNodeName, changeTypeName, matchesChangeVerifierRole } from '@/views/change/changeDisplayModel'
@@ -47,12 +52,17 @@ interface TodoDefinition {
 const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
+const activeBucket = ref<'todo' | 'history'>('todo')
 const selectedType = ref<TodoType>('all')
 const keyword = ref('')
 const workflowTasks = ref<WorkflowTask[]>([])
+const workflowHistoryTasks = ref<WorkflowTask[]>([])
 const periodicTasks = ref<PeriodicTaskVO[]>([])
+const periodicHistoryTasks = ref<PeriodicTaskVO[]>([])
 const samplingTasks = ref<SamplingTaskVO[]>([])
+const samplingHistoryTasks = ref<SamplingTaskVO[]>([])
 const productSupportTasks = ref<ProductSupportOrderVO[]>([])
+const productSupportHistoryTasks = ref<ProductSupportOrderVO[]>([])
 const firstCheckOrders = ref<Record<string, FirstCheckOrder>>({})
 const changeOrders = ref<Record<string, ChangeOrderVO>>({})
 
@@ -150,6 +160,7 @@ const firstCheckTodoEntries = computed<TodoDefinition[]>(() => {
   return workflowTasks.value
     .filter((task) => isPendingWorkflowTask(task))
     .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
+    .filter((task) => matchesWorkflowTaskRole(task, 'firstcheck', currentRole))
     .filter((task) => {
       const order = firstCheckOrders.value[String(task.businessId)]
       return order ? matchesFirstCheckVerifierRole(order, currentRole) : true
@@ -171,6 +182,38 @@ const firstCheckTodoEntries = computed<TodoDefinition[]>(() => {
       }
     })
     .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
+})
+
+const firstCheckHistoryEntries = computed<TodoDefinition[]>(() => {
+  const currentRole = roleCode.value
+  const path = currentRole ? firstCheckRouteByRole[currentRole] : undefined
+  if (!currentRole || !path || currentRole === 'EXTERNAL_OPERATOR') return []
+
+  return workflowHistoryTasks.value
+    .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
+    .filter((task) => matchesWorkflowTaskRole(task, 'firstcheck', currentRole))
+    .filter((task) => {
+      const order = firstCheckOrders.value[String(task.businessId)]
+      return order ? matchesFirstCheckVerifierRole(order, currentRole) : true
+    })
+    .map((task) => {
+      const orderId = String(task.businessId)
+      const order = firstCheckOrders.value[orderId]
+      return {
+        key: `firstcheck-${orderId}`,
+        type: 'firstcheck' as const,
+        title: `首检单 ${order?.orderNo || orderId}`,
+        detailTitle: [task.nodeName, task.completedAt?.replace('T', ' ').slice(0, 16), order?.currentNodeName]
+          .filter(Boolean)
+          .join(' · '),
+        count: 1,
+        unit: '单',
+        color: 'green' as TodoColor,
+        roles: [currentRole],
+        routeByRole: { [currentRole]: path },
+        query: { orderId, tab: 'history' }
+      }
+    })
 })
 
 const changeTodoEntries = computed<TodoDefinition[]>(() => {
@@ -258,6 +301,29 @@ const periodicTodoEntries = computed<TodoDefinition[]>(() => {
     .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
 })
 
+const periodicHistoryEntries = computed<TodoDefinition[]>(() => {
+  const currentRole = roleCode.value
+  const path = currentRole ? periodicRouteByRole[currentRole] : undefined
+  if (!currentRole || !path) return []
+  const pendingIds = new Set(periodicTasks.value.map((task) => String(task.id)))
+  const handledTasks = periodicHistoryTasks.value.filter((task) => !pendingIds.has(String(task.id)))
+
+  return buildPeriodicPlanTodoGroups(handledTasks).map(({ planId, tasks, deviceCount }) => ({
+    key: `periodic-${planId}`,
+    type: 'periodic' as const,
+    title: `周检单 ${derivePeriodicPlanLabel(planId, tasks)}`,
+    detailTitle: buildPeriodicPlanSubtitle(tasks),
+    count: deviceCount,
+    unit: '台',
+    color: 'green' as TodoColor,
+    roles: [currentRole],
+    routeByRole: { [currentRole]: path },
+    query: planId.startsWith('task-')
+      ? { tab: 'history' }
+      : { planId, tab: 'history' } as Record<string, string>
+  }))
+})
+
 function samplingPlanGroupKey(task: SamplingTaskVO) {
   if (task.planId !== undefined && task.planId !== null && task.planId !== '') return String(task.planId)
   return `task-${task.id}`
@@ -318,6 +384,35 @@ const samplingTodoEntries = computed<TodoDefinition[]>(() => {
     .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
 })
 
+const samplingHistoryEntries = computed<TodoDefinition[]>(() => {
+  const currentRole = roleCode.value
+  const path = currentRole ? samplingRouteByRole[currentRole] : undefined
+  if (!currentRole || !path || currentRole === 'PLANNER') return []
+
+  const pendingIds = new Set(samplingTasks.value.map((task) => String(task.id)))
+  const groups = new Map<string, SamplingTaskVO[]>()
+  samplingHistoryTasks.value.filter((task) => !pendingIds.has(String(task.id))).forEach((task) => {
+    const key = samplingPlanGroupKey(task)
+    const list = groups.get(key) || []
+    list.push(task)
+    groups.set(key, list)
+  })
+  return Array.from(groups.entries()).map(([planId, tasks]) => ({
+    key: `sampling-${planId}`,
+    type: 'sampling' as const,
+    title: `C类抽检计划 ${deriveSamplingPlanLabel(planId, tasks)}`,
+    detailTitle: buildSamplingPlanSubtitle(tasks),
+    count: tasks.length,
+    unit: '台',
+    color: 'green' as TodoColor,
+    roles: [currentRole],
+    routeByRole: { [currentRole]: path },
+    query: planId.startsWith('task-')
+      ? { tab: 'history' }
+      : { planId, tab: 'history' } as Record<string, string>
+  }))
+})
+
 const productSupportTodoEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
   const path = currentRole ? productSupportRouteByRole[currentRole] : undefined
@@ -353,6 +448,29 @@ const productSupportTodoEntries = computed<TodoDefinition[]>(() => {
     .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
 })
 
+const productSupportHistoryEntries = computed<TodoDefinition[]>(() => {
+  const currentRole = roleCode.value
+  const path = currentRole ? productSupportRouteByRole[currentRole] : undefined
+  if (!currentRole || !path) return []
+
+  const pendingIds = new Set(productSupportTasks.value.map((order) => String(order.id)))
+  return productSupportHistoryTasks.value.filter((order) => !pendingIds.has(String(order.id))).map((order) => {
+    const orderId = String(order.id)
+    return {
+      key: `product-support-${orderId}`,
+      type: 'productSupport' as const,
+      title: `产品配套单 ${order.orderNo || order.contractNo || orderId}`,
+      detailTitle: [order.contractNo, order.projectNo, order.currentNodeName || order.currentNode].filter(Boolean).join(' / '),
+      count: 1,
+      unit: '单',
+      color: 'green' as TodoColor,
+      roles: [currentRole],
+      routeByRole: { [currentRole]: path },
+      query: { orderId, tab: 'history' }
+    }
+  })
+})
+
 const permittedTodos = computed(() => {
   const currentRole = roleCode.value
   if (!currentRole) return []
@@ -367,9 +485,24 @@ const permittedTodos = computed(() => {
   )
 })
 
+const permittedHistory = computed(() => {
+  const currentRole = roleCode.value
+  if (!currentRole) return []
+  return filterVisibleTodoEntries(
+    dedupeTodoEntriesByKey([
+      ...firstCheckHistoryEntries.value,
+      ...periodicHistoryEntries.value,
+      ...samplingHistoryEntries.value,
+      ...productSupportHistoryEntries.value
+    ])
+  )
+})
+
+const activeEntries = computed(() => (activeBucket.value === 'todo' ? permittedTodos.value : permittedHistory.value))
+
 const filteredTodos = computed(() => {
   const text = keyword.value.trim()
-  return permittedTodos.value.filter((item) => {
+  return activeEntries.value.filter((item) => {
     const matchesType = selectedType.value === 'all' || item.type === selectedType.value
     const matchesKeyword = !text || item.title.includes(text) || Boolean(item.detailTitle?.includes(text))
     return matchesType && matchesKeyword
@@ -427,7 +560,7 @@ const pendingTotal = computed(() =>
 )
 
 const visibleFilterOptions = computed(() => {
-  const types = new Set<TodoType>(visibleTodoTypeValues(permittedTodos.value))
+  const types = new Set<TodoType>(visibleTodoTypeValues(activeEntries.value))
   return filterOptions.filter((option) => types.has(option.value as TodoType))
 })
 
@@ -445,19 +578,35 @@ function openTodo(item: TodoDefinition) {
 }
 
 async function loadWorkflowSummary() {
-  const [workflowResult, periodicResult, samplingResult, productSupportResult] = await Promise.allSettled([
+  const [
+    workflowResult,
+    workflowHistoryResult,
+    periodicResult,
+    periodicHistoryResult,
+    samplingResult,
+    samplingHistoryResult,
+    productSupportResult,
+    productSupportHistoryResult
+  ] = await Promise.allSettled([
     listWorkflowTasks(),
-    listPeriodicMyTasks('pending'),
-    listSamplingMyTasks('pending'),
-    listProductSupportMyTasks('pending')
+    listWorkflowHistory(),
+    listPeriodicMyTasks(),
+    listPeriodicMyHistory(),
+    listSamplingMyTasks(),
+    listSamplingMyHistory(),
+    listProductSupportMyTasks(),
+    listProductSupportMyHistory()
   ])
 
   workflowTasks.value = workflowResult.status === 'fulfilled' ? workflowResult.value : []
+  workflowHistoryTasks.value = workflowHistoryResult.status === 'fulfilled' ? workflowHistoryResult.value : []
   periodicTasks.value = periodicResult.status === 'fulfilled' ? periodicResult.value : []
+  periodicHistoryTasks.value = periodicHistoryResult.status === 'fulfilled' ? periodicHistoryResult.value : []
   samplingTasks.value = samplingResult.status === 'fulfilled' ? samplingResult.value : []
+  samplingHistoryTasks.value = samplingHistoryResult.status === 'fulfilled' ? samplingHistoryResult.value : []
   productSupportTasks.value = productSupportResult.status === 'fulfilled' ? productSupportResult.value : []
-  const firstCheckTasks = workflowTasks.value
-    .filter((task) => isPendingWorkflowTask(task))
+  productSupportHistoryTasks.value = productSupportHistoryResult.status === 'fulfilled' ? productSupportHistoryResult.value : []
+  const firstCheckTasks = [...workflowTasks.value, ...workflowHistoryTasks.value]
     .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
   const changeTasks = workflowTasks.value
     .filter((task) => isPendingWorkflowTask(task))
@@ -512,7 +661,7 @@ onMounted(loadWorkflowSummary)
       </div>
     </a-card>
 
-    <div v-if="route.path === '/todo' && metrics.length > 0" class="metric-grid">
+    <div v-if="route.path === '/todo' && activeBucket === 'todo' && metrics.length > 0" class="metric-grid">
       <a-card v-for="metric in metrics" :key="metric.title" class="metric-card" :bordered="false">
         <span>{{ metric.title }}</span>
         <strong>{{ metric.value }}</strong>
@@ -522,11 +671,16 @@ onMounted(loadWorkflowSummary)
 
     <a-card v-if="route.path === '/todo'" class="todo-panel" :bordered="false">
       <template #title>
-        <h2>我的待办</h2>
+        <h2>流程任务</h2>
       </template>
       <template #extra>
-        <a-tag v-if="isVerifier" class="count-pill orange">{{ pendingTotal }} 项待办</a-tag>
+        <a-tag v-if="isVerifier && activeBucket === 'todo'" class="count-pill orange">{{ pendingTotal }} 项待办</a-tag>
       </template>
+
+      <a-tabs v-model:active-key="activeBucket" class="workspace-task-tabs" @change="resetFilter">
+        <a-tab-pane key="todo" tab="我的待办" />
+        <a-tab-pane key="history" tab="我的已办" />
+      </a-tabs>
 
       <div class="task-filter">
         <a-select v-model:value="selectedType" class="type-select" :options="visibleFilterOptions" />
@@ -550,7 +704,11 @@ onMounted(loadWorkflowSummary)
         </div>
       </div>
 
-      <a-empty v-else class="todo-empty" description="当前角色暂无该类型待办" />
+      <a-empty
+        v-else
+        class="todo-empty"
+        :description="activeBucket === 'todo' ? '当前角色暂无该类型待办' : '当前角色暂无该类型已办记录'"
+      />
     </a-card>
 
     <a-card v-else class="todo-panel building-panel" :bordered="false">

@@ -8,6 +8,7 @@ import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { WorkflowTask } from '@/types/workflow'
 import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
 import FirstCheckConfirmDialog from '@/views/firstcheck/components/FirstCheckConfirmDialog.vue'
+import FirstCheckHistoryPanel from '@/views/firstcheck/components/FirstCheckHistoryPanel.vue'
 
 interface ConfirmerRow {
   key: number
@@ -22,6 +23,7 @@ const rows = ref<ConfirmerRow[]>([])
 const keyword = ref('')
 const confirmOpen = ref(false)
 const activeRow = ref<ConfirmerRow>()
+const activeTab = ref(route.query.tab === 'history' ? 'history' : 'todo')
 
 const routeOrderId = computed(() => {
   const value = route.query.orderId
@@ -116,6 +118,12 @@ onMounted(loadRows)
 
 <template>
   <section class="firstcheck-confirmer-page">
+    <a-tabs v-model:active-key="activeTab">
+      <a-tab-pane key="todo" tab="当前待办" />
+      <a-tab-pane key="history" tab="已办" />
+    </a-tabs>
+
+    <template v-if="activeTab === 'todo'">
     <div class="summary-line">
       <a-card class="metric" :bordered="false">
         <span>首检待办</span>
@@ -161,6 +169,9 @@ onMounted(loadRows)
         </template>
       </a-table>
     </a-card>
+    </template>
+
+    <FirstCheckHistoryPanel v-else role-code="CONFIRMER" :order-id="routeOrderId" />
 
     <FirstCheckConfirmDialog v-model:open="confirmOpen" :order="activeRow?.order" @success="loadRows" />
   </section>

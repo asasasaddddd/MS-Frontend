@@ -9,6 +9,7 @@ import type { WorkflowTask } from '@/types/workflow'
 import { getWorkflowNodeName, isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import FirstCheckCategoryDialog from '@/views/firstcheck/components/FirstCheckCategoryDialog.vue'
+import FirstCheckHistoryPanel from '@/views/firstcheck/components/FirstCheckHistoryPanel.vue'
 
 type StatusFilter = 'all' | 'manager_check' | 'returned'
 
@@ -20,6 +21,7 @@ const keyword = ref('')
 const detailOpen = ref(false)
 const categoryOpen = ref(false)
 const activeRow = ref<FirstCheckAdminRow>()
+const activeTab = ref(route.query.tab === 'history' ? 'history' : 'todo')
 
 const routeOrderId = computed(() => {
   const value = route.query.orderId
@@ -158,6 +160,12 @@ onMounted(loadRows)
 
 <template>
   <section class="firstcheck-admin-page">
+    <a-tabs v-model:active-key="activeTab">
+      <a-tab-pane key="todo" tab="当前待办" />
+      <a-tab-pane key="history" tab="已办" />
+    </a-tabs>
+
+    <template v-if="activeTab === 'todo'">
     <div class="summary-line">
       <div class="metric-grid compact">
         <a-card class="metric" :bordered="false">
@@ -230,6 +238,9 @@ onMounted(loadRows)
         </template>
       </a-table>
     </a-card>
+    </template>
+
+    <FirstCheckHistoryPanel v-else role-code="MEASURE_ADMIN" :order-id="routeOrderId" />
 
     <a-modal v-model:open="detailOpen" title="首检单详情" width="920px" :footer="null">
       <div v-if="activeRow" class="detail-grid">
