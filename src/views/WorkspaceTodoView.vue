@@ -28,6 +28,7 @@ import { changeNodeName, changeTypeName, matchesChangeVerifierRole } from '@/vie
 import {
   dedupeTodoEntriesByKey,
   filterVisibleTodoEntries,
+  getChangeTaskRoute,
   getWorkspaceLaunchActions,
   visibleTodoTypeValues,
   type WorkspaceTodoType
@@ -112,15 +113,6 @@ const firstCheckRouteByRole: Partial<Record<RoleCode, string>> = {
   VERIFIER_SELF: '/firstcheck/verifier',
   VERIFIER_EXTERNAL: '/firstcheck/verifier',
   EXTERNAL_OPERATOR: '/scan'
-}
-
-const changeRouteByRole: Partial<Record<RoleCode, string>> = {
-  MEASURE_ADMIN: '/change/apply',
-  DEPT_LEADER: '/change/approval',
-  MEASURE_LEADER: '/change/approval',
-  RESPONSIBLE_ENGINEER: '/change/approval',
-  VERIFIER_SELF: '/change/verifier',
-  VERIFIER_EXTERNAL: '/change/verifier'
 }
 
 function scanActionByFirstCheckNode(nodeCode?: string) {
@@ -217,7 +209,7 @@ const firstCheckHistoryEntries = computed<TodoDefinition[]>(() => {
 
 const changeTodoEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
-  const path = currentRole ? changeRouteByRole[currentRole] : undefined
+  const path = getChangeTaskRoute(currentRole)
   const allowedNodes = currentRole ? changeNodeCodesByRole[currentRole] : undefined
   if (!currentRole || !path || !allowedNodes) return []
 
@@ -255,7 +247,7 @@ const changeTodoEntries = computed<TodoDefinition[]>(() => {
 
 const changeHistoryEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
-  const path = currentRole ? changeRouteByRole[currentRole] : undefined
+  const path = getChangeTaskRoute(currentRole)
   const allowedNodes = currentRole ? changeNodeCodesByRole[currentRole] : undefined
   if (!currentRole || !path || !allowedNodes) return []
 

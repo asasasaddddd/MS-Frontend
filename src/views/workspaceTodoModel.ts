@@ -19,6 +19,19 @@ export interface WorkspaceLaunchAction {
   path: string
 }
 
+const changeTaskRouteByRole: Record<string, string> = {
+  MEASURE_ADMIN: '/change/admin-task',
+  DEPT_LEADER: '/change/approval',
+  MEASURE_LEADER: '/change/approval',
+  RESPONSIBLE_ENGINEER: '/change/approval',
+  VERIFIER_SELF: '/change/verifier',
+  VERIFIER_EXTERNAL: '/change/verifier'
+}
+
+export function getChangeTaskRoute(roleCode?: string) {
+  return roleCode ? changeTaskRouteByRole[roleCode] : undefined
+}
+
 export function filterVisibleTodoEntries<T extends WorkspaceTodoCountEntry>(entries: readonly T[]) {
   return entries.filter((entry) => Number.isFinite(entry.count) && entry.count > 0)
 }

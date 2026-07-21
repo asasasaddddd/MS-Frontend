@@ -58,6 +58,7 @@ const componentByPath: Partial<Record<string, RouteRecordRaw['component']>> = {
   '/periodic/external-operator': () => import('@/views/periodic/PeriodicExternalOperatorView.vue'),
   '/periodic/confirmer': () => import('@/views/periodic/PeriodicConfirmerView.vue'),
   '/change/apply': () => import('@/views/change/ChangeApplyView.vue'),
+  '/change/admin-task': () => import('@/views/change/ChangeAdminTaskView.vue'),
   '/change/approval': () => import('@/views/change/ChangeDeptLeaderView.vue'),
   '/change/verifier': () => import('@/views/change/ChangeVerifierView.vue'),
   '/scan': () => import('@/views/scan/DeviceScanView.vue'),
@@ -125,13 +126,17 @@ const metaByPath: Partial<Record<string, RouteRecordRaw['meta']>> = {
     title: '状态变更申请',
     breadcrumb: '首页 / 设备管理 / 状态变更'
   },
+  '/change/admin-task': {
+    title: '状态变更待办详情',
+    breadcrumb: '首页 / 工作台 / 状态变更'
+  },
   '/change/approval': {
     title: '状态变更待办',
-    breadcrumb: '首页 / 设备管理 / 状态变更'
+    breadcrumb: '首页 / 工作台 / 状态变更'
   },
   '/change/verifier': {
     title: '状态变更待办详情',
-    breadcrumb: '首页 / 设备管理 / 状态变更'
+    breadcrumb: '首页 / 工作台 / 状态变更'
   },
   '/scan': {
     title: '设备扫码',

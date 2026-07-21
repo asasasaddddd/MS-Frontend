@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   dedupeTodoEntriesByKey,
   filterVisibleTodoEntries,
+  getChangeTaskRoute,
   getWorkspaceLaunchActions,
   visibleTodoTypeValues
 } from '../src/views/workspaceTodoModel.ts'
@@ -32,3 +33,11 @@ assert.deepEqual(getWorkspaceLaunchActions('SUPPLIER'), [
   }
 ])
 assert.deepEqual(getWorkspaceLaunchActions('MEASURE_ADMIN'), [])
+
+assert.equal(getChangeTaskRoute('MEASURE_ADMIN'), '/change/admin-task')
+assert.equal(getChangeTaskRoute('DEPT_LEADER'), '/change/approval')
+assert.equal(getChangeTaskRoute('MEASURE_LEADER'), '/change/approval')
+assert.equal(getChangeTaskRoute('RESPONSIBLE_ENGINEER'), '/change/approval')
+assert.equal(getChangeTaskRoute('VERIFIER_SELF'), '/change/verifier')
+assert.equal(getChangeTaskRoute('VERIFIER_EXTERNAL'), '/change/verifier')
+assert.equal(getChangeTaskRoute('SUPPLIER'), undefined)

@@ -20,3 +20,16 @@ const labelBlock = source.slice(labelStart, labelEnd)
 assert.doesNotMatch(labelBlock, /MEASURE_ADMIN/)
 assert.match(labelBlock, /SUPPLIER/)
 assert.match(labelBlock, /VERIFIER_SELF/)
+
+const workflowRouteSource = source.slice(
+  source.indexOf('export const workflowRouteItems'),
+  source.indexOf('export const navSections')
+)
+const navSectionSource = source.slice(source.indexOf('export const navSections'))
+
+assert.match(workflowRouteSource, /path:\s*['"]\/change\/admin-task['"]/)
+assert.match(workflowRouteSource, /path:\s*['"]\/change\/approval['"]/)
+assert.match(workflowRouteSource, /path:\s*['"]\/change\/verifier['"]/)
+assert.match(navSectionSource, /path:\s*['"]\/change\/apply['"]/)
+assert.doesNotMatch(navSectionSource, /path:\s*['"]\/change\/approval['"]/)
+assert.doesNotMatch(navSectionSource, /path:\s*['"]\/change\/verifier['"]/)

@@ -133,6 +133,30 @@ export const workflowRouteItems: NavItem[] = [
     nodes: [...workflowNodeGroups.firstcheck.verifier]
   },
   {
+    path: '/change/admin-task',
+    title: '状态变更待办详情',
+    description: '接收部门计量管理员处理状态变更单',
+    module: 'change',
+    roles: ['MEASURE_ADMIN'],
+    nodes: [...workflowNodeGroups.change.receiveAdmin]
+  },
+  {
+    path: '/change/approval',
+    title: '状态变更待办详情',
+    description: '主管领导、计量领导和责任工程师处理状态变更单',
+    module: 'change',
+    roles: ['DEPT_LEADER', 'MEASURE_LEADER', 'RESPONSIBLE_ENGINEER'],
+    nodes: [...workflowNodeGroups.change.approval]
+  },
+  {
+    path: '/change/verifier',
+    title: '状态变更待办详情',
+    description: '检定员处理状态变更单',
+    module: 'change',
+    roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'],
+    nodes: [...workflowNodeGroups.change.verifier]
+  },
+  {
     path: '/sampling/plan',
     title: 'C类物资抽检',
     description: 'C类物资抽检计划编制与下发',
@@ -218,26 +242,10 @@ export const navSections: NavSection[] = [
       {
         path: '/change/apply',
         title: '状态变更',
-        description: '状态变更申请及接收部门管理员确认',
+        description: '手动发起状态变更申请',
         module: 'change',
         roles: ['MEASURE_ADMIN'],
-        nodes: [...workflowNodeGroups.change.apply, ...workflowNodeGroups.change.receiveAdmin]
-      },
-      {
-        path: '/change/approval',
-        title: '状态变更',
-        description: '主管领导、计量领导和责任工程师处理变更单',
-        module: 'change',
-        roles: ['DEPT_LEADER', 'MEASURE_LEADER', 'RESPONSIBLE_ENGINEER'],
-        nodes: [...workflowNodeGroups.change.approval]
-      },
-      {
-        path: '/change/verifier',
-        title: '状态变更',
-        description: '启用、类别、周期、用前检定和报废处理',
-        module: 'change',
-        roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'],
-        nodes: [...workflowNodeGroups.change.verifier]
+        nodes: [...workflowNodeGroups.change.apply]
       },
       {
         path: '/scan',
