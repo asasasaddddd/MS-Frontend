@@ -1,3 +1,5 @@
+import type { BusinessCaseDetailVO } from '@/types/device'
+
 export type FirstCheckNodeCode =
   | 'supplier_submit'
   | 'manager_check'
@@ -104,6 +106,7 @@ export interface FirstCheckOrder {
   currentNode?: string
   remark?: string
   deviceCodes?: string[]
+  history?: BusinessCaseDetailVO
 }
 
 export interface ApproveRequest {

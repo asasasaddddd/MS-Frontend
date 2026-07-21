@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { message } from 'ant-design-vue'
-import { engineerConfirmTypeFirstCheck } from '@/api/firstcheck'
+import { Modal, message } from 'ant-design-vue'
+import { engineerConfirmTypeFirstCheck, engineerReturnFirstCheck } from '@/api/firstcheck'
 import { listUsersByDeptAndRole, type SysUserVO } from '@/api/system'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import type { FirstCheckOrder, VerificationType } from '@/types/firstcheck'
@@ -124,6 +124,39 @@ async function submit() {
   }
 }
 
+function returnOrder() {
+  const order = props.order
+  if (!order) return
+  if (!form.opinion.trim()) {
+    message.warning('请输入退回意见')
+    return
+  }
+  Modal.confirm({
+    title: '确认退回计量管理员修改？',
+    content: '退回后业务不会终止，管理员修订后将重新经过主管领导和责任工程师审批。',
+    okText: '退回修改',
+    okButtonProps: { danger: true },
+    cancelText: '取消',
+    async onOk() {
+      submitting.value = true
+      try {
+        await engineerReturnFirstCheck({
+          orderId: order.id,
+          opinion: form.opinion.trim()
+        })
+        message.success('已退回计量管理员修改')
+        emit('success')
+        close()
+      } catch (error) {
+        message.error(error instanceof Error ? error.message : '责任工程师退回失败')
+        throw error
+      } finally {
+        submitting.value = false
+      }
+    }
+  })
+}
+
 watch(
   () => props.open,
   async (open) => {
@@ -149,6 +182,7 @@ watch(
           <h2>基本信息</h2>
           <div class="panel-actions">
             <a-button @click="close">返回</a-button>
+            <a-button danger :disabled="submitting" @click="returnOrder">退回修改</a-button>
             <a-button type="primary" :loading="submitting" @click="submit">提交</a-button>
           </div>
         </div>

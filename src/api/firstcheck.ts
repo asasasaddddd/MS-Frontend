@@ -52,9 +52,17 @@ export function deptLeaderApproveFirstCheck(data: ApproveRequest) {
   })
 }
 
-export function deptLeaderRejectFirstCheck(data: ApproveRequest) {
+export function deptLeaderReturnFirstCheck(data: ApproveRequest) {
   return request<void>({
-    url: '/firstcheck/dept-leader-reject',
+    url: '/firstcheck/dept-leader-return',
+    method: 'POST',
+    data
+  })
+}
+
+export function engineerReturnFirstCheck(data: ApproveRequest) {
+  return request<void>({
+    url: '/firstcheck/engineer-return',
     method: 'POST',
     data
   })

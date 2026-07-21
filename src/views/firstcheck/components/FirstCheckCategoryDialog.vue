@@ -6,6 +6,7 @@ import { listUsersByDeptAndRole, type SysUserVO } from '@/api/system'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import { useSessionStore } from '@/stores/session'
 import type { FirstCheckOrder, ManageCategory } from '@/types/firstcheck'
+import { latestFirstCheckReturnFeedback } from '@/views/firstcheck/firstCheckReturnModel'
 
 const props = defineProps<{
   open: boolean
@@ -38,6 +39,8 @@ const engineerOptions = computed(() =>
     value: user.employeeId
   }))
 )
+
+const returnFeedback = computed(() => latestFirstCheckReturnFeedback(props.order?.history))
 
 const canSubmit = computed(() =>
   Boolean(props.order && form.isWithReport !== undefined && form.requestedCategory && form.responsibleEngineerId)
@@ -164,11 +167,28 @@ watch(
     <template #title>
       <div>
         <div class="dialog-breadcrumb">首页 / 待办事项 / 首次检定 / {{ display(order?.orderNo) }}</div>
-        <strong>首检设备分类</strong>
+        <strong>{{ returnFeedback ? '首检分类修订' : '首检设备分类' }}</strong>
       </div>
     </template>
 
     <div class="form-page">
+      <a-alert
+        v-if="returnFeedback"
+        class="return-feedback"
+        type="warning"
+        show-icon
+        message="最近退回意见"
+      >
+        <template #description>
+          <div class="return-feedback-grid">
+            <div><span>退回人</span><strong>{{ display(returnFeedback.operatorName) }} · {{ display(returnFeedback.operatorId) }}</strong></div>
+            <div><span>退回节点</span><strong>{{ display(returnFeedback.nodeName) }}</strong></div>
+            <div><span>退回时间</span><strong>{{ normalizeDate(returnFeedback.operatedAt) }}</strong></div>
+            <div class="full"><span>审批意见</span><strong>{{ display(returnFeedback.opinion) }}</strong></div>
+          </div>
+        </template>
+      </a-alert>
+
       <section class="panel">
         <div class="panel-header">
           <h2>基本信息</h2>
@@ -244,7 +264,9 @@ watch(
 
       <div class="dialog-actions">
         <a-button @click="saveDraft">保存</a-button>
-        <a-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="submit">提交</a-button>
+        <a-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="submit">
+          {{ returnFeedback ? '重新提交' : '提交' }}
+        </a-button>
       </div>
     </div>
   </a-modal>
@@ -262,6 +284,38 @@ watch(
   display: grid;
   gap: 16px;
   padding-top: 4px;
+}
+
+.return-feedback {
+  border: 1px solid #f5c86b;
+  background: #fffaf0;
+}
+
+.return-feedback-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 18px;
+}
+
+.return-feedback-grid > div {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.return-feedback-grid span {
+  color: #8a6116;
+  font-size: 12px;
+}
+
+.return-feedback-grid strong {
+  color: #533b12;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.return-feedback-grid .full {
+  grid-column: 1 / -1;
 }
 
 .panel {
@@ -343,6 +397,14 @@ watch(
 
   .span-2 {
     grid-column: span 1;
+  }
+
+  .return-feedback-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .return-feedback-grid .full {
+    grid-column: auto;
   }
 }
 </style>

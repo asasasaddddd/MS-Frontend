@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
 import { Modal, message } from 'ant-design-vue'
-import { deptLeaderApproveFirstCheck, deptLeaderRejectFirstCheck } from '@/api/firstcheck'
+import { deptLeaderApproveFirstCheck, deptLeaderReturnFirstCheck } from '@/api/firstcheck'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import type { FirstCheckOrder } from '@/types/firstcheck'
 
@@ -53,27 +53,31 @@ async function submit() {
   }
 }
 
-function rejectOrder() {
+function returnOrder() {
   const order = props.order
   if (!order) return
+  if (!form.opinion.trim()) {
+    message.warning('请输入退回意见')
+    return
+  }
   Modal.confirm({
-    title: '确认驳回终止首检单？',
-    content: '驳回后首检流程将终止，不会继续推送给责任工程师。',
-    okText: '驳回终止',
+    title: '确认退回计量管理员修改？',
+    content: '退回后业务不会终止，计量管理员修订并重新提交后将再次进入审批流程。',
+    okText: '退回修改',
     okButtonProps: { danger: true },
     cancelText: '取消',
     async onOk() {
       submitting.value = true
       try {
-        await deptLeaderRejectFirstCheck({
+        await deptLeaderReturnFirstCheck({
           orderId: order.id,
-          opinion: form.opinion || '主管领导驳回终止'
+          opinion: form.opinion.trim()
         })
-        message.success('已驳回，首检流程已终止')
+        message.success('已退回计量管理员修改')
         emit('success')
         close()
       } catch (error) {
-        message.error(error instanceof Error ? error.message : '主管领导驳回失败')
+        message.error(error instanceof Error ? error.message : '主管领导退回失败')
         throw error
       } finally {
         submitting.value = false
@@ -136,7 +140,7 @@ watch(
 
     <div class="dialog-actions">
       <a-button :disabled="submitting" @click="close">返回</a-button>
-      <a-button danger :disabled="submitting" @click="rejectOrder">驳回终止</a-button>
+      <a-button danger :disabled="submitting" @click="returnOrder">退回修改</a-button>
       <a-button type="primary" :loading="submitting" @click="submit">同意</a-button>
     </div>
   </a-modal>
