@@ -19,6 +19,10 @@ export interface WorkspaceLaunchAction {
   path: string
 }
 
+export interface BusinessTaskReference {
+  businessId: string | number
+}
+
 const changeTaskRouteByRole: Record<string, string> = {
   MEASURE_ADMIN: '/change/admin-task',
   DEPT_LEADER: '/change/approval',
@@ -30,6 +34,12 @@ const changeTaskRouteByRole: Record<string, string> = {
 
 export function getChangeTaskRoute(roleCode?: string) {
   return roleCode ? changeTaskRouteByRole[roleCode] : undefined
+}
+
+export function uniqueTasksByBusinessId<T extends BusinessTaskReference>(tasks: readonly T[]) {
+  const taskByBusiness = new Map<string, T>()
+  tasks.forEach((task) => taskByBusiness.set(String(task.businessId), task))
+  return Array.from(taskByBusiness.values())
 }
 
 export function filterVisibleTodoEntries<T extends WorkspaceTodoCountEntry>(entries: readonly T[]) {

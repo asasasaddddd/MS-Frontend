@@ -30,6 +30,7 @@ import {
   filterVisibleTodoEntries,
   getChangeTaskRoute,
   getWorkspaceLaunchActions,
+  uniqueTasksByBusinessId,
   visibleTodoTypeValues,
   type WorkspaceTodoType
 } from '@/views/workspaceTodoModel'
@@ -115,64 +116,35 @@ const firstCheckRouteByRole: Partial<Record<RoleCode, string>> = {
   EXTERNAL_OPERATOR: '/scan'
 }
 
-function scanActionByFirstCheckNode(nodeCode?: string) {
-  if (nodeCode === 'external_sendout') return 'sendout'
-  if (nodeCode === 'verifier_receive') return 'receive'
-  if (nodeCode === 'verifier_return_verify') return 'sendout-return'
-  return undefined
-}
-
-function buildFirstCheckQuery(task: WorkflowTask, currentRole: RoleCode): Record<string, string> {
-  const orderId = String(task.businessId)
-  if (currentRole === 'EXTERNAL_OPERATOR') {
-    return {
-      module: 'firstcheck',
-      orderId,
-      action: scanActionByFirstCheckNode(task.nodeCode) || 'sendout'
-    }
-  }
-  return { orderId }
-}
-
-function buildFirstCheckSubtitle(task: WorkflowTask, order?: FirstCheckOrder) {
-  const pieces = [
-    order?.deviceName,
-    order?.quantity ? `${order.quantity}台` : undefined,
-    task.nodeName || order?.currentNodeName || task.nodeCode
-  ].filter(Boolean)
-  return pieces.length > 0 ? pieces.join(' · ') : `首检单ID ${task.businessId}`
-}
-
 const firstCheckTodoEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
   const path = currentRole ? firstCheckRouteByRole[currentRole] : undefined
   if (!currentRole || !path) return []
 
-  return workflowTasks.value
+  const tasks = uniqueTasksByBusinessId(workflowTasks.value
     .filter((task) => isPendingWorkflowTask(task))
     .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
     .filter((task) => matchesWorkflowTaskRole(task, 'firstcheck', currentRole))
     .filter((task) => {
       const order = firstCheckOrders.value[String(task.businessId)]
       return order ? matchesFirstCheckVerifierRole(order, currentRole) : true
-    })
-    .map((task) => {
-      const orderId = String(task.businessId)
-      const order = firstCheckOrders.value[orderId]
-      return {
-        key: `firstcheck-${orderId}`,
-        type: 'firstcheck' as const,
-        title: `首检单 ${order?.orderNo || orderId}`,
-        detailTitle: buildFirstCheckSubtitle(task, order),
-        count: 1,
-        unit: '单',
-        color: 'orange' as TodoColor,
-        roles: [currentRole],
-        routeByRole: { [currentRole]: path },
-        query: buildFirstCheckQuery(task, currentRole)
-      }
-    })
-    .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
+    }))
+  if (tasks.length === 0) return []
+
+  return [{
+    key: 'firstcheck-todo-summary',
+    type: 'firstcheck' as const,
+    title: '首次检定',
+    detailTitle: `当前共 ${tasks.length} 张首检单待处理`,
+    count: tasks.length,
+    unit: '单',
+    color: 'orange' as TodoColor,
+    roles: [currentRole],
+    routeByRole: { [currentRole]: path },
+    query: currentRole === 'EXTERNAL_OPERATOR'
+      ? { module: 'firstcheck', action: 'sendout', view: 'list' }
+      : undefined
+  }]
 })
 
 const firstCheckHistoryEntries = computed<TodoDefinition[]>(() => {

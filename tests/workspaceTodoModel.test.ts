@@ -5,6 +5,7 @@ import {
   filterVisibleTodoEntries,
   getChangeTaskRoute,
   getWorkspaceLaunchActions,
+  uniqueTasksByBusinessId,
   visibleTodoTypeValues
 } from '../src/views/workspaceTodoModel.ts'
 
@@ -41,3 +42,10 @@ assert.equal(getChangeTaskRoute('RESPONSIBLE_ENGINEER'), '/change/approval')
 assert.equal(getChangeTaskRoute('VERIFIER_SELF'), '/change/verifier')
 assert.equal(getChangeTaskRoute('VERIFIER_EXTERNAL'), '/change/verifier')
 assert.equal(getChangeTaskRoute('SUPPLIER'), undefined)
+
+const uniqueFirstCheckTasks = uniqueTasksByBusinessId([
+  { id: 'task-1', businessId: 'order-1' },
+  { id: 'task-2', businessId: 'order-1' },
+  { id: 'task-3', businessId: 'order-2' }
+])
+assert.deepEqual(uniqueFirstCheckTasks.map((task) => task.id), ['task-2', 'task-3'])

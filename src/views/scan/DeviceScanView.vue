@@ -10,6 +10,11 @@ import {
 import type { UnifiedScanAction, UnifiedScanInboxItem } from '@/types/scan'
 import { roleNameMap } from '@/types/common'
 import { useSessionStore } from '@/stores/session'
+import {
+  matchesScanRouteList,
+  shouldFocusScanRoute,
+  type ScanRouteQuery
+} from '@/views/scan/scanRouteModel'
 
 const session = useSessionStore()
 const route = useRoute()
@@ -94,11 +99,20 @@ const roleConfig = computed(() => {
 
 const actionSet = computed(() => new Set(roleConfig.value.actions.map(String)))
 const roleRows = computed(() => rows.value.filter((row) => actionSet.value.has(String(row.scanAction))))
+const routeQuery = computed<ScanRouteQuery>(() => ({
+  module: queryValue('module'),
+  businessType: queryValue('businessType'),
+  action: queryValue('action'),
+  taskId: queryValue('taskId'),
+  orderId: queryValue('orderId'),
+  view: queryValue('view')
+}))
+const routeRows = computed(() => roleRows.value.filter((row) => matchesScanRouteList(row, routeQuery.value)))
 
 const filteredAllRows = computed(() => {
   const code = keywordCode.value.trim()
   const name = keywordName.value.trim()
-  return roleRows.value.filter((row) => {
+  return routeRows.value.filter((row) => {
     const displayCode = row.deviceCode || row.scanCode || row.taskNo || row.orderNo || ''
     const nodeName = row.currentNodeName || row.scanStatus || ''
     const matchesCode = !code || displayCode.includes(code) || (row.orderNo || '').includes(code) || (row.taskNo || '').includes(code)
@@ -112,7 +126,7 @@ const pendingRows = computed(() => filteredAllRows.value.filter((row) => !row.sc
 const scannedRows = computed(() => filteredAllRows.value.filter((row) => row.scanned))
 const visibleRows = computed(() => (bucket.value === 'pending' ? pendingRows.value : scannedRows.value))
 const todayKey = computed(() => new Date().toISOString().slice(0, 10))
-const todayCount = computed(() => roleRows.value.filter((row) => (row.applyTime || row.scanTime || '').slice(0, 10) === todayKey.value).length)
+const todayCount = computed(() => routeRows.value.filter((row) => (row.applyTime || row.scanTime || '').slice(0, 10) === todayKey.value).length)
 
 const columns = [
   { title: '来源事项', key: 'sourceType', width: 110 },
@@ -126,7 +140,7 @@ const columns = [
 
 const nodeOptions = computed(() => {
   const set = new Set<string>(['all'])
-  roleRows.value.forEach((row) => {
+  routeRows.value.forEach((row) => {
     const node = row.currentNodeName || row.currentNode || row.scanStatus
     if (node && node !== '-') set.add(node)
   })
@@ -136,22 +150,19 @@ const nodeOptions = computed(() => {
   }))
 })
 
-function queryValue(key: string) {
+function queryValue(key: string): string | undefined {
   const value = route.query[key]
-  return Array.isArray(value) ? value[0] : value
+  const normalized = Array.isArray(value) ? value[0] : value
+  return typeof normalized === 'string' && normalized ? normalized : undefined
 }
 
 function rowMatchesRoute(row: UnifiedScanInboxItem) {
-  const module = queryValue('module') || queryValue('businessType')
   const taskId = queryValue('taskId')
   const orderId = queryValue('orderId')
-  const action = queryValue('action')
-
-  if (module && row.businessType !== module) return false
-  if (action && row.scanAction !== action) return false
+  if (!matchesScanRouteList(row, routeQuery.value)) return false
   if (taskId && String(row.taskId || '') !== taskId) return false
   if (orderId && String(row.orderId || '') !== orderId) return false
-  return Boolean(module || taskId || orderId || action)
+  return Boolean(taskId || orderId)
 }
 
 function scanRowKey(row: UnifiedScanInboxItem) {
@@ -212,11 +223,11 @@ function showFailure(error: unknown) {
 
 async function focusRouteTarget() {
   if (routeFocused.value) return
-  if (!queryValue('module') && !queryValue('businessType') && !queryValue('taskId') && !queryValue('orderId') && !queryValue('action')) return
+  if (!shouldFocusScanRoute(routeQuery.value)) return
 
   routeFocused.value = true
   await nextTick()
-  const target = roleRows.value.find(rowMatchesRoute)
+  const target = routeRows.value.find(rowMatchesRoute)
   if (!target) {
     message.warning('当前扫码页没有找到该待扫码任务，请确认登录角色和流程节点')
     return
@@ -258,7 +269,15 @@ async function submitScan() {
     })
     message.success(`${scanActionName(row.scanAction)}扫码成功`)
     scanOpen.value = false
-    await router.replace({ path: route.path })
+    const listQuery = queryValue('view') === 'list'
+      ? {
+          module: queryValue('module'),
+          businessType: queryValue('businessType'),
+          action: queryValue('action'),
+          view: 'list'
+        }
+      : undefined
+    await router.replace({ path: route.path, query: listQuery })
     await loadRows()
   } catch (error) {
     showFailure(error)
