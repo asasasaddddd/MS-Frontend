@@ -24,6 +24,23 @@ export interface WorkflowTask {
   updatedAt?: string
 }
 
+export interface WorkflowProcess {
+  id?: number
+  processNo?: string
+  businessType?: string
+  businessId?: number
+  processName?: string
+  currentNodeCode?: string
+  currentNodeName?: string
+  starterId?: string
+  starterName?: string
+  startedAt?: string
+  endedAt?: string
+  status?: string
+  statusName?: string
+  remark?: string
+}
+
 export interface WorkflowNode {
   code: string
   name: string

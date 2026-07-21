@@ -19,6 +19,7 @@ import {
   type ChangeTaskRow
 } from '@/views/change/changeDisplayModel'
 import ChangeVerifierHandleDialog from '@/views/change/components/ChangeVerifierHandleDialog.vue'
+import ChangeHistoryPanel from '@/views/change/components/ChangeHistoryPanel.vue'
 import { changeNodeCodesByRole, isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 
 const route = useRoute()
@@ -30,6 +31,12 @@ const sourceFilter = ref('all')
 const detailOpen = ref(false)
 const activeOrder = ref<ChangeOrderVO | null>(null)
 const submitting = ref(false)
+const activeTab = ref(route.query.tab === 'history' ? 'history' : 'todo')
+const routeOrderId = computed(() => {
+  const value = route.query.orderId
+  if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
+  return value ? String(value) : ''
+})
 
 const sourceOptions = [
   { label: '来源流程筛选', value: 'all' },
@@ -163,6 +170,12 @@ onMounted(loadRows)
 
 <template>
   <section class="change-verifier-page">
+    <a-tabs v-model:active-key="activeTab">
+      <a-tab-pane key="todo" tab="当前待办" />
+      <a-tab-pane key="history" tab="已办" />
+    </a-tabs>
+
+    <template v-if="activeTab === 'todo'">
     <div class="summary-line">
       <a-card class="metric" :bordered="false">
         <span>状态变更待办</span>
@@ -224,6 +237,13 @@ onMounted(loadRows)
         </template>
       </a-table>
     </a-card>
+    </template>
+
+    <ChangeHistoryPanel
+      v-else
+      :role-code="session.user?.roleCode || 'VERIFIER_SELF'"
+      :order-id="routeOrderId"
+    />
 
     <ChangeVerifierHandleDialog
       v-model:open="detailOpen"

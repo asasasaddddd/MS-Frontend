@@ -1,5 +1,5 @@
 import { request } from '@/api/request'
-import type { WorkflowTask } from '@/types/workflow'
+import type { WorkflowProcess, WorkflowTask } from '@/types/workflow'
 
 export function listWorkflowTasks() {
   return request<WorkflowTask[]>({
@@ -12,5 +12,13 @@ export function listWorkflowHistory() {
   return request<WorkflowTask[]>({
     url: '/workflow/my-history',
     method: 'GET'
+  })
+}
+
+export function getWorkflowProcessByBusiness(businessType: string, businessId: string | number) {
+  return request<WorkflowProcess | null>({
+    url: '/workflow/process/by-business',
+    method: 'GET',
+    params: { businessType, businessId }
   })
 }

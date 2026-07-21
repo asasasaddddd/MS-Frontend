@@ -254,6 +254,36 @@ const changeTodoEntries = computed<TodoDefinition[]>(() => {
     .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
 })
 
+const changeHistoryEntries = computed<TodoDefinition[]>(() => {
+  const currentRole = roleCode.value
+  const path = currentRole ? changeRouteByRole[currentRole] : undefined
+  const allowedNodes = currentRole ? changeNodeCodesByRole[currentRole] : undefined
+  if (!currentRole || !path || !allowedNodes) return []
+
+  const nodeSet = new Set<string>(allowedNodes)
+  return workflowHistoryTasks.value
+    .filter((task) => matchesBusinessType(task.businessType, 'change'))
+    .filter((task) => nodeSet.has(task.nodeCode))
+    .map((task) => {
+      const orderId = String(task.businessId)
+      const order = changeOrders.value[orderId]
+      return {
+        key: `change-${orderId}`,
+        type: 'change' as const,
+        title: `状态变更单 ${order?.orderNo || orderId}`,
+        detailTitle: [order?.changeType ? changeTypeName(order.changeType) : undefined, task.nodeName, task.completedAt?.replace('T', ' ').slice(0, 16)]
+          .filter(Boolean)
+          .join(' · '),
+        count: 1,
+        unit: '单',
+        color: 'green' as TodoColor,
+        roles: [currentRole],
+        routeByRole: { [currentRole]: path },
+        query: { orderId, tab: 'history' }
+      }
+    })
+})
+
 function derivePeriodicPlanLabel(planId: string, tasks: PeriodicTaskVO[]) {
   const taskNo = tasks.find((task) => task.taskNo)?.taskNo?.trim()
   if (taskNo && taskNo.length > 4) {
@@ -491,6 +521,7 @@ const permittedHistory = computed(() => {
   return filterVisibleTodoEntries(
     dedupeTodoEntriesByKey([
       ...firstCheckHistoryEntries.value,
+      ...changeHistoryEntries.value,
       ...periodicHistoryEntries.value,
       ...samplingHistoryEntries.value,
       ...productSupportHistoryEntries.value
@@ -608,8 +639,7 @@ async function loadWorkflowSummary() {
   productSupportHistoryTasks.value = productSupportHistoryResult.status === 'fulfilled' ? productSupportHistoryResult.value : []
   const firstCheckTasks = [...workflowTasks.value, ...workflowHistoryTasks.value]
     .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
-  const changeTasks = workflowTasks.value
-    .filter((task) => isPendingWorkflowTask(task))
+  const changeTasks = [...workflowTasks.value, ...workflowHistoryTasks.value]
     .filter((task) => matchesBusinessType(task.businessType, 'change'))
   const [firstCheckDetails, changeDetails] = await Promise.all([
     Promise.allSettled(

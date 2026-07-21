@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
+import { useRoute } from 'vue-router'
 import { submitChange } from '@/api/change'
 import { listDevicePage } from '@/api/device'
 import { useSessionStore } from '@/stores/session'
@@ -14,9 +15,18 @@ import {
   formatDate
 } from '@/views/change/changeDisplayModel'
 import ChangeApplyDialog from '@/views/change/components/ChangeApplyDialog.vue'
+import ChangeHistoryPanel from '@/views/change/components/ChangeHistoryPanel.vue'
 import ChangeReceiveAdminPanel from '@/views/change/components/ChangeReceiveAdminPanel.vue'
 
 const session = useSessionStore()
+const route = useRoute()
+const activeTab = ref(route.query.tab === 'history' ? 'history' : 'todo')
+
+const routeOrderId = computed(() => {
+  const value = route.query.orderId
+  if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
+  return value ? String(value) : ''
+})
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -157,6 +167,12 @@ onMounted(() => {
 
 <template>
   <section class="change-apply-page">
+    <a-tabs v-model:active-key="activeTab">
+      <a-tab-pane key="todo" tab="状态变更管理" />
+      <a-tab-pane key="history" tab="已办" />
+    </a-tabs>
+
+    <template v-if="activeTab === 'todo'">
     <ChangeReceiveAdminPanel v-if="session.user?.roleCode === 'MEASURE_ADMIN'" />
 
     <section class="panel selected-panel">
@@ -255,6 +271,9 @@ onMounted(() => {
         </template>
       </a-table>
     </section>
+    </template>
+
+    <ChangeHistoryPanel v-else role-code="MEASURE_ADMIN" :order-id="routeOrderId" />
 
     <ChangeApplyDialog
       v-model:open="dialogOpen"

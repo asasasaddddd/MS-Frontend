@@ -20,6 +20,7 @@ import {
   type ChangeTaskRow
 } from '@/views/change/changeDisplayModel'
 import ChangeApprovalDialog from '@/views/change/components/ChangeApprovalDialog.vue'
+import ChangeHistoryPanel from '@/views/change/components/ChangeHistoryPanel.vue'
 import { changeNodeCodesByRole, isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 
 const session = useSessionStore()
@@ -31,6 +32,12 @@ const selectedRowKeys = ref<string[]>([])
 const keyword = ref('')
 const approvalOpen = ref(false)
 const activeOrders = ref<ChangeOrderVO[]>([])
+const activeTab = ref(route.query.tab === 'history' ? 'history' : 'todo')
+const routeOrderId = computed(() => {
+  const value = route.query.orderId
+  if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
+  return value ? String(value) : ''
+})
 
 const pageTitle = computed(() => {
   if (session.user?.roleCode === 'MEASURE_LEADER') return '计量领导待办'
@@ -208,6 +215,12 @@ onMounted(loadRows)
 
 <template>
   <section class="change-approval-page">
+    <a-tabs v-model:active-key="activeTab">
+      <a-tab-pane key="todo" tab="当前待办" />
+      <a-tab-pane key="history" tab="已办" />
+    </a-tabs>
+
+    <template v-if="activeTab === 'todo'">
     <div class="summary-line">
       <a-card class="metric" :bordered="false">
         <span>状态变更待办</span>
@@ -261,6 +274,13 @@ onMounted(loadRows)
         </template>
       </a-table>
     </a-card>
+    </template>
+
+    <ChangeHistoryPanel
+      v-else
+      :role-code="session.user?.roleCode || 'DEPT_LEADER'"
+      :order-id="routeOrderId"
+    />
 
     <ChangeApprovalDialog
       v-model:open="approvalOpen"
