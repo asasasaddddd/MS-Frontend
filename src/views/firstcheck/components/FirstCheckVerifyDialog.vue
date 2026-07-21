@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { verifierVerifyFirstCheck } from '@/api/firstcheck'
+import { listUsersByDeptAndRole, type SysUserVO } from '@/api/system'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
 import type { AttachmentId, FirstCheckOrder, VerificationResult, VerifierVerifyRequest } from '@/types/firstcheck'
@@ -17,11 +18,14 @@ const emit = defineEmits<{
 }>()
 
 const submitting = defineModel<boolean>('submitting', { default: false })
+const loadingConfirmers = ref(false)
+const confirmers = ref<SysUserVO[]>([])
 
 const form = reactive({
   verificationResult: 'qualified' as VerificationResult,
   qualifiedQuantity: undefined as number | undefined,
   unqualifiedQuantity: 0,
+  confirmerId: undefined as string | undefined,
   certificateAttachmentGroupId: undefined as AttachmentId | undefined,
   deviceName: '',
   modelSpec: '',
@@ -55,6 +59,17 @@ const subjectSubcategoryOptions = [
   { label: '电压 040101', value: '040101' },
   { label: '卡尺 050102', value: '050102' }
 ]
+
+const requiresConfirmer = computed(
+  () => props.order?.verificationType === 'external_commission' && props.order?.isCommon === 0
+)
+
+const confirmerOptions = computed(() =>
+  confirmers.value.map((user) => ({
+    label: `${user.employeeName || user.employeeId} / ${user.employeeId}`,
+    value: user.employeeId
+  }))
+)
 
 function normalizeSubjectSubcategory(value?: string) {
   if (!value) return undefined
@@ -103,6 +118,7 @@ function resetForm(order?: FirstCheckOrder) {
   form.verificationResult = (order?.verificationResult as VerificationResult) || 'qualified'
   form.qualifiedQuantity = order?.qualifiedQuantity ?? order?.quantity ?? undefined
   form.unqualifiedQuantity = order?.unqualifiedQuantity ?? 0
+  form.confirmerId = order?.confirmerId
   form.certificateAttachmentGroupId = order?.certificateAttachmentGroupId
   form.deviceName = order?.deviceName || ''
   form.modelSpec = order?.modelSpec || ''
@@ -130,6 +146,35 @@ function resetForm(order?: FirstCheckOrder) {
   form.opinion = '检定完成'
 }
 
+async function loadConfirmers(order?: FirstCheckOrder) {
+  if (!requiresConfirmer.value) {
+    confirmers.value = []
+    form.confirmerId = undefined
+    return
+  }
+  if (!order?.applyDeptId) {
+    confirmers.value = []
+    form.confirmerId = undefined
+    message.warning('首检单缺少使用部门，无法加载确认员')
+    return
+  }
+
+  loadingConfirmers.value = true
+  try {
+    const users = await listUsersByDeptAndRole(order.applyDeptId, 'CONFIRMER')
+    confirmers.value = users
+    if (form.confirmerId && !users.some((user) => user.employeeId === form.confirmerId)) {
+      form.confirmerId = undefined
+    }
+  } catch (error) {
+    confirmers.value = []
+    form.confirmerId = undefined
+    message.warning(error instanceof Error ? error.message : '确认员列表加载失败')
+  } finally {
+    loadingConfirmers.value = false
+  }
+}
+
 function compactPayload(payload: VerifierVerifyRequest): VerifierVerifyRequest {
   return Object.fromEntries(Object.entries(payload).filter(([, value]) => value !== '' && value !== undefined)) as VerifierVerifyRequest
 }
@@ -147,6 +192,11 @@ async function submit() {
   const unqualified = Number(form.unqualifiedQuantity || 0)
   if (quantity > 0 && qualified + unqualified > quantity) {
     message.warning('合格数量和不合格数量不能超过申请数量')
+    return
+  }
+
+  if (requiresConfirmer.value && !form.confirmerId) {
+    message.warning('外委否通用设备请选择确认员')
     return
   }
 
@@ -168,6 +218,7 @@ async function submit() {
         verificationResult: form.verificationResult,
         qualifiedQuantity: qualified,
         unqualifiedQuantity: unqualified,
+        confirmerId: requiresConfirmer.value ? form.confirmerId : undefined,
         certificateAttachmentGroupId: form.certificateAttachmentGroupId,
         deviceName: form.deviceName,
         modelSpec: form.modelSpec,
@@ -207,8 +258,10 @@ async function submit() {
 
 watch(
   () => props.open,
-  (open) => {
-    if (open) resetForm(props.order)
+  async (open) => {
+    if (!open) return
+    resetForm(props.order)
+    await loadConfirmers(props.order)
   }
 )
 </script>
@@ -279,6 +332,17 @@ watch(
           </label>
           <label><span>合格数量</span><a-input-number v-model:value="form.qualifiedQuantity" :min="0" style="width:100%" /></label>
           <label><span>不合格数量</span><a-input-number v-model:value="form.unqualifiedQuantity" :min="0" style="width:100%" /></label>
+          <label v-if="requiresConfirmer">
+            <span>确认员</span>
+            <a-select
+              v-model:value="form.confirmerId"
+              placeholder="请选择使用部门确认员"
+              :loading="loadingConfirmers"
+              :options="confirmerOptions"
+              show-search
+              option-filter-prop="label"
+            />
+          </label>
         </div>
       </section>
 

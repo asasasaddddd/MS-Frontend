@@ -7,8 +7,6 @@ export type FirstCheckVerifierStatusKey =
   | 'wait_sendout_return'
   | 'verifier_verify'
   | 'assign_code'
-  | 'manager_forward'
-  | 'confirmer_confirm'
   | 'unknown'
 
 export type FirstCheckVerifierAction =
@@ -52,8 +50,6 @@ export function resolveFirstCheckVerifierStatus(source: FirstCheckVerifierStatus
   const scanStatus = source.scanStatus || ''
 
   if (nodeCode === 'assign_code') return { statusKey: 'assign_code', statusLabel: '待赋码', statusColor: 'cyan' }
-  if (nodeCode === 'manager_forward') return { statusKey: 'manager_forward', statusLabel: '报告待转发', statusColor: 'orange' }
-  if (nodeCode === 'confirmer_confirm') return { statusKey: 'confirmer_confirm', statusLabel: '报告待确认', statusColor: 'orange' }
 
   if (nodeCode === 'verifier_receive' || scanStatus === 'wait_receive') {
     return { statusKey: 'wait_receive', statusLabel: '待接收', statusColor: 'orange' }

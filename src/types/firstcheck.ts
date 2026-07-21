@@ -7,8 +7,6 @@ export type FirstCheckNodeCode =
   | 'external_sendout'
   | 'verifier_return_verify'
   | 'verifier_verify'
-  | 'manager_forward'
-  | 'confirmer_confirm'
   | 'assign_code'
 
 export type ManageCategory = 'A类' | 'B类' | 'C类'
@@ -111,8 +109,6 @@ export interface FirstCheckOrder {
 export interface ApproveRequest {
   orderId: number
   approve?: boolean
-  confirmerId?: string
-  confirmerName?: string
   responsibleEngineerId?: string
   responsibleEngineerName?: string
   opinion?: string
@@ -205,8 +201,6 @@ export interface ConfirmCategoryRequest {
   measureManagerName?: string
   responsibleEngineerId: string
   responsibleEngineerName?: string
-  confirmerId?: string
-  confirmerName?: string
   opinion?: string
 }
 
@@ -228,6 +222,7 @@ export interface VerifierVerifyRequest {
   verificationResult: VerificationResult
   qualifiedQuantity?: number
   unqualifiedQuantity?: number
+  confirmerId?: string
   certificateAttachmentGroupId?: AttachmentId
   deviceName?: string
   modelSpec?: string
@@ -252,12 +247,6 @@ export interface VerifierVerifyRequest {
   storageLocation?: string
   verificationOpinion?: string
   verificationUnitPrice: number
-  opinion?: string
-}
-
-export interface ConfirmCheckRequest {
-  orderId: number
-  confirmResult: 'PASS' | 'REJECT' | 'RETURN'
   opinion?: string
 }
 

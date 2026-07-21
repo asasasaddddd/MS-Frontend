@@ -6,7 +6,6 @@ import type {
   BatchDeptLeaderApproveRequest,
   BatchOperationResult,
   ConfirmCategoryRequest,
-  ConfirmCheckRequest,
   ConfirmVerificationTypeRequest,
   DeviceCodePreview,
   FirstCheckOrder,
@@ -40,14 +39,6 @@ export function getMyFirstCheckTasks(status?: string) {
 export function confirmCategoryFirstCheck(data: ConfirmCategoryRequest) {
   return request<void>({
     url: '/firstcheck/confirm-category',
-    method: 'POST',
-    data
-  })
-}
-
-export function managerForwardFirstCheck(data: ApproveRequest) {
-  return request<void>({
-    url: '/firstcheck/manager-forward',
     method: 'POST',
     data
   })
@@ -88,14 +79,6 @@ export function engineerConfirmTypeFirstCheck(data: ConfirmVerificationTypeReque
 export function verifierVerifyFirstCheck(data: VerifierVerifyRequest) {
   return request<void>({
     url: '/firstcheck/verifier-verify',
-    method: 'POST',
-    data
-  })
-}
-
-export function confirmerConfirmFirstCheck(data: ConfirmCheckRequest) {
-  return request<void>({
-    url: '/firstcheck/confirmer-confirm',
     method: 'POST',
     data
   })

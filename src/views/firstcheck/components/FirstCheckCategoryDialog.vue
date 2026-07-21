@@ -21,7 +21,6 @@ const session = useSessionStore()
 const submitting = ref(false)
 const loadingUsers = ref(false)
 const engineers = ref<SysUserVO[]>([])
-const confirmers = ref<SysUserVO[]>([])
 const engineerDeptName = ref('')
 
 const form = reactive({
@@ -30,7 +29,6 @@ const form = reactive({
   usageScenario: '',
   reportFileId: undefined as number | undefined,
   responsibleEngineerId: undefined as string | undefined,
-  confirmerId: undefined as string | undefined,
   opinion: '设备信息核对无误，同意进入首检流程'
 })
 
@@ -41,15 +39,8 @@ const engineerOptions = computed(() =>
   }))
 )
 
-const confirmerOptions = computed(() =>
-  confirmers.value.map((user) => ({
-    label: `${user.employeeName || user.employeeId} / ${user.employeeId}`,
-    value: user.employeeId
-  }))
-)
-
 const canSubmit = computed(() =>
-  Boolean(props.order && form.isWithReport !== undefined && form.requestedCategory && form.responsibleEngineerId && form.confirmerId)
+  Boolean(props.order && form.isWithReport !== undefined && form.requestedCategory && form.responsibleEngineerId)
 )
 
 function close() {
@@ -96,38 +87,12 @@ async function loadEngineerUsers(order?: FirstCheckOrder) {
   }
 }
 
-async function loadConfirmerUsers(order?: FirstCheckOrder) {
-  const deptId = resolveDeptId(order)
-
-  if (!deptId) {
-    confirmers.value = []
-    form.confirmerId = undefined
-    return
-  }
-
-  loadingUsers.value = true
-  try {
-    const users = await listUsersByDeptAndRole(deptId, 'CONFIRMER')
-    confirmers.value = users
-    if (form.confirmerId && !users.some((user) => user.employeeId === form.confirmerId)) {
-      form.confirmerId = undefined
-    }
-  } catch (error) {
-    confirmers.value = []
-    form.confirmerId = undefined
-    message.warning(error instanceof Error ? error.message : '确认员列表加载失败')
-  } finally {
-    loadingUsers.value = false
-  }
-}
-
 function resetForm(order?: FirstCheckOrder) {
   form.isWithReport = order?.isWithReport ?? undefined
   form.requestedCategory = order?.requestedCategory
   form.usageScenario = order?.usageScenario || ''
   form.reportFileId = order?.reportFileId
   form.responsibleEngineerId = order?.responsibleEngineerId
-  form.confirmerId = order?.confirmerId
   form.opinion = '设备信息核对无误，同意进入首检流程'
 }
 
@@ -151,13 +116,7 @@ async function submit() {
     return
   }
 
-  if (!form.confirmerId) {
-    message.warning('请选择确认员')
-    return
-  }
-
   const engineer = engineers.value.find((user) => user.employeeId === form.responsibleEngineerId)
-  const confirmer = confirmers.value.find((user) => user.employeeId === form.confirmerId)
 
   submitting.value = true
   try {
@@ -171,8 +130,6 @@ async function submit() {
       measureManagerName: session.user?.employeeName,
       responsibleEngineerId: form.responsibleEngineerId,
       responsibleEngineerName: engineer?.employeeName || form.responsibleEngineerId,
-      confirmerId: form.confirmerId,
-      confirmerName: confirmer?.employeeName || form.confirmerId,
       opinion: form.opinion
     })
     message.success('首检分类已提交，流程已流转到主管领导')
@@ -190,7 +147,7 @@ watch(
   async (open) => {
     if (!open) return
     resetForm(props.order)
-    await Promise.all([loadEngineerUsers(props.order), loadConfirmerUsers(props.order)])
+    await loadEngineerUsers(props.order)
   }
 )
 </script>
@@ -270,17 +227,6 @@ watch(
               placeholder="请选择本部门责任工程师"
               :loading="loadingUsers"
               :options="engineerOptions"
-              show-search
-              option-filter-prop="label"
-            />
-          </label>
-          <label class="span-2">
-            <span>确认员</span>
-            <a-select
-              v-model:value="form.confirmerId"
-              placeholder="请选择本部门确认员"
-              :loading="loadingUsers"
-              :options="confirmerOptions"
               show-search
               option-filter-prop="label"
             />

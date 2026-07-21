@@ -49,7 +49,6 @@ const componentByPath: Partial<Record<string, RouteRecordRaw['component']>> = {
   '/firstcheck/admin': () => import('@/views/firstcheck/FirstCheckAdminView.vue'),
   '/firstcheck/verifier': () => import('@/views/firstcheck/FirstCheckVerifierView.vue'),
   '/firstcheck/engineer': () => import('@/views/firstcheck/FirstCheckEngineerView.vue'),
-  '/firstcheck/confirmer': () => import('@/views/firstcheck/FirstCheckConfirmerView.vue'),
   '/firstcheck/leader': () => import('@/views/firstcheck/FirstCheckLeaderView.vue'),
   '/firstcheck/supplier': () => import('@/views/firstcheck/FirstCheckSupplierView.vue'),
   '/periodic/admin': () => import('@/views/periodic/PeriodicAdminView.vue'),
@@ -88,10 +87,6 @@ const metaByPath: Partial<Record<string, RouteRecordRaw['meta']>> = {
   },
   '/firstcheck/engineer': {
     title: '首检单详情',
-    breadcrumb: '首页 / 工作台 / 首次检定'
-  },
-  '/firstcheck/confirmer': {
-    title: '确认员首次检定待办',
     breadcrumb: '首页 / 工作台 / 首次检定'
   },
   '/firstcheck/leader': {

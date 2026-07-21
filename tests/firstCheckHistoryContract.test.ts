@@ -17,8 +17,7 @@ for (const view of [
   'FirstCheckAdminView.vue',
   'FirstCheckLeaderView.vue',
   'FirstCheckEngineerView.vue',
-  'FirstCheckVerifierView.vue',
-  'FirstCheckConfirmerView.vue'
+  'FirstCheckVerifierView.vue'
 ]) {
   const viewSource = source(`../src/views/firstcheck/${view}`)
   assert.match(viewSource, /FirstCheckHistoryPanel/)

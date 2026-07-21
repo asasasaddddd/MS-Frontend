@@ -111,7 +111,6 @@ const firstCheckRouteByRole: Partial<Record<RoleCode, string>> = {
   RESPONSIBLE_ENGINEER: '/firstcheck/engineer',
   VERIFIER_SELF: '/firstcheck/verifier',
   VERIFIER_EXTERNAL: '/firstcheck/verifier',
-  CONFIRMER: '/firstcheck/confirmer',
   EXTERNAL_OPERATOR: '/scan'
 }
 

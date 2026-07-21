@@ -133,14 +133,6 @@ export const workflowRouteItems: NavItem[] = [
     nodes: [...workflowNodeGroups.firstcheck.verifier]
   },
   {
-    path: '/firstcheck/confirmer',
-    title: '首检',
-    description: '否通用设备报告确认',
-    module: 'firstcheck',
-    roles: ['CONFIRMER'],
-    nodes: [...workflowNodeGroups.firstcheck.confirmer]
-  },
-  {
     path: '/sampling/plan',
     title: 'C类物资抽检',
     description: 'C类物资抽检计划编制与下发',

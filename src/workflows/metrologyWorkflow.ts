@@ -18,8 +18,6 @@ export const firstCheckNodes: WorkflowNode[] = [
   { code: 'external_sendout', name: '外扩人员外委送出', module: 'firstcheck', roles: ['EXTERNAL_OPERATOR'], api: 'POST /api/scan/firstcheck/sendout' },
   { code: 'verifier_return_verify', name: '检定员外委送回接收', module: 'firstcheck', roles: ['VERIFIER_EXTERNAL'], api: 'POST /api/scan/firstcheck/sendout-return' },
   { code: 'verifier_verify', name: '检定员录入', module: 'firstcheck', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: 'POST /api/firstcheck/verifier-verify' },
-  { code: 'manager_forward', name: '待转办', module: 'firstcheck', roles: ['MEASURE_ADMIN'], api: 'POST /api/firstcheck/manager-forward' },
-  { code: 'confirmer_confirm', name: '确认员确认', module: 'firstcheck', roles: ['CONFIRMER'], api: 'POST /api/firstcheck/confirmer-confirm' },
   { code: 'assign_code', name: '待赋码', module: 'firstcheck', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: 'POST /api/firstcheck/assign-code' }
 ]
 
@@ -59,8 +57,7 @@ export const workflowNodeGroups = {
     leader: ['dept_leader_approve'],
     engineer: ['engineer_confirm_type'],
     verifier: ['verifier_receive', 'verifier_return_verify', 'verifier_verify', 'assign_code'],
-    externalOperator: ['external_sendout'],
-    confirmer: ['confirmer_confirm']
+    externalOperator: ['external_sendout']
   },
   periodic: {
     admin: ['plan_confirm', 'manager_forward_confirm'],
@@ -98,8 +95,7 @@ export const firstCheckNodeCodesByRole: Partial<Record<RoleCode, readonly string
   RESPONSIBLE_ENGINEER: workflowNodeGroups.firstcheck.engineer,
   VERIFIER_SELF: workflowNodeGroups.firstcheck.verifier,
   VERIFIER_EXTERNAL: workflowNodeGroups.firstcheck.verifier,
-  EXTERNAL_OPERATOR: workflowNodeGroups.firstcheck.externalOperator,
-  CONFIRMER: workflowNodeGroups.firstcheck.confirmer
+  EXTERNAL_OPERATOR: workflowNodeGroups.firstcheck.externalOperator
 }
 
 export function matchesBusinessType(value: string | undefined, module: WorkflowModule) {

@@ -66,8 +66,6 @@ const statusOptions = [
   { label: '已外委送出', value: 'sent_out' },
   { label: '待外委送回', value: 'wait_sendout_return' },
   { label: '待赋码', value: 'assign_code' },
-  { label: '报告待转发', value: 'manager_forward' },
-  { label: '报告待确认', value: 'confirmer_confirm' },
 ]
 
 const columns = [
@@ -104,9 +102,7 @@ const metrics = computed(() => {
     waitSendoutCount: countByStatus('wait_sendout'),
     sentOutCount: countByStatus('sent_out'),
     returnCount: countByStatus('wait_sendout_return'),
-    assignCount: countByStatus('assign_code'),
-    managerForwardCount: countByStatus('manager_forward'),
-    confirmerCount: countByStatus('confirmer_confirm')
+    assignCount: countByStatus('assign_code')
   }
 })
 
@@ -281,8 +277,6 @@ onMounted(loadRows)
         <a-tag class="tag blue">已外委送出 {{ metrics.sentOutCount }}</a-tag>
         <a-tag class="tag blue">待外委送回 {{ metrics.returnCount }}</a-tag>
         <a-tag class="tag cyan">待赋码 {{ metrics.assignCount }}</a-tag>
-        <a-tag class="tag orange">报告待转发 {{ metrics.managerForwardCount }}</a-tag>
-        <a-tag class="tag orange">报告待确认 {{ metrics.confirmerCount }}</a-tag>
       </div>
     </div>
 
