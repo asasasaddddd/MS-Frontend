@@ -53,9 +53,12 @@ export async function listAttachmentsByGroupId(groupId: AttachmentId) {
   return group.files || []
 }
 
-export function listAttachmentsByCaseId(caseId: string | number) {
+export function listAttachmentsByCaseId(
+  caseId: string | number,
+  deviceId: string | number
+) {
   return request<AttachmentCaseGroupVO[]>({
-    url: `/attachment/cases/${encodeURIComponent(String(caseId))}`,
+    url: `/attachment/cases/${encodeURIComponent(String(caseId))}/devices/${encodeURIComponent(String(deviceId))}`,
     method: 'GET'
   })
 }

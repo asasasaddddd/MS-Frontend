@@ -376,6 +376,11 @@ async function loadBusinessEvents(deviceCode?: string) {
 }
 
 async function openCaseDetail(caseId: string | number) {
+  const deviceId = activeDevice.value?.id
+  if (!deviceId) {
+    message.error('当前设备缺少主键，无法加载设备履历附件')
+    return
+  }
   caseDetailOpen.value = true
   caseLoading.value = true
   activeCase.value = undefined
@@ -383,7 +388,7 @@ async function openCaseDetail(caseId: string | number) {
   try {
     const [detail, attachments] = await Promise.all([
       getBusinessCaseDetail(caseId),
-      listAttachmentsByCaseId(caseId)
+      listAttachmentsByCaseId(caseId, deviceId)
     ])
     activeCase.value = detail
     caseAttachments.value = attachments

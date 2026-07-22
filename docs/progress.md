@@ -256,3 +256,11 @@
 - 删除外委分支逐台附件必传校验，移除 `attachmentRequired` 组件参数和“必传”动态标题。
 - 自检、外委通用、外委否通用的单台附件统一显示为“检定证书（选传）”；已上传附件仍随请求提交并绑定对应设备。
 - 新增规则契约测试；前端 40 个契约测试文件、`npm run typecheck`、`npm run build` 通过。
+
+# 2026-07-22 台账履历附件按设备隔离
+
+- 台账设备履历不再调用只带 `caseId` 的全案例附件接口，改为调用 `/api/attachment/cases/{caseId}/devices/{deviceId}`。
+- 打开业务案例详情时从当前台账设备读取真实主键；主键缺失时提示错误并阻止查询，避免再次显示同案例全部设备附件。
+- 案例公共附件继续展示，当前设备附件继续展示，同批其他设备附件由后端查询层排除。
+- 更新 `tests/deviceBusinessHistoryApi.test.ts` 固化设备范围接口和调用参数。
+- 验证通过：40 个契约测试文件、`npm run typecheck`、`npm run build`、`git diff --check`。

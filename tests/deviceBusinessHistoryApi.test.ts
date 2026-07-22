@@ -10,10 +10,12 @@ assert.equal(deviceApi.includes('/business-cases/${encodeURIComponent(String(cas
 assert.equal(deviceApi.includes('/device/${encodeURIComponent(deviceCode)}/history'), false)
 
 assert.equal(attachmentApi.includes('/attachment/cases/${encodeURIComponent(String(caseId))}'), true)
+assert.equal(attachmentApi.includes('/devices/${encodeURIComponent(String(deviceId))}'), true)
 
 assert.equal(ledgerView.includes('listDeviceBusinessEvents'), true)
 assert.equal(ledgerView.includes('getBusinessCaseDetail'), true)
 assert.equal(ledgerView.includes('listAttachmentsByCaseId'), true)
+assert.equal(ledgerView.includes('listAttachmentsByCaseId(caseId, deviceId)'), true)
 assert.equal(ledgerView.includes('listAttachmentsByGroupId'), false)
 assert.equal(ledgerView.includes('{{ item.statusText }}'), true)
 assert.equal(ledgerView.includes('>已完成</a-tag>'), false)
