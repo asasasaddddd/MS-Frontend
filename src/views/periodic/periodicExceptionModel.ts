@@ -113,6 +113,24 @@ export function displayCategory(value?: string) {
   return normalized ? `${normalized}类` : '-'
 }
 
+type PeriodicCycleTask = Pick<PeriodicTaskVO, 'verificationCycleMonth'>
+
+export function maxPeriodicVerificationCycleMonth(tasks: PeriodicCycleTask[]) {
+  if (tasks.length === 0) return undefined
+  const cycles = tasks.map((task) => Number(task.verificationCycleMonth))
+  if (cycles.some((cycle) => !Number.isFinite(cycle) || cycle <= 0)) return undefined
+  return Math.max(...cycles)
+}
+
+export function periodicCycleExtensionOptions<T extends { value: number | string }>(
+  options: T[],
+  tasks: PeriodicCycleTask[]
+) {
+  const currentMaxCycle = maxPeriodicVerificationCycleMonth(tasks)
+  if (currentMaxCycle === undefined) return []
+  return options.filter((option) => Number(option.value) > currentMaxCycle)
+}
+
 function requiredText(value: unknown, fieldName: string) {
   const text = value === undefined || value === null ? '' : String(value).trim()
   if (!text) {
@@ -157,6 +175,9 @@ export function buildPeriodicExceptionChangeRequest(
   const reason = primaryReason(form)
   const tasks = Array.isArray(taskOrTasks) ? taskOrTasks : [taskOrTasks]
   if (tasks.length === 0) throw new Error('请选择周检异常设备')
+  const targetCycleMonth = form.actionType === 'cycle'
+    ? Number(requiredText(form.newCycleMonth, '调整后检定周期'))
+    : undefined
 
   const items = tasks.map((task) => {
     const item = {
@@ -200,8 +221,15 @@ export function buildPeriodicExceptionChangeRequest(
       })
     }
     if (form.actionType === 'cycle') {
+      const currentCycleMonth = Number(task.verificationCycleMonth)
+      if (!Number.isFinite(currentCycleMonth) || currentCycleMonth <= 0) {
+        throw new Error(`设备${task.deviceCode || '-'}缺少有效的当前检定周期`)
+      }
+      if (!Number.isFinite(targetCycleMonth) || Number(targetCycleMonth) <= currentCycleMonth) {
+        throw new Error(`设备${task.deviceCode || '-'}的调整后检定周期必须大于当前检定周期`)
+      }
       Object.assign(item, {
-        newCycleMonth: Number(requiredText(form.newCycleMonth, '调整后检定周期')),
+        newCycleMonth: targetCycleMonth,
         adjustmentReason: reason
       })
     }

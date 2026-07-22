@@ -5,8 +5,10 @@ import {
   buildPeriodicExceptionChangeRequest,
   canDisposePeriodicException,
   canSubmitPeriodicException,
+  maxPeriodicVerificationCycleMonth,
   periodicExceptionSubmitNodeCodes,
-  periodicExceptionHandlingType
+  periodicExceptionHandlingType,
+  periodicCycleExtensionOptions
 } from '../src/views/periodic/periodicExceptionModel.ts'
 
 const task = {
@@ -158,3 +160,58 @@ const cycle = buildPeriodicExceptionChangeRequest(task, applicant, {
 assert.equal(cycle.changeType, 'cycle')
 assert.equal(cycle.items[0].newCycleMonth, 24)
 assert.equal(periodicExceptionHandlingType('cycle'), 'change')
+
+const taskWithLongerCycle = {
+  ...task,
+  id: '2073579908903317507',
+  deviceId: '2073579908903317508',
+  deviceCode: 'JL20240000020',
+  verificationCycleMonth: 24
+}
+assert.equal(maxPeriodicVerificationCycleMonth([task, taskWithLongerCycle]), 24)
+assert.deepEqual(
+  periodicCycleExtensionOptions(
+    [
+      { label: '6', value: 6 },
+      { label: '12', value: 12 },
+      { label: '24', value: 24 },
+      { label: '36', value: 36 }
+    ],
+    [task, taskWithLongerCycle]
+  ).map((option) => option.value),
+  [36]
+)
+
+assert.throws(
+  () => buildPeriodicExceptionChangeRequest(task, applicant, {
+    actionType: 'cycle',
+    newCycleMonth: 12,
+    adjustmentReason: '保持周期',
+    scrapType: 'damaged'
+  }),
+  /调整后检定周期必须大于当前检定周期/
+)
+
+assert.throws(
+  () => buildPeriodicExceptionChangeRequest(task, applicant, {
+    actionType: 'cycle',
+    newCycleMonth: 6,
+    adjustmentReason: '缩短周期',
+    scrapType: 'damaged'
+  }),
+  /调整后检定周期必须大于当前检定周期/
+)
+
+assert.throws(
+  () => buildPeriodicExceptionChangeRequest(
+    { ...task, verificationCycleMonth: undefined },
+    applicant,
+    {
+      actionType: 'cycle',
+      newCycleMonth: 24,
+      adjustmentReason: '缺少原周期',
+      scrapType: 'damaged'
+    }
+  ),
+  /缺少有效的当前检定周期/
+)

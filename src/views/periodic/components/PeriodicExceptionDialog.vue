@@ -10,8 +10,10 @@ import type { EntityId, PeriodicTaskVO } from '../../../types/periodic'
 import {
   buildPeriodicExceptionChangeRequest,
   displayCategory,
+  maxPeriodicVerificationCycleMonth,
   periodicExceptionActionMeta,
   periodicExceptionActionMetas,
+  periodicCycleExtensionOptions,
   type PeriodicExceptionAction,
   type PeriodicExceptionFormState
 } from '../periodicExceptionModel'
@@ -64,6 +66,16 @@ const tasksToDisplay = computed(() => {
   if (props.tasks.length > 0) return props.tasks
   return props.task ? [props.task] : []
 })
+const currentMaxCycleMonth = computed(() => maxPeriodicVerificationCycleMonth(tasksToDisplay.value))
+const currentCycleText = computed(() => {
+  if (currentMaxCycleMonth.value === undefined) return '-'
+  return tasksToDisplay.value.length > 1
+    ? `本批最长 ${currentMaxCycleMonth.value}个月`
+    : `${currentMaxCycleMonth.value}个月`
+})
+const longerVerificationCycleOptions = computed(() =>
+  periodicCycleExtensionOptions(positiveVerificationCycleOptions.value, tasksToDisplay.value)
+)
 const applicantText = computed(() => {
   const user = session.user
   if (!user) return '-'
@@ -115,6 +127,12 @@ watch(
     if (props.open) form.actionType = action
   }
 )
+
+watch(longerVerificationCycleOptions, (options) => {
+  if (form.actionType !== 'cycle' || form.newCycleMonth === undefined) return
+  const selectedStillAvailable = options.some((option) => Number(option.value) === Number(form.newCycleMonth))
+  if (!selectedStillAvailable) form.newCycleMonth = undefined
+})
 </script>
 
 <template>
@@ -227,7 +245,7 @@ watch(
           <template v-if="form.actionType === 'cycle'">
             <label>
               <span>调整前</span>
-              <a-input :value="task?.verificationCycleMonth ? `${task.verificationCycleMonth}个月` : '-'" readonly />
+              <a-input :value="currentCycleText" readonly />
             </label>
             <label>
               <span>调整后 <b>*</b></span>
@@ -235,7 +253,8 @@ watch(
                 v-model:value="form.newCycleMonth"
                 placeholder="请选择调整后周期"
                 :loading="dictionaryLoading"
-                :options="positiveVerificationCycleOptions"
+                :options="longerVerificationCycleOptions"
+                not-found-content="暂无比当前周期更长的选项"
               />
             </label>
             <label class="span-4">
