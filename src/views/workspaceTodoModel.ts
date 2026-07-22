@@ -36,6 +36,16 @@ export function getChangeTaskRoute(roleCode?: string) {
   return roleCode ? changeTaskRouteByRole[roleCode] : undefined
 }
 
+/**
+ * 保留详情接口确认当前角色可见的任务，防止仅凭工作流摘要展示越权入口。
+ */
+export function filterTasksWithLoadedDetails<T extends BusinessTaskReference, D>(
+  tasks: readonly T[],
+  details: Readonly<Record<string, D | null | undefined>>
+) {
+  return tasks.filter((task) => Boolean(details[String(task.businessId)]))
+}
+
 export function uniqueTasksByBusinessId<T extends BusinessTaskReference>(tasks: readonly T[]) {
   const taskByBusiness = new Map<string, T>()
   tasks.forEach((task) => taskByBusiness.set(String(task.businessId), task))

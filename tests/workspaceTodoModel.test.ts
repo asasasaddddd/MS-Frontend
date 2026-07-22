@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 
 import {
   dedupeTodoEntriesByKey,
+  filterTasksWithLoadedDetails,
   filterVisibleTodoEntries,
   getChangeTaskRoute,
   getWorkspaceLaunchActions,
@@ -49,3 +50,12 @@ const uniqueFirstCheckTasks = uniqueTasksByBusinessId([
   { id: 'task-3', businessId: 'order-2' }
 ])
 assert.deepEqual(uniqueFirstCheckTasks.map((task) => task.id), ['task-2', 'task-3'])
+
+const tasksWithDetails = filterTasksWithLoadedDetails(
+  [
+    { id: 'task-1', businessId: 'order-1' },
+    { id: 'task-2', businessId: 'order-2' }
+  ],
+  { 'order-1': { id: 'order-1' } }
+)
+assert.deepEqual(tasksWithDetails.map((task) => task.id), ['task-1'])

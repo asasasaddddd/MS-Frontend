@@ -13,6 +13,8 @@ export interface WorkflowTask {
   nodeName?: string
   assigneeId?: string
   assigneeName?: string
+  /** 后端授权的任务目标角色；前端仅用于展示和诊断，不作为权限边界。 */
+  assigneeRoleCode?: RoleCode
   taskStatus?: WorkflowTaskStatus
   taskStatusName?: string
   dueTime?: string

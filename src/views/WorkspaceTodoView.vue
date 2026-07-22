@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { SelectProps } from 'ant-design-vue'
 import { getFirstCheckDetail } from '@/api/firstcheck'
@@ -17,16 +17,14 @@ import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { ChangeOrderVO } from '@/types/change'
 import { useSessionStore } from '@/stores/session'
 import {
-  changeNodeCodesByRole,
   isPendingWorkflowTask,
-  matchesBusinessType,
-  matchesWorkflowTaskRole
+  matchesBusinessType
 } from '@/workflows/metrologyWorkflow'
-import { matchesFirstCheckVerifierRole } from '@/views/firstcheck/firstCheckVerifierModel'
 import { buildPeriodicPlanTodoGroups } from '@/views/periodic/periodicDisplayModel'
-import { changeTypeName, matchesChangeVerifierRole } from '@/views/change/changeDisplayModel'
+import { changeTypeName } from '@/views/change/changeDisplayModel'
 import {
   dedupeTodoEntriesByKey,
+  filterTasksWithLoadedDetails,
   filterVisibleTodoEntries,
   getChangeTaskRoute,
   getWorkspaceLaunchActions,
@@ -121,14 +119,12 @@ const firstCheckTodoEntries = computed<TodoDefinition[]>(() => {
   const path = currentRole ? firstCheckRouteByRole[currentRole] : undefined
   if (!currentRole || !path) return []
 
-  const tasks = uniqueTasksByBusinessId(workflowTasks.value
-    .filter((task) => isPendingWorkflowTask(task))
-    .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
-    .filter((task) => matchesWorkflowTaskRole(task, 'firstcheck', currentRole))
-    .filter((task) => {
-      const order = firstCheckOrders.value[String(task.businessId)]
-      return order ? matchesFirstCheckVerifierRole(order, currentRole) : true
-    }))
+  const tasks = filterTasksWithLoadedDetails(
+    uniqueTasksByBusinessId(workflowTasks.value
+      .filter((task) => isPendingWorkflowTask(task))
+      .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))),
+    firstCheckOrders.value
+  )
   if (tasks.length === 0) return []
 
   return [{
@@ -152,13 +148,10 @@ const firstCheckHistoryEntries = computed<TodoDefinition[]>(() => {
   const path = currentRole ? firstCheckRouteByRole[currentRole] : undefined
   if (!currentRole || !path || currentRole === 'EXTERNAL_OPERATOR') return []
 
-  return workflowHistoryTasks.value
-    .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
-    .filter((task) => matchesWorkflowTaskRole(task, 'firstcheck', currentRole))
-    .filter((task) => {
-      const order = firstCheckOrders.value[String(task.businessId)]
-      return order ? matchesFirstCheckVerifierRole(order, currentRole) : true
-    })
+  return filterTasksWithLoadedDetails(
+    workflowHistoryTasks.value.filter((task) => matchesBusinessType(task.businessType, 'firstcheck')),
+    firstCheckOrders.value
+  )
     .map((task) => {
       const orderId = String(task.businessId)
       const order = firstCheckOrders.value[orderId]
@@ -182,18 +175,14 @@ const firstCheckHistoryEntries = computed<TodoDefinition[]>(() => {
 const changeTodoEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
   const path = getChangeTaskRoute(currentRole)
-  const allowedNodes = currentRole ? changeNodeCodesByRole[currentRole] : undefined
-  if (!currentRole || !path || !allowedNodes) return []
+  if (!currentRole || !path) return []
 
-  const nodeSet = new Set<string>(allowedNodes)
-  const tasks = uniqueTasksByBusinessId(workflowTasks.value
-    .filter((task) => isPendingWorkflowTask(task))
-    .filter((task) => matchesBusinessType(task.businessType, 'change'))
-    .filter((task) => nodeSet.has(task.nodeCode))
-    .filter((task) => {
-      const order = changeOrders.value[String(task.businessId)]
-      return order ? matchesChangeVerifierRole(order, currentRole) : true
-    }))
+  const tasks = filterTasksWithLoadedDetails(
+    uniqueTasksByBusinessId(workflowTasks.value
+      .filter((task) => isPendingWorkflowTask(task))
+      .filter((task) => matchesBusinessType(task.businessType, 'change'))),
+    changeOrders.value
+  )
   if (tasks.length === 0) return []
 
   return [{
@@ -212,13 +201,12 @@ const changeTodoEntries = computed<TodoDefinition[]>(() => {
 const changeHistoryEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
   const path = getChangeTaskRoute(currentRole)
-  const allowedNodes = currentRole ? changeNodeCodesByRole[currentRole] : undefined
-  if (!currentRole || !path || !allowedNodes) return []
+  if (!currentRole || !path) return []
 
-  const nodeSet = new Set<string>(allowedNodes)
-  return workflowHistoryTasks.value
-    .filter((task) => matchesBusinessType(task.businessType, 'change'))
-    .filter((task) => nodeSet.has(task.nodeCode))
+  return filterTasksWithLoadedDetails(
+    workflowHistoryTasks.value.filter((task) => matchesBusinessType(task.businessType, 'change')),
+    changeOrders.value
+  )
     .map((task) => {
       const orderId = String(task.businessId)
       const order = changeOrders.value[orderId]
@@ -290,8 +278,7 @@ const periodicHistoryEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
   const path = currentRole ? periodicRouteByRole[currentRole] : undefined
   if (!currentRole || !path) return []
-  const pendingIds = new Set(periodicTasks.value.map((task) => String(task.id)))
-  const handledTasks = periodicHistoryTasks.value.filter((task) => !pendingIds.has(String(task.id)))
+  const handledTasks = periodicHistoryTasks.value
 
   return buildPeriodicPlanTodoGroups(handledTasks).map(({ planId, tasks, deviceCount }) => ({
     key: `periodic-${planId}`,
@@ -374,9 +361,8 @@ const samplingHistoryEntries = computed<TodoDefinition[]>(() => {
   const path = currentRole ? samplingRouteByRole[currentRole] : undefined
   if (!currentRole || !path || currentRole === 'PLANNER') return []
 
-  const pendingIds = new Set(samplingTasks.value.map((task) => String(task.id)))
   const groups = new Map<string, SamplingTaskVO[]>()
-  samplingHistoryTasks.value.filter((task) => !pendingIds.has(String(task.id))).forEach((task) => {
+  samplingHistoryTasks.value.forEach((task) => {
     const key = samplingPlanGroupKey(task)
     const list = groups.get(key) || []
     list.push(task)
@@ -438,8 +424,7 @@ const productSupportHistoryEntries = computed<TodoDefinition[]>(() => {
   const path = currentRole ? productSupportRouteByRole[currentRole] : undefined
   if (!currentRole || !path) return []
 
-  const pendingIds = new Set(productSupportTasks.value.map((order) => String(order.id)))
-  return productSupportHistoryTasks.value.filter((order) => !pendingIds.has(String(order.id))).map((order) => {
+  return productSupportHistoryTasks.value.map((order) => {
     const orderId = String(order.id)
     return {
       key: `product-support-${orderId}`,
@@ -563,7 +548,34 @@ function openTodo(item: TodoDefinition) {
   }
 }
 
+/** 当前工作台加载代次，用于丢弃角色切换前返回的异步响应。 */
+let workspaceLoadId = 0
+
+/** 清空上一激活角色的待办、已办及详情快照。 */
+function clearWorkspaceSummary() {
+  workflowTasks.value = []
+  workflowHistoryTasks.value = []
+  periodicTasks.value = []
+  periodicHistoryTasks.value = []
+  samplingTasks.value = []
+  samplingHistoryTasks.value = []
+  productSupportTasks.value = []
+  productSupportHistoryTasks.value = []
+  firstCheckOrders.value = {}
+  changeOrders.value = {}
+}
+
+/** 判断异步请求结果是否仍属于当前激活角色和最新加载代次。 */
+function isCurrentWorkspaceLoad(loadId: number, requestedRole: RoleCode) {
+  return loadId === workspaceLoadId && roleCode.value === requestedRole
+}
+
 async function loadWorkflowSummary() {
+  const requestedRole = roleCode.value
+  const loadId = ++workspaceLoadId
+  clearWorkspaceSummary()
+  if (!requestedRole) return
+
   const [
     workflowResult,
     workflowHistoryResult,
@@ -584,17 +596,29 @@ async function loadWorkflowSummary() {
     listProductSupportMyHistory()
   ])
 
-  workflowTasks.value = workflowResult.status === 'fulfilled' ? workflowResult.value : []
-  workflowHistoryTasks.value = workflowHistoryResult.status === 'fulfilled' ? workflowHistoryResult.value : []
-  periodicTasks.value = periodicResult.status === 'fulfilled' ? periodicResult.value : []
-  periodicHistoryTasks.value = periodicHistoryResult.status === 'fulfilled' ? periodicHistoryResult.value : []
-  samplingTasks.value = samplingResult.status === 'fulfilled' ? samplingResult.value : []
-  samplingHistoryTasks.value = samplingHistoryResult.status === 'fulfilled' ? samplingHistoryResult.value : []
-  productSupportTasks.value = productSupportResult.status === 'fulfilled' ? productSupportResult.value : []
-  productSupportHistoryTasks.value = productSupportHistoryResult.status === 'fulfilled' ? productSupportHistoryResult.value : []
-  const firstCheckTasks = [...workflowTasks.value, ...workflowHistoryTasks.value]
+  if (!isCurrentWorkspaceLoad(loadId, requestedRole)) return
+
+  const nextWorkflowTasks = workflowResult.status === 'fulfilled' ? workflowResult.value : []
+  const nextWorkflowHistoryTasks = workflowHistoryResult.status === 'fulfilled' ? workflowHistoryResult.value : []
+  const nextPeriodicTasks = periodicResult.status === 'fulfilled' ? periodicResult.value : []
+  const nextPeriodicHistoryTasks = periodicHistoryResult.status === 'fulfilled' ? periodicHistoryResult.value : []
+  const nextSamplingTasks = samplingResult.status === 'fulfilled' ? samplingResult.value : []
+  const nextSamplingHistoryTasks = samplingHistoryResult.status === 'fulfilled' ? samplingHistoryResult.value : []
+  const nextProductSupportTasks = productSupportResult.status === 'fulfilled' ? productSupportResult.value : []
+  const nextProductSupportHistoryTasks = productSupportHistoryResult.status === 'fulfilled' ? productSupportHistoryResult.value : []
+
+  workflowTasks.value = nextWorkflowTasks
+  workflowHistoryTasks.value = nextWorkflowHistoryTasks
+  periodicTasks.value = nextPeriodicTasks
+  periodicHistoryTasks.value = nextPeriodicHistoryTasks
+  samplingTasks.value = nextSamplingTasks
+  samplingHistoryTasks.value = nextSamplingHistoryTasks
+  productSupportTasks.value = nextProductSupportTasks
+  productSupportHistoryTasks.value = nextProductSupportHistoryTasks
+
+  const firstCheckTasks = [...nextWorkflowTasks, ...nextWorkflowHistoryTasks]
     .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
-  const changeTasks = [...workflowTasks.value, ...workflowHistoryTasks.value]
+  const changeTasks = [...nextWorkflowTasks, ...nextWorkflowHistoryTasks]
     .filter((task) => matchesBusinessType(task.businessType, 'change'))
   const [firstCheckDetails, changeDetails] = await Promise.all([
     Promise.allSettled(
@@ -610,6 +634,9 @@ async function loadWorkflowSummary() {
       }))
     )
   ])
+
+  if (!isCurrentWorkspaceLoad(loadId, requestedRole)) return
+
   firstCheckOrders.value = firstCheckDetails.reduce<Record<string, FirstCheckOrder>>((next, item) => {
     if (item.status === 'fulfilled') {
       next[item.value.orderId] = item.value.order
@@ -628,7 +655,9 @@ function openLaunch(path: string) {
   router.push(path)
 }
 
-onMounted(loadWorkflowSummary)
+watch(roleCode, () => {
+  void loadWorkflowSummary()
+}, { immediate: true })
 </script>
 
 <template>

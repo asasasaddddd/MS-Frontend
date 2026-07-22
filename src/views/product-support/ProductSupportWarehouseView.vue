@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, PrinterOutlined, SaveOutlined } from '@ant-design/icons-vue'
 import { createProductSupportOrder } from '@/api/productSupport'
 import { listUsersByDeptAndRole, type SysUserVO } from '@/api/system'
 import { useSessionStore } from '@/stores/session'
-import type { ProductSupportItemRequest, ProductSupportRatioRequest } from '@/types/productSupport'
+import type {
+  ProductSupportItemRequest,
+  ProductSupportRatioRequest,
+  ProductSupportVerifierRole
+} from '@/types/productSupport'
 import { defaultItemRows, defaultRatioRows } from './productSupportDisplayModel'
 
 type EditableRatio = ProductSupportRatioRequest & { lineNo: number }
@@ -26,6 +30,7 @@ const form = reactive({
   supplierName: '重工机械制造有限公司',
   applyDeptId: session.user?.deptId || '',
   applyDeptName: session.user?.deptName || '质量管理部',
+  verifierRoleCode: 'VERIFIER_SELF' as ProductSupportVerifierRole,
   verifierId: '',
   verifierName: '',
   remark: ''
@@ -55,6 +60,12 @@ const verifierOptions = computed(() =>
     value: user.employeeId
   }))
 )
+
+/** 产品配套单必须明确归属到一个检定员角色，不能只按工号授权。 */
+const verifierRoleOptions: Array<{ label: string; value: ProductSupportVerifierRole }> = [
+  { label: '自检检定员', value: 'VERIFIER_SELF' },
+  { label: '外委检定员', value: 'VERIFIER_EXTERNAL' }
+]
 
 function renumber<T extends { lineNo: number }>(rows: T[]) {
   rows.forEach((row, index) => {
@@ -118,6 +129,7 @@ function resetForm() {
   form.supplierName = ''
   form.applyDeptId = session.user?.deptId || ''
   form.applyDeptName = session.user?.deptName || ''
+  form.verifierRoleCode = 'VERIFIER_SELF'
   form.verifierId = ''
   form.verifierName = ''
   form.remark = ''
@@ -153,6 +165,7 @@ async function submitOrder() {
       supplierName: form.supplierName.trim(),
       applyDeptId: form.applyDeptId || session.user?.deptId,
       applyDeptName: form.applyDeptName.trim(),
+      verifierRoleCode: form.verifierRoleCode,
       verifierId: form.verifierId || undefined,
       verifierName: form.verifierName || undefined,
       ratios: ratios.value.map((row) => ({
@@ -182,22 +195,24 @@ async function loadVerifiers() {
   verifierLoading.value = true
   try {
     const deptId = session.user?.deptId || form.applyDeptId
-    const [selfResult, externalResult] = await Promise.allSettled([
-      deptId ? listUsersByDeptAndRole(deptId, 'VERIFIER_SELF') : Promise.resolve([]),
-      deptId ? listUsersByDeptAndRole(deptId, 'VERIFIER_EXTERNAL') : Promise.resolve([])
-    ])
-    const users = [
-      ...(selfResult.status === 'fulfilled' ? selfResult.value : []),
-      ...(externalResult.status === 'fulfilled' ? externalResult.value : [])
-    ]
-    const dedup = new Map(users.map((user) => [user.employeeId, user]))
-    verifiers.value = Array.from(dedup.values())
+    verifiers.value = deptId
+      ? await listUsersByDeptAndRole(deptId, form.verifierRoleCode)
+      : []
   } catch {
     verifiers.value = []
   } finally {
     verifierLoading.value = false
   }
 }
+
+watch(
+  () => form.verifierRoleCode,
+  () => {
+    form.verifierId = ''
+    form.verifierName = ''
+    void loadVerifiers()
+  }
+)
 
 onMounted(loadVerifiers)
 </script>
@@ -222,13 +237,16 @@ onMounted(loadVerifiers)
         <a-form-item label="送检时间" required><a-input v-model:value="form.inspectionDate" type="date" /></a-form-item>
         <a-form-item label="供方" required><a-input v-model:value="form.supplierName" /></a-form-item>
         <a-form-item label="申请部门" required><a-input v-model:value="form.applyDeptName" /></a-form-item>
+        <a-form-item label="检定员类型" required>
+          <a-select v-model:value="form.verifierRoleCode" :options="verifierRoleOptions" />
+        </a-form-item>
         <a-form-item label="指定检定员">
           <a-select
             :value="form.verifierId"
             :loading="verifierLoading"
             :options="verifierOptions"
             allow-clear
-            placeholder="不选则全部检定员可见"
+            placeholder="不选则本部门该类型检定员可见"
             @change="chooseVerifier"
           />
         </a-form-item>

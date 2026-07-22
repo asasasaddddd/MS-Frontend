@@ -2,6 +2,8 @@ export type ProductSupportEntityId = string | number
 
 export type ProductSupportNodeCode = 'verifier_verify' | 'completed' | string
 export type ProductSupportOrderStatus = 'pending' | 'completed' | string
+/** 产品配套单可指定的检定员角色，必须与后端任务授权角色一致。 */
+export type ProductSupportVerifierRole = 'VERIFIER_SELF' | 'VERIFIER_EXTERNAL'
 
 export interface ProductSupportRatioRequest {
   name: string
@@ -27,6 +29,8 @@ export interface ProductSupportCreateOrderRequest {
   applyDeptName: string
   verifierId?: string
   verifierName?: string
+  /** 必填的目标检定员角色；未指定个人时决定部门待办池归属。 */
+  verifierRoleCode: ProductSupportVerifierRole
   ratios: ProductSupportRatioRequest[]
   items: ProductSupportItemRequest[]
   remark?: string
@@ -86,6 +90,8 @@ export interface ProductSupportOrderVO {
   applicantName?: string
   verifierId?: string
   verifierName?: string
+  /** 持久化的目标检定员角色；旧记录迁移后始终由后端返回。 */
+  verifierRoleCode?: ProductSupportVerifierRole
   currentNode?: ProductSupportNodeCode
   currentNodeName?: string
   orderStatus?: ProductSupportOrderStatus
