@@ -3,8 +3,11 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getFirstCheckDetail } from '@/api/firstcheck'
+import { getFirstCheckFlowSummary } from '@/api/flowSummary'
 import { listWorkflowTasks } from '@/api/workflow'
+import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import type { FirstCheckAdminRow, FirstCheckOrder } from '@/types/firstcheck'
+import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
 import { getWorkflowNodeName, isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
@@ -15,6 +18,10 @@ type StatusFilter = 'all' | 'manager_check' | 'returned'
 
 const route = useRoute()
 const loading = ref(false)
+/** 后端按当前管理员参与范围生成的首检流程汇总快照。 */
+const firstCheckFlowSummary = ref<FlowSummary | null>(null)
+/** 统一汇总接口的加载状态，与待办表加载状态分别传给各自组件。 */
+const summaryLoading = ref(false)
 const rows = ref<FirstCheckAdminRow[]>([])
 const statusFilter = ref<StatusFilter>('all')
 const keyword = ref('')
@@ -55,16 +62,6 @@ const filteredRows = computed(() => {
       (order.materialCode || '').includes(text)
     return matchesStatus && matchesKeyword
   })
-})
-
-const todayKey = computed(() => new Date().toISOString().slice(0, 10))
-
-const metrics = computed(() => {
-  const todoCount = rows.value.length
-  const todayCount = rows.value.filter((row) => (row.order.applyTime || '').slice(0, 10) === todayKey.value).length
-  const categoryCount = rows.value.filter((row) => row.nodeCode === 'manager_check').length
-  const returnedCount = rows.value.filter((row) => row.statusLabel.includes('退回')).length
-  return { todoCount, todayCount, categoryCount, returnedCount }
 })
 
 const columns = [
@@ -127,32 +124,64 @@ function openDetail(row: FirstCheckAdminRow) {
   detailOpen.value = true
 }
 
-async function loadRows() {
+/**
+ * 读取当前管理员可处理的工作流任务及其首检单详情。
+ *
+ * 工作流任务仍是待办范围和操作权限的唯一来源；详情失败的任务不会生成替代行。
+ *
+ * @returns 已成功取得真实首检详情的管理员待办行。
+ * @throws {ApiError} 工作流任务列表请求失败时抛出。
+ */
+async function fetchTaskRows(): Promise<FirstCheckAdminRow[]> {
+  const tasks = await listWorkflowTasks()
+  const adminNodeSet = new Set<string>(workflowNodeGroups.firstcheck.admin)
+  const firstCheckTasks = tasks.filter((task) => {
+    const pending = isPendingWorkflowTask(task)
+    return pending && matchesBusinessType(task.businessType, 'firstcheck') && adminNodeSet.has(task.nodeCode) && matchesRouteOrder(task)
+  })
+
+  const details = await Promise.allSettled(
+    firstCheckTasks.map(async (task) => ({
+      task,
+      order: await getFirstCheckDetail(task.businessId)
+    }))
+  )
+
+  return details
+    .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: FirstCheckOrder }> => item.status === 'fulfilled')
+    .map((item) => toRow(item.value.task, item.value.order))
+}
+
+/**
+ * 并行刷新管理员待办与参与流程汇总，并分别处理两路请求结果。
+ *
+ * 任一路失败只清空其自己的展示数据，避免汇总故障覆盖已成功加载的真实待办。
+ */
+async function loadRows(): Promise<void> {
   loading.value = true
-  try {
-    const tasks = await listWorkflowTasks()
-    const adminNodeSet = new Set<string>(workflowNodeGroups.firstcheck.admin)
-    const firstCheckTasks = tasks.filter((task) => {
-      const pending = isPendingWorkflowTask(task)
-      return pending && matchesBusinessType(task.businessType, 'firstcheck') && adminNodeSet.has(task.nodeCode) && matchesRouteOrder(task)
-    })
+  summaryLoading.value = true
 
-    const details = await Promise.allSettled(
-      firstCheckTasks.map(async (task) => ({
-        task,
-        order: await getFirstCheckDetail(task.businessId)
-      }))
-    )
+  const [taskResult, summaryResult] = await Promise.allSettled([
+    fetchTaskRows(),
+    getFirstCheckFlowSummary()
+  ])
 
-    rows.value = details
-      .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: FirstCheckOrder }> => item.status === 'fulfilled')
-      .map((item) => toRow(item.value.task, item.value.order))
-  } catch (error) {
+  if (taskResult.status === 'fulfilled') {
+    rows.value = taskResult.value
+  } else {
     rows.value = []
-    message.error(error instanceof Error ? error.message : '首检待办加载失败')
-  } finally {
-    loading.value = false
+    message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '首检待办加载失败')
   }
+
+  if (summaryResult.status === 'fulfilled') {
+    firstCheckFlowSummary.value = summaryResult.value
+  } else {
+    firstCheckFlowSummary.value = null
+    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '首检参与流程汇总加载失败')
+  }
+
+  loading.value = false
+  summaryLoading.value = false
 }
 
 onMounted(loadRows)
@@ -165,26 +194,14 @@ onMounted(loadRows)
       <a-tab-pane key="history" tab="已办" />
     </a-tabs>
 
+    <FlowStatusSummary
+      :summary="firstCheckFlowSummary"
+      :loading="summaryLoading"
+      title="首检参与流程汇总"
+      empty-text="暂无首检参与流程汇总"
+    />
+
     <template v-if="activeTab === 'todo'">
-    <div class="summary-line">
-      <div class="metric-grid compact">
-        <a-card class="metric" :bordered="false">
-          <span>首检待办</span>
-          <strong>{{ metrics.todoCount }}项</strong>
-        </a-card>
-        <a-card class="metric" :bordered="false">
-          <span>今日新增</span>
-          <strong>{{ metrics.todayCount }}项</strong>
-        </a-card>
-      </div>
-
-      <div class="status-strip">
-        <div class="status-check">✓</div>
-        <a-tag class="tag orange">待分类 {{ metrics.categoryCount }}</a-tag>
-        <a-tag class="tag red">退回待修改 {{ metrics.returnedCount }}</a-tag>
-      </div>
-    </div>
-
     <a-card class="panel" :bordered="false">
       <template #title>
         <h2>首检明细</h2>
@@ -275,68 +292,6 @@ onMounted(loadRows)
 .firstcheck-admin-page {
   display: grid;
   gap: 16px;
-}
-
-.summary-line {
-  display: flex;
-  align-items: stretch;
-  gap: 14px;
-}
-
-.metric-grid.compact {
-  display: grid;
-  grid-template-columns: repeat(2, 140px);
-  gap: 14px;
-  flex-shrink: 0;
-}
-
-.metric {
-  border: 1px solid #e5eaf1;
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.metric :deep(.ant-card-body) {
-  padding: 12px 16px;
-}
-
-.metric span {
-  color: #667085;
-  font-size: 13px;
-}
-
-.metric strong {
-  display: block;
-  margin-top: 4px;
-  color: #172033;
-  font-size: 22px;
-  line-height: 1.2;
-}
-
-.status-strip {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  flex: 1;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 1px solid #d9f3e5;
-  border-radius: 8px;
-  background: #fbfffd;
-}
-
-.status-check {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: #12b76a;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 700;
 }
 
 .panel {
@@ -471,14 +426,9 @@ onMounted(loadRows)
 }
 
 @media (max-width: 980px) {
-  .summary-line,
   .task-filter {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .metric-grid.compact {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .status-select,

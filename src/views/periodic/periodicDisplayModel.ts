@@ -1,4 +1,4 @@
-import type { EntityId, PeriodicDisplayRow, PeriodicPlanVO, PeriodicTaskVO } from '../../types/periodic'
+import type { EntityId, PeriodicDisplayRow, PeriodicTaskVO } from '../../types/periodic'
 
 export type PeriodicTableRole = 'admin' | 'verifier' | 'confirmer' | 'externalOperator'
 export type PeriodicTagColor = 'blue' | 'cyan' | 'orange' | 'green' | 'red'
@@ -9,22 +9,6 @@ export interface PeriodicTableColumn {
   dataIndex?: keyof PeriodicDisplayRow
   width?: number
   fixed?: 'left' | 'right'
-}
-
-export interface PeriodicPlanMetric {
-  key: string
-  label: string
-  value: number
-  color: PeriodicTagColor
-}
-
-export interface PeriodicPlanSummary {
-  planNo: string
-  deviceCount: number
-  statusChangeCount: number
-  statusChangeBreakdown: string
-  notSentCount: number
-  metrics: PeriodicPlanMetric[]
 }
 
 export interface PeriodicPlanTodoGroup {
@@ -191,124 +175,6 @@ export function mapPeriodicTaskRow(task: PeriodicTaskVO, role?: PeriodicTableRol
     result: resultName(task.result),
     remark: displayValue(task.remark),
     tagColor: periodicTagColor(task.currentNode || task.taskStatus)
-  }
-}
-
-function countTasks(tasks: PeriodicTaskVO[], matcher: (task: PeriodicTaskVO) => boolean) {
-  return tasks.filter(matcher).length
-}
-
-function nodeIn(task: PeriodicTaskVO, nodes: string[]) {
-  return nodes.includes(String(task.currentNode || ''))
-}
-
-function statusChangeName(task: PeriodicTaskVO) {
-  if (task.exceptionFlowName) return task.exceptionFlowName
-  const names: Record<string, string> = {
-    seal: '封存',
-    scrap: '非正常报废',
-    normal_scrap: '正常报废',
-    defer: '缓检',
-    precheck: '缓检',
-    repair: '维修',
-    category: '管理类别调整',
-    cycle: '检定周期调整'
-  }
-  return task.exceptionFlowType ? names[task.exceptionFlowType] || task.exceptionFlowType : '其他'
-}
-
-function buildStatusChangeBreakdown(tasks: PeriodicTaskVO[]) {
-  const counts = new Map<string, number>()
-  tasks
-    .filter((task) => nodeIn(task, ['exception_disposal']) || task.taskStatus === 'exception')
-    .forEach((task) => {
-      const name = statusChangeName(task)
-      counts.set(name, (counts.get(name) || 0) + 1)
-    })
-  return Array.from(counts.entries())
-    .map(([name, count]) => `${name} ${count}`)
-    .join(' / ')
-}
-
-export function buildPeriodicPlanSummary(plan: PeriodicPlanVO | null | undefined, tasks: PeriodicTaskVO[]): PeriodicPlanSummary {
-  const statusChangeCount = countTasks(tasks, (task) => nodeIn(task, ['exception_disposal']) || task.taskStatus === 'exception')
-  const notSentCount = countTasks(
-    tasks,
-    (task) => isDualHandoverTask(task)
-  )
-  const metrics: PeriodicPlanMetric[] = [
-    {
-      key: 'waitSend',
-      label: '待送检',
-      value: notSentCount,
-      color: 'orange'
-    },
-    {
-      key: 'received',
-      label: '已接收',
-      value: countTasks(
-        tasks,
-        (task) => task.physicalStatus === 'verifier_received' || nodeIn(task, ['self_verify', 'verification_record'])
-      ),
-      color: 'blue'
-    },
-    {
-      key: 'externalSent',
-      label: '外委送出',
-      value: countTasks(
-        tasks,
-        (task) => task.physicalStatus === 'external_received' || nodeIn(task, ['send_out', 'supplier_fill_info'])
-      ),
-      color: 'blue'
-    },
-    {
-      key: 'externalReturned',
-      label: '外委送回',
-      value: countTasks(tasks, (task) =>
-        ['wait_sendout_return_receive', 'sendout_return_received'].includes(String(task.physicalStatus || '')) ||
-        nodeIn(task, ['send_out_return', 'verifier_fill_info', 'responsible_second_judge', 'external_third_judge'])
-      ),
-      color: 'blue'
-    },
-    {
-      key: 'reportForward',
-      label: '报告待转发',
-      value: countTasks(tasks, (task) => nodeIn(task, ['manager_forward_confirm'])),
-      color: 'orange'
-    },
-    {
-      key: 'reportConfirm',
-      label: '报告待确认',
-      value: countTasks(tasks, (task) => nodeIn(task, ['confirmer_confirm'])),
-      color: 'orange'
-    },
-    {
-      key: 'labelPending',
-      label: '待打印',
-      value: countTasks(tasks, (task) => task.labelStatus === 'pending'),
-      color: 'cyan'
-    },
-    {
-      key: 'labelPrinted',
-      label: '已打印',
-      value: countTasks(tasks, (task) => task.labelStatus === 'printed'),
-      color: 'green'
-    },
-    {
-      key: 'takenBack',
-      label: '取回',
-      value: countTasks(tasks, (task) => task.physicalStatus === 'taken_back'),
-      color: 'green'
-    }
-  ]
-
-  return {
-    planNo: displayValue(plan?.planNo),
-    deviceCount: tasks.length,
-    statusChangeCount,
-    statusChangeBreakdown: buildStatusChangeBreakdown(tasks),
-    notSentCount,
-    metrics
   }
 }
 

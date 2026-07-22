@@ -3,10 +3,13 @@ import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute } from 'vue-router'
 import { approveChange, getChangeOrderDetail, rejectChange } from '@/api/change'
+import { getChangeFlowSummary } from '@/api/flowSummary'
 import { listWorkflowTasks } from '@/api/workflow'
+import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import { useSessionStore } from '@/stores/session'
 import type { RoleCode } from '@/types/common'
 import type { ChangeOrderVO } from '@/types/change'
+import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
 import {
   changeNodeName,
@@ -28,6 +31,8 @@ const route = useRoute()
 const loading = ref(false)
 const submitting = ref(false)
 const rows = ref<ChangeTaskRow[]>([])
+/** 当前角色待办范围内由后端生成的权威流程汇总。 */
+const changeFlowSummary = ref<FlowSummary | null>(null)
 const selectedRowKeys = ref<string[]>([])
 const keyword = ref('')
 const approvalOpen = ref(false)
@@ -38,13 +43,6 @@ const routeOrderId = computed(() => {
   if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
   return value ? String(value) : ''
 })
-
-const pageTitle = computed(() => {
-  if (session.user?.roleCode === 'MEASURE_LEADER') return '计量领导待办'
-  if (session.user?.roleCode === 'RESPONSIBLE_ENGINEER') return '责任工程师待办'
-  return '主管领导待办'
-})
-const roleText = computed(() => `${session.user?.roleName || pageTitle.value} · ${session.user?.employeeName || session.user?.employeeId || '-'}`)
 
 const columns = [
   { title: '申请编号', key: 'orderNo', width: 170 },
@@ -67,14 +65,6 @@ const filteredRows = computed(() => {
         .some((value) => String(value).includes(text))
     )
   })
-})
-
-const metrics = computed(() => {
-  const today = new Date().toISOString().slice(0, 10)
-  return {
-    todoCount: rows.value.length,
-    todayCount: rows.value.filter((row) => String(row.order.applyTime || '').slice(0, 10) === today).length
-  }
 })
 
 const selectedRows = computed(() => rows.value.filter((row) => selectedRowKeys.value.includes(row.key)))
@@ -114,10 +104,22 @@ function toRow(task: WorkflowTask, order: ChangeOrderVO): ChangeTaskRow {
 async function loadRows() {
   loading.value = true
   selectedRowKeys.value = []
-  try {
-    const currentRole = session.user?.roleCode as RoleCode | undefined
-    const nodeSet = new Set<string>(currentRole ? changeNodeCodesByRole[currentRole] || [] : [])
-    const tasks = (await listWorkflowTasks()).filter(
+  const currentRole = session.user?.roleCode as RoleCode | undefined
+  const nodeSet = new Set<string>(currentRole ? changeNodeCodesByRole[currentRole] || [] : [])
+  const [taskResult, summaryResult] = await Promise.allSettled([
+    listWorkflowTasks(),
+    getChangeFlowSummary('pending')
+  ])
+
+  if (summaryResult.status === 'fulfilled') {
+    changeFlowSummary.value = summaryResult.value
+  } else {
+    changeFlowSummary.value = null
+    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '状态变更待办流程汇总加载失败')
+  }
+
+  if (taskResult.status === 'fulfilled') {
+    const tasks = taskResult.value.filter(
       (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change') && nodeSet.has(task.nodeCode)
     )
     const details = await Promise.allSettled(
@@ -132,12 +134,11 @@ async function loadRows() {
     const targetOrderId = route.query.orderId ? String(route.query.orderId) : ''
     const targetRow = targetOrderId ? rows.value.find((row) => String(row.order.id) === targetOrderId) : undefined
     if (targetRow) openDetail(targetRow)
-  } catch (error) {
+  } else {
     rows.value = []
-    message.error(error instanceof Error ? error.message : '状态变更待办加载失败')
-  } finally {
-    loading.value = false
+    message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '状态变更待办加载失败')
   }
+  loading.value = false
 }
 
 function assertSameChangeType(targetRows: ChangeTaskRow[]) {
@@ -221,17 +222,11 @@ onMounted(loadRows)
     </a-tabs>
 
     <template v-if="activeTab === 'todo'">
-    <div class="summary-line">
-      <a-card class="metric" :bordered="false">
-        <span>状态变更待办</span>
-        <strong>{{ metrics.todoCount }}项</strong>
-      </a-card>
-      <a-card class="metric" :bordered="false">
-        <span>今日新增</span>
-        <strong>{{ metrics.todayCount }}项</strong>
-      </a-card>
-      <div class="role-pill">{{ roleText }}</div>
-    </div>
+    <FlowStatusSummary
+      :summary="changeFlowSummary"
+      :loading="loading"
+      title="状态变更流程汇总（当前待办）"
+    />
 
     <a-card class="panel" :bordered="false">
       <template #title>
@@ -296,47 +291,6 @@ onMounted(loadRows)
 .change-approval-page {
   display: grid;
   gap: 16px;
-}
-
-.summary-line {
-  display: flex;
-  align-items: stretch;
-  gap: 14px;
-}
-
-.metric {
-  width: 140px;
-  border: 1px solid #e5eaf1;
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.metric :deep(.ant-card-body) {
-  padding: 12px 16px;
-}
-
-.metric span {
-  color: #667085;
-  font-size: 13px;
-}
-
-.metric strong {
-  display: block;
-  margin-top: 4px;
-  color: #172033;
-  font-size: 22px;
-  line-height: 1.2;
-}
-
-.role-pill {
-  display: flex;
-  align-items: center;
-  padding: 0 14px;
-  border: 1px solid #b7d3ff;
-  border-radius: 8px;
-  background: #eef5ff;
-  color: #175cd3;
-  font-weight: 700;
 }
 
 .panel {
@@ -430,13 +384,11 @@ onMounted(loadRows)
 }
 
 @media (max-width: 900px) {
-  .summary-line,
   .task-filter {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .metric,
   .keyword-input {
     width: 100%;
   }

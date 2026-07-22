@@ -3,8 +3,11 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getFirstCheckDetail } from '@/api/firstcheck'
+import { getFirstCheckFlowSummary } from '@/api/flowSummary'
 import { listWorkflowTasks } from '@/api/workflow'
+import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import type { FirstCheckOrder } from '@/types/firstcheck'
+import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
 import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
 import FirstCheckEngineerDialog from '@/views/firstcheck/components/FirstCheckEngineerDialog.vue'
@@ -19,6 +22,10 @@ interface EngineerRow {
 
 const route = useRoute()
 const loading = ref(false)
+/** 后端按当前责任工程师参与范围生成的首检流程汇总快照。 */
+const firstCheckFlowSummary = ref<FlowSummary | null>(null)
+/** 统一汇总接口的加载状态，与待办表加载状态分别传给各自组件。 */
+const summaryLoading = ref(false)
 const rows = ref<EngineerRow[]>([])
 const statusFilter = ref('all')
 const keyword = ref('')
@@ -54,12 +61,6 @@ const columns = [
   { title: '操作', key: 'action', fixed: 'right', width: 100 }
 ]
 
-const todayKey = computed(() => new Date().toISOString().slice(0, 10))
-const metrics = computed(() => ({
-  todoCount: rows.value.length,
-  todayCount: rows.value.filter((row) => (row.order.applyTime || '').slice(0, 10) === todayKey.value).length
-}))
-
 const filteredRows = computed(() => {
   const text = keyword.value.trim()
   return rows.value.filter((row) => {
@@ -94,37 +95,69 @@ function openEngineer(row: EngineerRow) {
   engineerOpen.value = true
 }
 
-async function loadRows() {
+/**
+ * 读取当前责任工程师可处理的工作流任务及其首检单详情。
+ *
+ * 工作流任务仍是待办范围和确认按钮权限的唯一来源；详情失败的任务不会生成替代行。
+ *
+ * @returns 已成功取得真实首检详情的责任工程师待办行。
+ * @throws {ApiError} 工作流任务列表请求失败时抛出。
+ */
+async function fetchTaskRows(): Promise<EngineerRow[]> {
+  const tasks = await listWorkflowTasks()
+  const engineerNodeSet = new Set<string>(workflowNodeGroups.firstcheck.engineer)
+  const firstCheckTasks = tasks.filter((task) => {
+    const pending = isPendingWorkflowTask(task)
+    return pending && matchesBusinessType(task.businessType, 'firstcheck') && engineerNodeSet.has(task.nodeCode) && matchesRouteOrder(task)
+  })
+
+  const details = await Promise.allSettled(
+    firstCheckTasks.map(async (task) => ({
+      task,
+      order: await getFirstCheckDetail(task.businessId)
+    }))
+  )
+
+  return details
+    .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: FirstCheckOrder }> => item.status === 'fulfilled')
+    .map((item) => ({
+      key: item.value.task.businessId,
+      taskId: item.value.task.id,
+      nodeCode: item.value.task.nodeCode,
+      order: item.value.order
+    }))
+}
+
+/**
+ * 并行刷新责任工程师待办与参与流程汇总，并分别处理两路请求结果。
+ *
+ * 任一路失败只清空其自己的展示数据，避免汇总故障覆盖已成功加载的真实待办。
+ */
+async function loadRows(): Promise<void> {
   loading.value = true
-  try {
-    const tasks = await listWorkflowTasks()
-    const engineerNodeSet = new Set<string>(workflowNodeGroups.firstcheck.engineer)
-    const firstCheckTasks = tasks.filter((task) => {
-      const pending = isPendingWorkflowTask(task)
-      return pending && matchesBusinessType(task.businessType, 'firstcheck') && engineerNodeSet.has(task.nodeCode) && matchesRouteOrder(task)
-    })
+  summaryLoading.value = true
 
-    const details = await Promise.allSettled(
-      firstCheckTasks.map(async (task) => ({
-        task,
-        order: await getFirstCheckDetail(task.businessId)
-      }))
-    )
+  const [taskResult, summaryResult] = await Promise.allSettled([
+    fetchTaskRows(),
+    getFirstCheckFlowSummary()
+  ])
 
-    rows.value = details
-      .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: FirstCheckOrder }> => item.status === 'fulfilled')
-      .map((item) => ({
-        key: item.value.task.businessId,
-        taskId: item.value.task.id,
-        nodeCode: item.value.task.nodeCode,
-        order: item.value.order
-      }))
-  } catch (error) {
+  if (taskResult.status === 'fulfilled') {
+    rows.value = taskResult.value
+  } else {
     rows.value = []
-    message.error(error instanceof Error ? error.message : '责任工程师首检待办加载失败')
-  } finally {
-    loading.value = false
+    message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '责任工程师首检待办加载失败')
   }
+
+  if (summaryResult.status === 'fulfilled') {
+    firstCheckFlowSummary.value = summaryResult.value
+  } else {
+    firstCheckFlowSummary.value = null
+    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '首检参与流程汇总加载失败')
+  }
+
+  loading.value = false
+  summaryLoading.value = false
 }
 
 onMounted(loadRows)
@@ -137,18 +170,14 @@ onMounted(loadRows)
       <a-tab-pane key="history" tab="已办" />
     </a-tabs>
 
-    <template v-if="activeTab === 'todo'">
-    <div class="summary-line">
-      <a-card class="metric" :bordered="false">
-        <span>首检待办</span>
-        <strong>{{ metrics.todoCount }}项</strong>
-      </a-card>
-      <a-card class="metric" :bordered="false">
-        <span>今日新增</span>
-        <strong>{{ metrics.todayCount }}项</strong>
-      </a-card>
-    </div>
+    <FlowStatusSummary
+      :summary="firstCheckFlowSummary"
+      :loading="summaryLoading"
+      title="首检参与流程汇总"
+      empty-text="暂无首检参与流程汇总"
+    />
 
+    <template v-if="activeTab === 'todo'">
     <a-card class="panel" :bordered="false">
       <template #title>
         <h2>首检明细</h2>
@@ -196,36 +225,6 @@ onMounted(loadRows)
 .firstcheck-engineer-page {
   display: grid;
   gap: 16px;
-}
-
-.summary-line {
-  display: flex;
-  gap: 14px;
-}
-
-.metric {
-  width: 140px;
-  flex: 0 0 auto;
-  border: 1px solid #e5eaf1;
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.metric :deep(.ant-card-body) {
-  padding: 12px 16px;
-}
-
-.metric span {
-  color: #667085;
-  font-size: 13px;
-}
-
-.metric strong {
-  display: block;
-  margin-top: 4px;
-  color: #172033;
-  font-size: 22px;
-  line-height: 1.2;
 }
 
 .panel {
@@ -286,7 +285,6 @@ onMounted(loadRows)
 }
 
 @media (max-width: 980px) {
-  .summary-line,
   .task-filter {
     align-items: stretch;
     flex-direction: column;

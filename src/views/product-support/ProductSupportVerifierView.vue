@@ -3,15 +3,17 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { SearchOutlined } from '@ant-design/icons-vue'
+import { getProductSupportTaskFlowSummary } from '@/api/flowSummary'
 import {
   getProductSupportOrder,
   listProductSupportMyHistory,
   listProductSupportMyTasks,
   verifierSubmitProductSupport
 } from '@/api/productSupport'
+import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
+import type { FlowSummary } from '@/types/flowSummary'
 import type { ProductSupportEntityId, ProductSupportOrderVO, ProductSupportRatioVO } from '@/types/productSupport'
 import {
-  buildProductSupportSummary,
   display,
   mapProductSupportOrderRow,
   productSupportTagColor,
@@ -33,9 +35,12 @@ type VerifyRatioDraft = {
 
 const route = useRoute()
 const loading = ref(false)
+const summaryLoading = ref(false)
 const historyLoading = ref(false)
 const submitting = ref(false)
 const tasks = ref<ProductSupportOrderVO[]>([])
+// 后端汇总是独立的权威快照，不从当前页任务列表补算。
+const productSupportFlowSummary = ref<FlowSummary | null>(null)
 const history = ref<ProductSupportOrderVO[]>([])
 const activeTab = ref<'pending' | 'history'>(route.query.tab === 'history' ? 'history' : 'pending')
 const selectedRowKeys = ref<ProductSupportEntityId[]>([])
@@ -75,7 +80,6 @@ const ratioColumns = [
 
 const rows = computed(() => tasks.value.map(mapProductSupportOrderRow))
 const historyRows = computed(() => history.value.map(mapProductSupportOrderRow))
-const summary = computed(() => buildProductSupportSummary(tasks.value))
 
 const filteredRows = computed(() => {
   const text = keyword.value.trim()
@@ -133,14 +137,30 @@ function ratioDraftFrom(ratio: ProductSupportRatioVO): VerifyRatioDraft {
 
 async function loadRows() {
   loading.value = true
+  summaryLoading.value = true
   try {
-    tasks.value = await listProductSupportMyTasks()
-    await openOrderFromRoute()
-  } catch (error) {
-    tasks.value = []
-    message.error(error instanceof Error ? error.message : '产品配套待办加载失败')
+    const [taskResult, summaryResult] = await Promise.allSettled([
+      listProductSupportMyTasks(),
+      getProductSupportTaskFlowSummary()
+    ])
+
+    if (taskResult.status === 'fulfilled') {
+      tasks.value = taskResult.value
+      await openOrderFromRoute()
+    } else {
+      tasks.value = []
+      message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '产品配套待办加载失败')
+    }
+
+    if (summaryResult.status === 'fulfilled') {
+      productSupportFlowSummary.value = summaryResult.value
+    } else {
+      productSupportFlowSummary.value = null
+      message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '产品配套流程汇总加载失败')
+    }
   } finally {
     loading.value = false
+    summaryLoading.value = false
   }
 }
 
@@ -246,17 +266,11 @@ onMounted(async () => {
 
 <template>
   <section class="product-support-verifier-page">
-    <div class="metric-grid">
-      <a-card class="metric" :bordered="false"><span>待办总数</span><strong>{{ summary.pending }}</strong><small>项</small></a-card>
-      <a-card class="metric" :bordered="false"><span>今日新增</span><strong>{{ summary.total }}</strong><small>项</small></a-card>
-      <div class="status-strip">
-        <span class="status-check">✓</span>
-        <a-tag>待接收 {{ summary.pending }}</a-tag>
-        <a-tag color="blue">已接收 0</a-tag>
-        <a-tag>外委送出 0</a-tag>
-        <a-tag color="blue">外委送回 0</a-tag>
-      </div>
-    </div>
+    <FlowStatusSummary
+      :summary="productSupportFlowSummary"
+      :loading="summaryLoading"
+      title="产品配套流程汇总"
+    />
 
     <a-card class="panel" :bordered="false">
       <template #title><h2>产品配套明细</h2></template>
@@ -385,57 +399,10 @@ onMounted(async () => {
   gap: 16px;
 }
 
-.metric-grid {
-  display: grid;
-  grid-template-columns: 140px 140px minmax(0, 1fr);
-  gap: 14px;
-}
-
-.metric,
 .panel {
   border: 1px solid #e5eaf1;
   border-radius: 8px;
   background: #ffffff;
-}
-
-.metric :deep(.ant-card-body) {
-  padding: 12px 16px;
-}
-
-.metric span,
-.metric small {
-  color: #667085;
-  font-size: 12px;
-}
-
-.metric strong {
-  display: block;
-  margin-top: 4px;
-  color: #172033;
-  font-size: 22px;
-}
-
-.status-strip {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 1px solid #e5eaf1;
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.status-check {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  background: #12b76a;
-  color: #ffffff;
-  font-weight: 700;
 }
 
 .panel {
@@ -608,13 +575,11 @@ onMounted(async () => {
 }
 
 @media (max-width: 980px) {
-  .metric-grid,
   .info-grid {
     grid-template-columns: 1fr;
   }
 
-  .task-filter,
-  .status-strip {
+  .task-filter {
     align-items: stretch;
     flex-direction: column;
   }

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
+import { getPeriodicPlanFlowSummary } from '../../../api/flowSummary'
 import {
   confirmerConfirmPeriodic,
   exceptionDisposePeriodic,
@@ -32,6 +33,7 @@ import type {
   PeriodicVerifierFillInfoRequest
 } from '../../../types/periodic'
 import type { ChangeSubmitRequest } from '../../../types/change'
+import type { FlowSummary } from '../../../types/flowSummary'
 import { isPeriodicDualHandoverTask } from '../../../api/periodicContract'
 import PeriodicConfirmDialog from './PeriodicConfirmDialog.vue'
 import PeriodicDetailDialog from './PeriodicDetailDialog.vue'
@@ -79,6 +81,8 @@ const keyword = ref('')
 const currentTasks = ref<PeriodicTaskVO[]>([])
 const historyTasks = ref<PeriodicTaskVO[]>([])
 const currentPlan = ref<PeriodicPlanVO | null>(null)
+/** 当前路由计划由后端生成的权威流程状态快照。 */
+const periodicFlowSummary = ref<FlowSummary | null>(null)
 const activeTask = ref<PeriodicTaskVO | null>(null)
 const selectedRowKeys = ref<EntityId[]>([])
 const selectedTasks = ref<PeriodicTaskVO[]>([])
@@ -153,12 +157,6 @@ function filterByRoutePlan(tasks: PeriodicTaskVO[]) {
 
 const scopedCurrentTasks = computed(() => filterByRoutePlan(currentTasks.value))
 const scopedHistoryTasks = computed(() => filterByRoutePlan(historyTasks.value))
-const scopedSummaryTasks = computed(() => {
-  const tasksById = new Map<string, PeriodicTaskVO>()
-  scopedHistoryTasks.value.forEach((task) => tasksById.set(String(task.id), task))
-  scopedCurrentTasks.value.forEach((task) => tasksById.set(String(task.id), task))
-  return Array.from(tasksById.values())
-})
 const sourceTasks = computed(() => (activeTab.value === 'todo' ? scopedCurrentTasks.value : scopedHistoryTasks.value))
 const visibleTasks = computed(() =>
   sourceTasks.value.filter((task) => {
@@ -179,10 +177,6 @@ const visibleTasks = computed(() =>
         .some((value) => String(value).includes(text))
     return nodeMatched && methodMatched && statusMatched && keywordMatched
   })
-)
-
-const todoCount = computed(() =>
-  scopedCurrentTasks.value.filter((task) => props.nodeCodes.length === 0 || props.nodeCodes.includes(String(task.currentNode || ''))).length
 )
 
 const canBatchException = computed(() => props.role === 'admin' && activeTab.value === 'todo')
@@ -332,16 +326,31 @@ function openProcess(task: PeriodicTaskVO) {
   openDetail(task)
 }
 
-async function loadPlanFromTasks(tasks: PeriodicTaskVO[]) {
-  const planId = routePlanId.value || tasks.find((task) => task.planId)?.planId
+/**
+ * 读取路由指定计划的基础信息和权威状态快照。
+ *
+ * 未选择计划时不从任务列表猜测计划，避免把多个计划的明细误展示为同一计划汇总。
+ */
+async function loadPlanContext() {
+  const planId = routePlanId.value
   if (!planId) {
     currentPlan.value = null
+    periodicFlowSummary.value = null
     return
   }
-  try {
-    currentPlan.value = await getPeriodicPlan(planId)
-  } catch {
-    currentPlan.value = null
+
+  const [planResult, summaryResult] = await Promise.allSettled([
+    getPeriodicPlan(planId),
+    getPeriodicPlanFlowSummary(planId)
+  ])
+  currentPlan.value = planResult.status === 'fulfilled' ? planResult.value : null
+  periodicFlowSummary.value = summaryResult.status === 'fulfilled' ? summaryResult.value : null
+
+  if (planResult.status === 'rejected') {
+    message.error(planResult.reason instanceof Error ? planResult.reason.message : '周检计划信息加载失败')
+  }
+  if (summaryResult.status === 'rejected') {
+    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '周检状态汇总加载失败')
   }
 }
 
@@ -375,20 +384,27 @@ async function loadData() {
   loading.value = true
   selectedRowKeys.value = []
   selectedTasks.value = []
-  try {
-    const [todo, history] = await Promise.all([listPeriodicMyTasks(), listPeriodicMyHistory()])
-    currentTasks.value = todo
-    historyTasks.value = history
-    await loadPlanFromTasks([...todo, ...history])
-    await loadConfirmers(filterByRoutePlan([...todo, ...history]))
-  } catch (error) {
-    currentTasks.value = []
-    historyTasks.value = []
-    currentPlan.value = null
-    message.error(error instanceof Error ? error.message : '周检待办加载失败')
-  } finally {
-    loading.value = false
+  /** 当前待办与参与记录的独立请求结果，不因单路失败互相清空。 */
+  const taskResultsPromise = Promise.allSettled([listPeriodicMyTasks(), listPeriodicMyHistory()])
+  /** 路由计划基础信息和权威汇总与任务列表并行读取。 */
+  const planContextPromise = loadPlanContext()
+  const [todoResult, historyResult] = await taskResultsPromise
+
+  currentTasks.value = todoResult.status === 'fulfilled' ? todoResult.value : []
+  historyTasks.value = historyResult.status === 'fulfilled' ? historyResult.value : []
+
+  if (todoResult.status === 'rejected') {
+    message.error(todoResult.reason instanceof Error ? todoResult.reason.message : '周检待办加载失败')
   }
+  if (historyResult.status === 'rejected') {
+    message.error(historyResult.reason instanceof Error ? historyResult.reason.message : '周检参与记录加载失败')
+  }
+
+  await Promise.all([
+    planContextPromise,
+    loadConfirmers(filterByRoutePlan([...currentTasks.value, ...historyTasks.value]))
+  ])
+  loading.value = false
 }
 
 async function submitForwardSelection() {
@@ -555,20 +571,17 @@ onMounted(loadData)
 watch(routePlanId, () => {
   selectedRowKeys.value = []
   selectedTasks.value = []
-  loadPlanFromTasks([...scopedCurrentTasks.value, ...scopedHistoryTasks.value])
+  void loadPlanContext()
 })
 </script>
 
 <template>
   <section class="periodic-workspace">
-    <PeriodicPlanSummary :plan="currentPlan" :tasks="scopedSummaryTasks" />
+    <PeriodicPlanSummary :plan="currentPlan" :summary="periodicFlowSummary" :loading="loading" />
 
     <a-card class="panel" :bordered="false">
       <template #title>
-        <div class="panel-title">
-          <h2>{{ title }}</h2>
-          <a-tag class="periodic-tag orange">{{ todoCount }} 项待办</a-tag>
-        </div>
+        <h2>{{ title }}</h2>
       </template>
 
       <div class="task-filter">
@@ -712,14 +725,7 @@ watch(routePlanId, () => {
   padding: 0;
 }
 
-.panel-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.panel-title h2 {
+.panel h2 {
   margin: 0;
   color: #172033;
   font-size: 16px;

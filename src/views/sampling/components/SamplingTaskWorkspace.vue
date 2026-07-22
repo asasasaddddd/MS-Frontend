@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { getSamplingPlanFlowSummary } from '@/api/flowSummary'
 import {
   adminConfirmSampling,
   confirmerSubmitSampling,
@@ -12,6 +13,7 @@ import {
 } from '@/api/sampling'
 import { listUsersByDeptAndRole, type SysUserVO } from '@/api/system'
 import { useSessionStore } from '@/stores/session'
+import type { FlowSummary } from '@/types/flowSummary'
 import type {
   SamplingAdminResult,
   SamplingEntityId,
@@ -46,6 +48,8 @@ const keyword = ref('')
 const currentTasks = ref<SamplingTaskVO[]>([])
 const historyTasks = ref<SamplingTaskVO[]>([])
 const currentPlan = ref<SamplingPlanVO | null>(null)
+/** 后端按当前计划生成的权威流程状态快照。 */
+const samplingFlowSummary = ref<FlowSummary | null>(null)
 const activeTask = ref<SamplingTaskVO | null>(null)
 const selectedRowKeys = ref<SamplingEntityId[]>([])
 const selectedTasks = ref<SamplingTaskVO[]>([])
@@ -97,7 +101,6 @@ function filterByRoutePlan(tasks: SamplingTaskVO[]) {
 
 const scopedCurrentTasks = computed(() => filterByRoutePlan(currentTasks.value))
 const scopedHistoryTasks = computed(() => filterByRoutePlan(historyTasks.value))
-const scopedSummaryTasks = computed(() => (scopedCurrentTasks.value.length > 0 ? scopedCurrentTasks.value : scopedHistoryTasks.value))
 const sourceTasks = computed(() => (activeTab.value === 'todo' ? scopedCurrentTasks.value : scopedHistoryTasks.value))
 
 const visibleTasks = computed(() =>
@@ -115,10 +118,6 @@ const visibleTasks = computed(() =>
         .some((value) => String(value).includes(text))
     return nodeMatched && statusMatched && keywordMatched
   })
-)
-
-const todoCount = computed(() =>
-  scopedCurrentTasks.value.filter((task) => props.nodeCodes.length === 0 || props.nodeCodes.includes(String(task.currentNode || ''))).length
 )
 
 const canSelect = computed(() => activeTab.value === 'todo')
@@ -220,16 +219,27 @@ async function submitResult(payload: SamplingVerificationSubmitRequest) {
   }
 }
 
-async function loadPlanFromTasks(tasks: SamplingTaskVO[]) {
-  const planId = routePlanId.value || tasks.find((task) => task.planId)?.planId
+/** 并行加载当前路由计划及其后端汇总，两个结果互不覆盖。 */
+async function loadPlanContext() {
+  const planId = routePlanId.value
   if (!planId) {
     currentPlan.value = null
+    samplingFlowSummary.value = null
     return
   }
-  try {
-    currentPlan.value = await getSamplingPlan(planId)
-  } catch {
-    currentPlan.value = null
+
+  const [planResult, summaryResult] = await Promise.allSettled([
+    getSamplingPlan(planId),
+    getSamplingPlanFlowSummary(planId)
+  ])
+  currentPlan.value = planResult.status === 'fulfilled' ? planResult.value : null
+  samplingFlowSummary.value = summaryResult.status === 'fulfilled' ? summaryResult.value : null
+
+  if (planResult.status === 'rejected') {
+    message.error(planResult.reason instanceof Error ? planResult.reason.message : '抽检计划信息加载失败')
+  }
+  if (summaryResult.status === 'rejected') {
+    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '抽检流程汇总加载失败')
   }
 }
 
@@ -251,16 +261,23 @@ async function loadData() {
   selectedRowKeys.value = []
   selectedTasks.value = []
   try {
-    const [todo, history] = await Promise.all([listSamplingMyTasks(), listSamplingMyHistory()])
-    currentTasks.value = todo
-    historyTasks.value = history
-    await loadPlanFromTasks([...todo, ...history])
-    await loadConfirmers([...todo, ...history])
-  } catch (error) {
-    currentTasks.value = []
-    historyTasks.value = []
-    currentPlan.value = null
-    message.error(error instanceof Error ? error.message : '抽检待办加载失败')
+    /** 当前待办与参与记录的独立请求结果，不因单路失败互相清空。 */
+    const taskResultsPromise = Promise.allSettled([listSamplingMyTasks(), listSamplingMyHistory()])
+    /** 路由计划基础信息和权威汇总与任务列表并行读取。 */
+    const planContextPromise = loadPlanContext()
+    const [todoResult, historyResult] = await taskResultsPromise
+
+    currentTasks.value = todoResult.status === 'fulfilled' ? todoResult.value : []
+    historyTasks.value = historyResult.status === 'fulfilled' ? historyResult.value : []
+
+    if (todoResult.status === 'rejected') {
+      message.error(todoResult.reason instanceof Error ? todoResult.reason.message : '抽检待办加载失败')
+    }
+    if (historyResult.status === 'rejected') {
+      message.error(historyResult.reason instanceof Error ? historyResult.reason.message : '抽检参与记录加载失败')
+    }
+
+    await Promise.all([planContextPromise, loadConfirmers([...currentTasks.value, ...historyTasks.value])])
   } finally {
     loading.value = false
   }
@@ -275,20 +292,17 @@ onMounted(loadData)
 watch(routePlanId, () => {
   selectedRowKeys.value = []
   selectedTasks.value = []
-  loadPlanFromTasks([...scopedCurrentTasks.value, ...scopedHistoryTasks.value])
+  void loadPlanContext()
 })
 </script>
 
 <template>
   <section class="sampling-workspace">
-    <SamplingPlanSummary :plan="currentPlan" :tasks="scopedSummaryTasks" />
+    <SamplingPlanSummary :plan="currentPlan" :summary="samplingFlowSummary" :loading="loading" />
 
     <a-card class="panel" :bordered="false">
       <template #title>
-        <div class="panel-title">
-          <h2>{{ title }}</h2>
-          <a-tag class="tag orange">{{ todoCount }} 项待办</a-tag>
-        </div>
+        <h2>{{ title }}</h2>
       </template>
 
       <div class="task-filter">
@@ -371,15 +385,7 @@ watch(routePlanId, () => {
   padding: 0;
 }
 
-.panel-title {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.panel-title h2 {
+.panel h2 {
   margin: 0;
   color: #172033;
   font-size: 16px;

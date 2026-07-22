@@ -1,4 +1,4 @@
-import type { SamplingDisplayRow, SamplingEntityId, SamplingPlanVO, SamplingTaskVO } from '@/types/sampling'
+import type { SamplingDisplayRow, SamplingEntityId, SamplingTaskVO } from '@/types/sampling'
 
 export type SamplingTableRole = 'admin' | 'verifier' | 'confirmer'
 export type SamplingTagColor = 'blue' | 'cyan' | 'orange' | 'green' | 'red'
@@ -9,21 +9,6 @@ export interface SamplingTableColumn {
   dataIndex?: keyof SamplingDisplayRow
   width?: number
   fixed?: 'left' | 'right'
-}
-
-export interface SamplingPlanMetric {
-  key: string
-  label: string
-  value: number
-  color: SamplingTagColor
-}
-
-export interface SamplingPlanSummary {
-  planNo: string
-  deviceCount: number
-  completedCount: number
-  statusChangeCount: number
-  metrics: SamplingPlanMetric[]
 }
 
 export type SamplingDisplayRowWithMeta = SamplingDisplayRow & {
@@ -124,32 +109,6 @@ export function mapSamplingTaskRow(task: SamplingTaskVO): SamplingDisplayRowWith
     validUntil: formatDate(task.validUntil),
     remark: display(task.remark),
     tagColor: samplingTagColor(task.currentNode || task.taskStatus)
-  }
-}
-
-function countTasks(tasks: SamplingTaskVO[], matcher: (task: SamplingTaskVO) => boolean) {
-  return tasks.filter(matcher).length
-}
-
-function nodeIn(task: SamplingTaskVO, nodes: string[]) {
-  return nodes.includes(String(task.currentNode || ''))
-}
-
-export function buildSamplingPlanSummary(plan: SamplingPlanVO | null | undefined, tasks: SamplingTaskVO[]): SamplingPlanSummary {
-  const statusChangeCount = countTasks(tasks, (task) => task.taskStatus === 'rejected')
-  return {
-    planNo: display(plan?.planNo || tasks.find((task) => task.planNo)?.planNo),
-    deviceCount: plan?.deviceCount ?? tasks.length,
-    completedCount: plan?.completedCount ?? countTasks(tasks, (task) => task.taskStatus === 'completed'),
-    statusChangeCount,
-    metrics: [
-      { key: 'admin', label: '待管理员清点', value: countTasks(tasks, (task) => nodeIn(task, ['admin_confirm'])), color: 'orange' },
-      { key: 'verifier', label: '待检定', value: countTasks(tasks, (task) => nodeIn(task, ['verifier_verify'])), color: 'blue' },
-      { key: 'confirmer', label: '待确认', value: countTasks(tasks, (task) => nodeIn(task, ['confirmer_confirm'])), color: 'orange' },
-      { key: 'labelPending', label: '待打印标签', value: countTasks(tasks, (task) => task.labelStatus === 'pending'), color: 'cyan' },
-      { key: 'done', label: '已完成', value: countTasks(tasks, (task) => task.taskStatus === 'completed'), color: 'green' },
-      { key: 'exception', label: '状态变更', value: statusChangeCount, color: 'red' }
-    ]
   }
 }
 

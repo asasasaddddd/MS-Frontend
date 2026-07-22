@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict'
 
 import {
-  buildProductSupportSummary,
   mapProductSupportOrderRow,
   productSupportNodeName,
   productSupportStatusName,
@@ -45,11 +44,3 @@ assert.equal(row.ratioCount, 2)
 assert.equal(row.itemCount, 3)
 
 assert.equal(sumRatioAmount(order.ratios), 4080)
-assert.deepEqual(buildProductSupportSummary([order]), {
-  total: 1,
-  pending: 1,
-  completed: 0,
-  itemCount: 3,
-  ratioCount: 2,
-  amount: 4080
-})

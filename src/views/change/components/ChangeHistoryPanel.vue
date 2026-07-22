@@ -2,9 +2,12 @@
 import { onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { getChangeOrderDetail } from '@/api/change'
+import { getChangeFlowSummary } from '@/api/flowSummary'
 import { getWorkflowProcessByBusiness, listWorkflowHistory } from '@/api/workflow'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
+import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import type { ChangeOrderVO } from '@/types/change'
+import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowProcess, WorkflowTask } from '@/types/workflow'
 import { changeTypeName, display, formatDateTime } from '@/views/change/changeDisplayModel'
 import { changeNodeCodesByRole, matchesBusinessType } from '@/workflows/metrologyWorkflow'
@@ -23,6 +26,8 @@ const props = defineProps<{
 
 const loading = ref(false)
 const rows = ref<HistoryRow[]>([])
+/** 当前角色历史已办范围内由后端生成的权威流程汇总。 */
+const changeFlowSummary = ref<FlowSummary | null>(null)
 const detailOpen = ref(false)
 const activeRow = ref<HistoryRow>()
 
@@ -55,8 +60,20 @@ function openDetail(row: HistoryRow) {
 
 async function loadRows() {
   loading.value = true
-  try {
-    const tasks = (await listWorkflowHistory())
+  const [taskResult, summaryResult] = await Promise.allSettled([
+    listWorkflowHistory(),
+    getChangeFlowSummary('history')
+  ])
+
+  if (summaryResult.status === 'fulfilled') {
+    changeFlowSummary.value = summaryResult.value
+  } else {
+    changeFlowSummary.value = null
+    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '状态变更历史流程汇总加载失败')
+  }
+
+  if (taskResult.status === 'fulfilled') {
+    const tasks = taskResult.value
       .filter((task) => matchesBusinessType(task.businessType, 'change'))
       .filter((task) => changeNodeCodesByRole[props.roleCode as keyof typeof changeNodeCodesByRole]?.includes(task.nodeCode))
       .filter((task) => !props.orderId || String(task.businessId) === props.orderId)
@@ -83,55 +100,63 @@ async function loadRows() {
         order: item.value.order,
         process: item.value.process
       }))
-  } catch (error) {
+  } else {
     rows.value = []
-    message.error(error instanceof Error ? error.message : '状态变更已办加载失败')
-  } finally {
-    loading.value = false
+    message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '状态变更已办加载失败')
   }
+  loading.value = false
 }
 
 onMounted(loadRows)
 </script>
 
 <template>
-  <a-card class="history-panel" :bordered="false">
-    <template #title><h2>状态变更已办记录</h2></template>
-    <a-table :columns="columns" :data-source="rows" :loading="loading" :pagination="{ pageSize: 10, showSizeChanger: false }" :scroll="{ x: 1250 }" row-key="key" size="middle">
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'orderNo'">{{ display(record.order.orderNo) }}</template>
-        <template v-else-if="column.key === 'changeType'"><a-tag color="blue">{{ changeTypeName(record.order.changeType) }}</a-tag></template>
-        <template v-else-if="column.key === 'itemCount'">{{ display(record.order.itemCount || record.order.items?.length) }}</template>
-        <template v-else-if="column.key === 'deptName'">{{ display(record.order.applyDeptName) }}</template>
-        <template v-else-if="column.key === 'nodeName'">{{ display(record.task.nodeName) }}</template>
-        <template v-else-if="column.key === 'action'"><a-tag color="green">{{ actionName(record.task.action) }}</a-tag></template>
-        <template v-else-if="column.key === 'completedAt'">{{ formatDateTime(record.task.completedAt) }}</template>
-        <template v-else-if="column.key === 'currentNodeName'"><a-tag color="blue">{{ display(record.process?.currentNodeName || record.order.workflowStatus || record.order.statusName) }}</a-tag></template>
-        <template v-else-if="column.key === 'operation'"><a-button type="link" @click="openDetail(record)">查看</a-button></template>
-      </template>
-    </a-table>
-  </a-card>
+  <section class="history-workspace">
+    <FlowStatusSummary
+      :summary="changeFlowSummary"
+      :loading="loading"
+      title="状态变更流程汇总（历史已办）"
+    />
 
-  <a-modal v-model:open="detailOpen" title="状态变更已办详情" width="960px" :footer="null">
-    <div v-if="activeRow" class="history-detail-grid">
-      <div><span>变更单号</span><strong>{{ display(activeRow.order.orderNo) }}</strong></div>
-      <div><span>当前流转节点</span><strong>{{ display(activeRow.process?.currentNodeName || activeRow.order.workflowStatus || activeRow.order.statusName) }}</strong></div>
-      <div><span>本人已办节点</span><strong>{{ display(activeRow.task.nodeName) }}</strong></div>
-      <div><span>本人处理结果</span><strong>{{ actionName(activeRow.task.action) }}</strong></div>
-      <div class="full"><span>本人处理意见</span><strong>{{ display(activeRow.task.opinion) }}</strong></div>
-      <div><span>变更类型</span><strong>{{ changeTypeName(activeRow.order.changeType) }}</strong></div>
-      <div><span>申请部门</span><strong>{{ display(activeRow.order.applyDeptName) }}</strong></div>
-      <div><span>申请原因</span><strong>{{ display(activeRow.order.reason) }}</strong></div>
-      <div><span>涉及设备</span><strong>{{ display(activeRow.order.itemCount || activeRow.order.items?.length) }}</strong></div>
-      <div>
-        <span>申请附件</span>
-        <AttachmentListButton :group-id="activeRow.order.attachmentGroupId" title="状态变更申请附件" size="small" />
+    <a-card class="history-panel" :bordered="false">
+      <template #title><h2>状态变更已办记录</h2></template>
+      <a-table :columns="columns" :data-source="rows" :loading="loading" :pagination="{ pageSize: 10, showSizeChanger: false }" :scroll="{ x: 1250 }" row-key="key" size="middle">
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'orderNo'">{{ display(record.order.orderNo) }}</template>
+          <template v-else-if="column.key === 'changeType'"><a-tag color="blue">{{ changeTypeName(record.order.changeType) }}</a-tag></template>
+          <template v-else-if="column.key === 'itemCount'">{{ display(record.order.itemCount || record.order.items?.length) }}</template>
+          <template v-else-if="column.key === 'deptName'">{{ display(record.order.applyDeptName) }}</template>
+          <template v-else-if="column.key === 'nodeName'">{{ display(record.task.nodeName) }}</template>
+          <template v-else-if="column.key === 'action'"><a-tag color="green">{{ actionName(record.task.action) }}</a-tag></template>
+          <template v-else-if="column.key === 'completedAt'">{{ formatDateTime(record.task.completedAt) }}</template>
+          <template v-else-if="column.key === 'currentNodeName'"><a-tag color="blue">{{ display(record.process?.currentNodeName || record.order.workflowStatus || record.order.statusName) }}</a-tag></template>
+          <template v-else-if="column.key === 'operation'"><a-button type="link" @click="openDetail(record)">查看</a-button></template>
+        </template>
+      </a-table>
+    </a-card>
+
+    <a-modal v-model:open="detailOpen" title="状态变更已办详情" width="960px" :footer="null">
+      <div v-if="activeRow" class="history-detail-grid">
+        <div><span>变更单号</span><strong>{{ display(activeRow.order.orderNo) }}</strong></div>
+        <div><span>当前流转节点</span><strong>{{ display(activeRow.process?.currentNodeName || activeRow.order.workflowStatus || activeRow.order.statusName) }}</strong></div>
+        <div><span>本人已办节点</span><strong>{{ display(activeRow.task.nodeName) }}</strong></div>
+        <div><span>本人处理结果</span><strong>{{ actionName(activeRow.task.action) }}</strong></div>
+        <div class="full"><span>本人处理意见</span><strong>{{ display(activeRow.task.opinion) }}</strong></div>
+        <div><span>变更类型</span><strong>{{ changeTypeName(activeRow.order.changeType) }}</strong></div>
+        <div><span>申请部门</span><strong>{{ display(activeRow.order.applyDeptName) }}</strong></div>
+        <div><span>申请原因</span><strong>{{ display(activeRow.order.reason) }}</strong></div>
+        <div><span>涉及设备</span><strong>{{ display(activeRow.order.itemCount || activeRow.order.items?.length) }}</strong></div>
+        <div>
+          <span>申请附件</span>
+          <AttachmentListButton :group-id="activeRow.order.attachmentGroupId" title="状态变更申请附件" size="small" />
+        </div>
       </div>
-    </div>
-  </a-modal>
+    </a-modal>
+  </section>
 </template>
 
 <style scoped>
+.history-workspace { display: grid; gap: 16px; }
 .history-panel { overflow: hidden; border: 1px solid #e5eaf1; border-radius: 8px; }
 .history-panel :deep(.ant-card-body) { padding: 0; }
 .history-panel h2 { margin: 0; font-size: 16px; }

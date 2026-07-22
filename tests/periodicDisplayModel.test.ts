@@ -2,14 +2,13 @@ import assert from 'node:assert/strict'
 
 import {
   buildPeriodicPlanTodoGroups,
-  buildPeriodicPlanSummary,
   displayValue,
   getPeriodicTableColumns,
   mapPeriodicTaskRow,
   periodicTagColor
 } from '../src/views/periodic/periodicDisplayModel.ts'
 import { periodicNodeName, periodicStatusName } from '../src/api/periodicContract.ts'
-import type { PeriodicPlanVO, PeriodicTaskVO } from '../src/types/periodic.ts'
+import type { PeriodicTaskVO } from '../src/types/periodic.ts'
 
 assert.equal(displayValue(undefined), '-')
 assert.equal(displayValue(null), '-')
@@ -61,31 +60,6 @@ assert.equal(
   mapPeriodicTaskRow({ ...dualEntryTask, physicalStatus: 'verifier_received' }, 'admin').currentNodeName,
   '待实物交接'
 )
-
-const plan: PeriodicPlanVO = {
-  id: '2073579908903317500',
-  planNo: '202607',
-  deviceCount: 4,
-  completedCount: 1
-}
-
-const summary = buildPeriodicPlanSummary(plan, [
-  task,
-  { ...task, id: '2', currentNode: 'responsible_second_judge', taskStatus: 'wait_confirm' },
-  { ...task, id: '3', currentNode: 'external_third_judge', taskStatus: 'wait_confirm' },
-  { ...task, id: '4', currentNode: 'completed', taskStatus: 'completed', labelStatus: 'printed', physicalStatus: 'taken_back' },
-  { ...task, id: '5', currentNode: 'exception_disposal', taskStatus: 'exception', exceptionFlowName: '封存' },
-  { ...task, id: '6', currentNode: 'completed', taskStatus: 'completed', labelStatus: 'pending' }
-])
-
-assert.equal(summary.planNo, '202607')
-assert.equal(summary.deviceCount, 6)
-assert.equal(summary.statusChangeCount, 1)
-assert.equal(summary.statusChangeBreakdown, '封存 1')
-assert.equal(summary.metrics.find((item) => item.key === 'externalReturned')?.value, 2)
-assert.equal(summary.metrics.find((item) => item.key === 'labelPending')?.value, 1)
-assert.equal(summary.metrics.find((item) => item.key === 'labelPrinted')?.value, 1)
-assert.equal(summary.metrics.find((item) => item.key === 'takenBack')?.value, 1)
 
 const todoGroups = buildPeriodicPlanTodoGroups([
   dualEntryTask,

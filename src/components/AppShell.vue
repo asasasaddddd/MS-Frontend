@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons-vue'
@@ -20,6 +20,12 @@ const currentRoleNavCodes = computed(() => roleCode.value ? [roleCode.value] : [
 const sections = useNavSections(currentRoleNavCodes, roleCode)
 const selectedKeys = computed(() => [route.path])
 const openKeys = ref<string[]>([])
+/** 当前视口是否必须使用窄屏折叠侧栏，避免固定侧栏覆盖业务内容。 */
+const narrowViewport = ref(false)
+/** 桌面沿用用户偏好，窄屏始终使用 72px 折叠侧栏。 */
+const effectiveSidebarCollapsed = computed(() => narrowViewport.value || app.sidebarCollapsed)
+/** 浏览器媒体查询实例，仅在组件挂载期间存在。 */
+let narrowViewportQuery: MediaQueryList | null = null
 
 watch(
   sections,
@@ -44,6 +50,15 @@ const roleOptions = computed(() =>
   }))
 )
 const operatorSelectorLabel = computed(() => session.user?.employeeName || session.user?.employeeId || '-')
+
+/**
+ * 将媒体查询结果同步为响应式侧栏状态。
+ *
+ * @param event 浏览器媒体查询变化事件或首次读取的查询实例。
+ */
+function syncNarrowViewport(event: MediaQueryListEvent | MediaQueryList) {
+  narrowViewport.value = event.matches
+}
 
 function handleRoleChange(nextRole: string) {
   const nextItem = findNavItemForRoleDisplay(route.path, nextRole)
@@ -77,6 +92,17 @@ async function handleLogout() {
     router.replace('/login')
   }
 }
+
+onMounted(() => {
+  narrowViewportQuery = window.matchMedia('(max-width: 900px)')
+  syncNarrowViewport(narrowViewportQuery)
+  narrowViewportQuery.addEventListener('change', syncNarrowViewport)
+})
+
+onBeforeUnmount(() => {
+  narrowViewportQuery?.removeEventListener('change', syncNarrowViewport)
+  narrowViewportQuery = null
+})
 </script>
 
 <template>
@@ -85,12 +111,12 @@ async function handleLogout() {
       class="app-sider"
       :width="232"
       :collapsed-width="72"
-      :collapsed="app.sidebarCollapsed"
+      :collapsed="effectiveSidebarCollapsed"
       :trigger="null"
     >
-      <div class="sider-brand" :class="{ collapsed: app.sidebarCollapsed }">
+      <div class="sider-brand" :class="{ collapsed: effectiveSidebarCollapsed }">
         <div class="brand-mark">M</div>
-        <div v-if="!app.sidebarCollapsed" class="brand-copy">
+        <div v-if="!effectiveSidebarCollapsed" class="brand-copy">
           <strong>计量设备</strong>
           <span>管理系统</span>
         </div>
@@ -116,7 +142,7 @@ async function handleLogout() {
       </a-menu>
     </a-layout-sider>
 
-    <a-layout class="app-main" :class="{ collapsed: app.sidebarCollapsed }">
+    <a-layout class="app-main" :class="{ collapsed: effectiveSidebarCollapsed }">
       <a-layout-header class="app-header">
         <div class="header-left">
           <a-button class="collapse-button" type="text" @click="app.toggleSidebar()">
@@ -214,6 +240,7 @@ async function handleLogout() {
 }
 
 .app-main {
+  min-width: 0;
   min-height: 100vh;
   margin-left: 232px;
   transition: margin-left 0.2s ease;
@@ -325,6 +352,37 @@ async function handleLogout() {
 
   .role-select {
     width: 180px;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-header {
+    height: auto;
+    min-height: 72px;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px 10px;
+  }
+
+  .header-left,
+  .header-right {
+    width: 100%;
+  }
+
+  .header-right {
+    justify-content: flex-end;
+  }
+
+  .role-select {
+    width: auto;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .app-content {
+    min-height: calc(100vh - 112px);
+    padding: 12px 10px 20px;
   }
 }
 </style>

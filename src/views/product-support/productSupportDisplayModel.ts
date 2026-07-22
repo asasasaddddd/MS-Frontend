@@ -1,8 +1,7 @@
 import type {
   ProductSupportDisplayRow,
   ProductSupportOrderVO,
-  ProductSupportRatioVO,
-  ProductSupportSummary
+  ProductSupportRatioVO
 } from '@/types/productSupport'
 
 export type ProductSupportTagColor = 'blue' | 'orange' | 'green' | 'red'
@@ -83,21 +82,6 @@ export function mapProductSupportOrderRow(order: ProductSupportOrderVO): Product
     verifierName: display(order.verifierName),
     amount: sumRatioAmount(order.ratios)
   }
-}
-
-export function buildProductSupportSummary(orders: ProductSupportOrderVO[]): ProductSupportSummary {
-  return orders.reduce<ProductSupportSummary>(
-    (summary, order) => {
-      summary.total += 1
-      summary.pending += order.orderStatus === 'completed' ? 0 : 1
-      summary.completed += order.orderStatus === 'completed' ? 1 : 0
-      summary.itemCount += order.itemCount ?? order.items?.length ?? 0
-      summary.ratioCount += order.ratioCount ?? order.ratios?.length ?? 0
-      summary.amount += sumRatioAmount(order.ratios)
-      return summary
-    },
-    { total: 0, pending: 0, completed: 0, itemCount: 0, ratioCount: 0, amount: 0 }
-  )
 }
 
 export function defaultRatioRows() {

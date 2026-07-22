@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute } from 'vue-router'
 import { approveChange, getChangeOrderDetail, rejectChange } from '@/api/change'
+import { getChangeFlowSummary } from '@/api/flowSummary'
 import { listWorkflowTasks } from '@/api/workflow'
+import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import type { ChangeOrderVO } from '@/types/change'
+import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
 import {
   changeNodeName,
@@ -23,6 +26,8 @@ const route = useRoute()
 const loading = ref(false)
 const submitting = ref(false)
 const rows = ref<ChangeTaskRow[]>([])
+/** 当前管理员待办范围内由后端生成的权威流程汇总。 */
+const changeFlowSummary = ref<FlowSummary | null>(null)
 const activeOrders = ref<ChangeOrderVO[]>([])
 const dialogOpen = ref(false)
 
@@ -35,8 +40,6 @@ const columns = [
   { title: '当前状态', key: 'status', width: 120 },
   { title: '操作', key: 'action', fixed: 'right', width: 90 }
 ]
-
-const pendingCount = computed(() => rows.value.length)
 
 function toRow(task: WorkflowTask, order: ChangeOrderVO): ChangeTaskRow {
   return {
@@ -59,9 +62,21 @@ function openOrder(row: ChangeTaskRow) {
 
 async function loadRows() {
   loading.value = true
-  try {
-    const nodeSet = new Set<string>(changeNodeCodesByRole.MEASURE_ADMIN || [])
-    const tasks = (await listWorkflowTasks()).filter(
+  const nodeSet = new Set<string>(changeNodeCodesByRole.MEASURE_ADMIN || [])
+  const [taskResult, summaryResult] = await Promise.allSettled([
+    listWorkflowTasks(),
+    getChangeFlowSummary('pending')
+  ])
+
+  if (summaryResult.status === 'fulfilled') {
+    changeFlowSummary.value = summaryResult.value
+  } else {
+    changeFlowSummary.value = null
+    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '状态变更待办流程汇总加载失败')
+  }
+
+  if (taskResult.status === 'fulfilled') {
+    const tasks = taskResult.value.filter(
       (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change') && nodeSet.has(task.nodeCode)
     )
     const details = await Promise.allSettled(
@@ -77,12 +92,11 @@ async function loadRows() {
     const targetOrderId = route.query.orderId ? String(route.query.orderId) : ''
     const targetRow = targetOrderId ? rows.value.find((row) => String(row.order.id) === targetOrderId) : undefined
     if (targetRow) openOrder(targetRow)
-  } catch (error) {
+  } else {
     rows.value = []
-    message.error(error instanceof Error ? error.message : '接收管理员待办加载失败')
-  } finally {
-    loading.value = false
+    message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '接收管理员待办加载失败')
   }
+  loading.value = false
 }
 
 async function handleApprove(opinion: string) {
@@ -123,40 +137,47 @@ onMounted(loadRows)
 </script>
 
 <template>
-  <section class="receive-panel">
-    <div class="panel-header">
-      <h2>接收部门管理员待办</h2>
-      <a-tag color="orange">{{ pendingCount }} 单待确认</a-tag>
-    </div>
-
-    <a-table
-      :columns="columns"
-      :data-source="rows"
+  <section class="receive-workspace">
+    <FlowStatusSummary
+      :summary="changeFlowSummary"
       :loading="loading"
-      :pagination="{ pageSize: 8, showSizeChanger: false }"
-      :row-key="rowKey"
-      :scroll="{ x: 1050 }"
-      size="middle"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'orderNo'">{{ display(record.order.orderNo) }}</template>
-        <template v-else-if="column.key === 'applyTime'">{{ formatDateTime(record.order.applyTime) }}</template>
-        <template v-else-if="column.key === 'itemCount'">{{ display(record.order.itemCount || record.order.items?.length) }}</template>
-        <template v-else-if="column.key === 'changeType'">
-          <a-tag :class="['tag', changeTagColor(record.order.changeType)]">{{ changeTypeName(record.order.changeType) }}</a-tag>
+      title="状态变更流程汇总（当前待办）"
+    />
+
+    <section class="receive-panel">
+      <div class="panel-header">
+        <h2>接收部门管理员待办</h2>
+      </div>
+
+      <a-table
+        :columns="columns"
+        :data-source="rows"
+        :loading="loading"
+        :pagination="{ pageSize: 8, showSizeChanger: false }"
+        :row-key="rowKey"
+        :scroll="{ x: 1050 }"
+        size="middle"
+      >
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'orderNo'">{{ display(record.order.orderNo) }}</template>
+          <template v-else-if="column.key === 'applyTime'">{{ formatDateTime(record.order.applyTime) }}</template>
+          <template v-else-if="column.key === 'itemCount'">{{ display(record.order.itemCount || record.order.items?.length) }}</template>
+          <template v-else-if="column.key === 'changeType'">
+            <a-tag :class="['tag', changeTagColor(record.order.changeType)]">{{ changeTypeName(record.order.changeType) }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'nodeName'">{{ record.nodeName || changeNodeName(record.nodeCode) }}</template>
+          <template v-else-if="column.key === 'status'">
+            <a-tag :class="['tag', statusTagColor(record.order.status)]">{{ changeStatusName(record.order.status) }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <a-button type="link" class="button-link" @click="openOrder(record)">处理</a-button>
+          </template>
         </template>
-        <template v-else-if="column.key === 'nodeName'">{{ record.nodeName || changeNodeName(record.nodeCode) }}</template>
-        <template v-else-if="column.key === 'status'">
-          <a-tag :class="['tag', statusTagColor(record.order.status)]">{{ changeStatusName(record.order.status) }}</a-tag>
+        <template #emptyText>
+          <a-empty description="暂无接收部门管理员待办" />
         </template>
-        <template v-else-if="column.key === 'action'">
-          <a-button type="link" class="button-link" @click="openOrder(record)">处理</a-button>
-        </template>
-      </template>
-      <template #emptyText>
-        <a-empty description="暂无接收部门管理员待办" />
-      </template>
-    </a-table>
+      </a-table>
+    </section>
 
     <ChangeApprovalDialog
       v-model:open="dialogOpen"
@@ -169,6 +190,11 @@ onMounted(loadRows)
 </template>
 
 <style scoped>
+.receive-workspace {
+  display: grid;
+  gap: 16px;
+}
+
 .receive-panel {
   overflow: hidden;
   border: 1px solid #e5eaf1;

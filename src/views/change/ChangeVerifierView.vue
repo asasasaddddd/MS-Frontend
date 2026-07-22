@@ -3,10 +3,13 @@ import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute } from 'vue-router'
 import { getChangeOrderDetail, verifierHandleChange } from '@/api/change'
+import { getChangeFlowSummary } from '@/api/flowSummary'
 import { listWorkflowTasks } from '@/api/workflow'
+import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import { useSessionStore } from '@/stores/session'
 import type { RoleCode } from '@/types/common'
 import type { ChangeOrderVO, ChangeVerifierHandleRequest } from '@/types/change'
+import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
 import {
   changeTagColor,
@@ -26,6 +29,8 @@ const route = useRoute()
 const session = useSessionStore()
 const loading = ref(false)
 const rows = ref<ChangeTaskRow[]>([])
+/** 当前检定员待办范围内由后端生成的权威流程汇总。 */
+const changeFlowSummary = ref<FlowSummary | null>(null)
 const keyword = ref('')
 const sourceFilter = ref('all')
 const detailOpen = ref(false)
@@ -75,15 +80,6 @@ const filteredRows = computed(() => {
   })
 })
 
-const metrics = computed(() => {
-  const today = new Date().toISOString().slice(0, 10)
-  return {
-    todoCount: rows.value.length,
-    todayCount: rows.value.filter((row) => String(row.order.applyTime || '').slice(0, 10) === today).length,
-    handleCount: rows.value.filter((row) => row.nodeCode === 'verifier_handle').length
-  }
-})
-
 function resetFilter() {
   sourceFilter.value = 'all'
   keyword.value = ''
@@ -101,10 +97,22 @@ function toRow(task: WorkflowTask, order: ChangeOrderVO): ChangeTaskRow {
 
 async function loadRows() {
   loading.value = true
-  try {
-    const currentRole = session.user?.roleCode as RoleCode | undefined
-    const nodeSet = new Set<string>(currentRole ? changeNodeCodesByRole[currentRole] || [] : [])
-    const tasks = (await listWorkflowTasks()).filter(
+  const currentRole = session.user?.roleCode as RoleCode | undefined
+  const nodeSet = new Set<string>(currentRole ? changeNodeCodesByRole[currentRole] || [] : [])
+  const [taskResult, summaryResult] = await Promise.allSettled([
+    listWorkflowTasks(),
+    getChangeFlowSummary('pending')
+  ])
+
+  if (summaryResult.status === 'fulfilled') {
+    changeFlowSummary.value = summaryResult.value
+  } else {
+    changeFlowSummary.value = null
+    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '状态变更待办流程汇总加载失败')
+  }
+
+  if (taskResult.status === 'fulfilled') {
+    const tasks = taskResult.value.filter(
       (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change') && nodeSet.has(task.nodeCode)
     )
     const details = await Promise.allSettled(
@@ -120,12 +128,11 @@ async function loadRows() {
     const targetOrderId = route.query.orderId ? String(route.query.orderId) : ''
     const targetRow = targetOrderId ? rows.value.find((row) => String(row.order.id) === targetOrderId) : undefined
     if (targetRow) openDetail(targetRow)
-  } catch (error) {
+  } else {
     rows.value = []
-    message.error(error instanceof Error ? error.message : '检定员状态变更待办加载失败')
-  } finally {
-    loading.value = false
+    message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '检定员状态变更待办加载失败')
   }
+  loading.value = false
 }
 
 function openDetail(row: ChangeTaskRow) {
@@ -176,29 +183,15 @@ onMounted(loadRows)
     </a-tabs>
 
     <template v-if="activeTab === 'todo'">
-    <div class="summary-line">
-      <a-card class="metric" :bordered="false">
-        <span>状态变更待办</span>
-        <strong>{{ metrics.todoCount }}项</strong>
-      </a-card>
-      <a-card class="metric" :bordered="false">
-        <span>今日新增</span>
-        <strong>{{ metrics.todayCount }}项</strong>
-      </a-card>
-      <div class="status-strip">
-        <div class="status-check">✓</div>
-        <a-tag class="tag orange">待检定员处理 {{ metrics.handleCount }}</a-tag>
-        <a-tag class="tag blue">通过后完成状态回写</a-tag>
-        <a-tag class="tag red">不通过则终止变更单</a-tag>
-      </div>
-    </div>
+    <FlowStatusSummary
+      :summary="changeFlowSummary"
+      :loading="loading"
+      title="状态变更流程汇总（当前待办）"
+    />
 
     <a-card class="panel" :bordered="false">
       <template #title>
-        <div class="panel-title">
-          <h2>状态变更待办明细</h2>
-          <a-tag class="tag orange">{{ metrics.todoCount }} 项待办</a-tag>
-        </div>
+        <h2>状态变更待办明细</h2>
       </template>
 
       <div class="task-filter">
@@ -260,64 +253,6 @@ onMounted(loadRows)
   gap: 16px;
 }
 
-.summary-line {
-  display: flex;
-  align-items: stretch;
-  gap: 14px;
-}
-
-.metric {
-  width: 140px;
-  border: 1px solid #e5eaf1;
-  border-radius: 8px;
-  background: #ffffff;
-  flex-shrink: 0;
-}
-
-.metric :deep(.ant-card-body) {
-  padding: 12px 16px;
-}
-
-.metric span {
-  color: #667085;
-  font-size: 13px;
-}
-
-.metric strong {
-  display: block;
-  margin-top: 4px;
-  color: #172033;
-  font-size: 22px;
-  line-height: 1.2;
-}
-
-.status-strip {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  flex: 1;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 1px solid #d9f3e5;
-  border-radius: 8px;
-  background: #fbfffd;
-  overflow-x: auto;
-}
-
-.status-check {
-  width: 24px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: #12b76a;
-  color: #ffffff;
-  font-size: 13px;
-  font-weight: 700;
-}
-
 .panel {
   overflow: hidden;
   border: 1px solid #e5eaf1;
@@ -333,12 +268,6 @@ onMounted(loadRows)
 
 .panel :deep(.ant-card-body) {
   padding: 0;
-}
-
-.panel-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
 }
 
 .panel h2 {
@@ -418,13 +347,11 @@ onMounted(loadRows)
 }
 
 @media (max-width: 980px) {
-  .summary-line,
   .task-filter {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .metric,
   .source-select,
   .keyword-input {
     width: 100%;
