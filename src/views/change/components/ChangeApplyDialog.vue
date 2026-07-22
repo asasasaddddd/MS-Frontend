@@ -3,6 +3,7 @@ import { computed, reactive, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
 import type { AttachmentId } from '@/api/attachment'
+import { useProductionDictionaries } from '@/composables/useProductionDictionaries'
 import type { ChangeItemSubmitRequest, ChangeSubmitRequest, ChangeType } from '@/types/change'
 import type { DeviceVO } from '@/types/device'
 import { useSessionStore } from '@/stores/session'
@@ -29,6 +30,11 @@ const emit = defineEmits<{
 }>()
 
 const session = useSessionStore()
+const {
+  loading: dictionaryLoading,
+  positiveVerificationCycleOptions,
+  loadProductionDictionaries
+} = useProductionDictionaries()
 
 const form = reactive({
   remark: '',
@@ -59,14 +65,6 @@ const applyTimeLabel = computed(() => (props.type === 'enable' ? '申请时间' 
 const applyTimeValue = computed(() => (props.type === 'enable' ? form.applyDateTime : form.applyDate))
 const selectedDeviceCountText = computed(() => (props.devices.length > 1 ? `已选择 ${props.devices.length} 台设备` : ''))
 
-const cycleOptions = [
-  { label: '3个月', value: 3 },
-  { label: '6个月', value: 6 },
-  { label: '12个月', value: 12 },
-  { label: '24个月', value: 24 },
-  { label: '36个月', value: 36 }
-]
-
 const categoryOptions = [
   { label: 'A类', value: 'A类' },
   { label: 'B类', value: 'B类' },
@@ -88,8 +86,14 @@ const scrapTypeOptions = [
 
 watch(
   () => props.open,
-  (open) => {
-    if (open) resetForm()
+  async (open) => {
+    if (!open) return
+    resetForm()
+    try {
+      await loadProductionDictionaries()
+    } catch (error) {
+      message.warning(error instanceof Error ? error.message : '检定周期字典加载失败')
+    }
   }
 )
 
@@ -278,7 +282,13 @@ function resolvePrimaryReason() {
         <a-form layout="vertical" class="prototype-form">
           <template v-if="type === 'cycle'">
             <a-form-item label="调整后检定周期" required>
-              <a-select v-model:value="form.newCycleMonth" size="large" placeholder="请选择调整后周期" :options="cycleOptions" />
+              <a-select
+                v-model:value="form.newCycleMonth"
+                size="large"
+                placeholder="请选择调整后周期"
+                :loading="dictionaryLoading"
+                :options="positiveVerificationCycleOptions"
+              />
               <p class="field-help">如选项中没有所需周期，请在调整原因中注明</p>
             </a-form-item>
             <a-form-item label="调整原因" required>

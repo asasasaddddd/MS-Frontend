@@ -7,6 +7,7 @@ import {
 } from '@/api/firstcheck'
 import { listUsersByDeptAndRole, type SysUserVO } from '@/api/system'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
+import { useProductionDictionaries } from '@/composables/useProductionDictionaries'
 import FirstCheckQualifiedDeviceTable from '@/views/firstcheck/components/FirstCheckQualifiedDeviceTable.vue'
 import {
   applyDeviceCodeReservation,
@@ -42,6 +43,16 @@ const reservationClock = ref(Date.now())
 let reservationTimer: ReturnType<typeof setInterval> | undefined
 let resetting = false
 
+const {
+  loading: dictionaryLoading,
+  deviceUsageOptions,
+  positiveVerificationCycleOptions,
+  subjectCategoryOptions,
+  specialProjectOptions,
+  getSubjectSubcategoryOptions,
+  loadProductionDictionaries
+} = useProductionDictionaries()
+
 const form = reactive({
   verificationResult: 'qualified' as VerificationResult,
   qualifiedQuantity: undefined as number | undefined,
@@ -69,12 +80,9 @@ const form = reactive({
   opinion: '检定完成'
 })
 
-const subjectSubcategoryOptions = [
-  { label: '温度 010101', value: '010101' },
-  { label: '压力 020101', value: '020101' },
-  { label: '电压 040101', value: '040101' },
-  { label: '卡尺 050102', value: '050102' }
-]
+const subjectSubcategoryOptions = computed(() =>
+  getSubjectSubcategoryOptions(form.subjectCategory)
+)
 
 const isExternalCommission = computed(
   () => props.order?.verificationType === 'external_commission'
@@ -109,14 +117,11 @@ const reservationLabel = computed(() => {
 
 function normalizeSubjectSubcategory(value?: string) {
   if (!value) return undefined
-  if (/^\d{6}$/.test(value)) return value
-  const aliasMap: Record<string, string> = {
-    温度: '010101',
-    压力: '020101',
-    电压: '040101',
-    卡尺: '050102'
-  }
-  return aliasMap[value]
+  return value.match(/\d{6}/)?.[0] || value
+}
+
+function handleSubjectCategoryChange() {
+  form.subjectSubcategory = undefined
 }
 
 function today() {
@@ -391,6 +396,11 @@ watch(
       return
     }
     startReservationClock()
+    try {
+      await loadProductionDictionaries()
+    } catch (error) {
+      message.warning(error instanceof Error ? error.message : '生产字典加载失败')
+    }
     resetForm(props.order)
     await loadConfirmers(props.order)
   }
@@ -526,11 +536,8 @@ onUnmounted(stopReservationClock)
             <a-select
               v-model:value="form.deviceUsage"
               placeholder="请选择"
-              :options="[
-                { label: '工艺控制', value: '工艺控制' },
-                { label: '质量检验', value: '质量检验' },
-                { label: '试验验证', value: '试验验证' }
-              ]"
+              :loading="dictionaryLoading"
+              :options="deviceUsageOptions"
             />
           </label>
           <label><span>测量范围</span><a-input v-model:value="form.measureRange" placeholder="填写测量范围" /></label>
@@ -543,17 +550,23 @@ onUnmounted(stopReservationClock)
             <a-select
               v-model:value="form.subjectCategory"
               placeholder="请选择"
-              :options="[
-                { label: '长度', value: '长度' },
-                { label: '热学', value: '热学' },
-                { label: '力学', value: '力学' },
-                { label: '电磁', value: '电磁' }
-              ]"
+              :loading="dictionaryLoading"
+              :options="subjectCategoryOptions"
+              show-search
+              option-filter-prop="label"
+              @change="handleSubjectCategoryChange"
             />
           </label>
           <label>
             <span>学科小类</span>
-            <a-select v-model:value="form.subjectSubcategory" placeholder="请选择" :options="subjectSubcategoryOptions" />
+            <a-select
+              v-model:value="form.subjectSubcategory"
+              placeholder="请选择"
+              :loading="dictionaryLoading"
+              :options="subjectSubcategoryOptions"
+              show-search
+              option-filter-prop="label"
+            />
           </label>
           <label>
             <span>设备状态</span>
@@ -595,17 +608,24 @@ onUnmounted(stopReservationClock)
               ]"
             />
           </label>
-          <label><span>专用项目</span><a-input v-model:value="form.specialProject" placeholder="填写专用项目" /></label>
+          <label>
+            <span>专用项目</span>
+            <a-select
+              v-model:value="form.specialProject"
+              placeholder="请选择"
+              :loading="dictionaryLoading"
+              :options="specialProjectOptions"
+              show-search
+              option-filter-prop="label"
+            />
+          </label>
           <label>
             <span>检定周期</span>
             <a-select
               v-model:value="form.verificationCycleMonth"
               :disabled="form.confirmInterval === '一次检定'"
-              :options="[
-                { label: '12', value: 12 },
-                { label: '6', value: 6 },
-                { label: '24', value: 24 }
-              ]"
+              :loading="dictionaryLoading"
+              :options="positiveVerificationCycleOptions"
             />
           </label>
           <label v-if="isExternalCommission">

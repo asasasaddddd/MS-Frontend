@@ -4,13 +4,13 @@ import { message } from 'ant-design-vue'
 import { listUsersByDeptAndRole, type SysUserVO } from '@/api/system'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
+import { useProductionDictionaries } from '@/composables/useProductionDictionaries'
 import type { ChangeOrderVO, ChangeVerifierHandleRequest } from '@/types/change'
 import {
   buildChangeVerifierHandleRequest,
   changeVerifierReason,
   resolveChangeVerifierDialog,
   validateChangeVerifierForm,
-  verificationCycleOptions,
   verifierResultOptions,
   type ChangeVerifierFormState
 } from '@/views/change/changeVerifierDialogModel'
@@ -42,6 +42,11 @@ const emit = defineEmits<{
 
 const engineers = ref<SysUserVO[]>([])
 const engineerLoading = ref(false)
+const {
+  loading: dictionaryLoading,
+  positiveVerificationCycleOptions,
+  loadProductionDictionaries
+} = useProductionDictionaries()
 
 const form = reactive<ChangeVerifierFormState>({
   reason: '',
@@ -187,6 +192,11 @@ watch(
     form.opinion = ''
     form.certificateAttachmentGroupId = currentItem?.certificateAttachmentGroupId
     form.validUntil = currentItem?.newValidUntil || calculateValidUntil(form.verificationDate, targetCycleMonth())
+    try {
+      await loadProductionDictionaries()
+    } catch (error) {
+      message.warning(error instanceof Error ? error.message : '检定周期字典加载失败')
+    }
     await loadEngineers()
   }
 )
@@ -308,7 +318,12 @@ watch(
           </div>
           <div v-if="config.showNewCycle" class="form-row">
             <label>新检定周期 <span class="required">*</span></label>
-            <a-select v-model:value="form.newCycleMonth" :options="verificationCycleOptions" placeholder="请选择" />
+            <a-select
+              v-model:value="form.newCycleMonth"
+              :loading="dictionaryLoading"
+              :options="positiveVerificationCycleOptions"
+              placeholder="请选择"
+            />
           </div>
           <div class="form-row">
             <label>结果判定 <span class="required">*</span></label>

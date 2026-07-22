@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { computed, onMounted, reactive, watch } from 'vue'
 import { message } from 'ant-design-vue'
+import { useProductionDictionaries } from '@/composables/useProductionDictionaries'
 import type { DeviceLedgerUpdateRequest, DeviceVO } from '@/types/device'
 
 const props = defineProps<{
@@ -15,25 +16,15 @@ const form = reactive<DeviceLedgerUpdateRequest>({
   deviceName: ''
 })
 
-const deviceUsageOptions = [
-  { label: '工艺控制', value: '工艺控制' },
-  { label: '质量检验', value: '质量检验' },
-  { label: '试验验证', value: '试验验证' }
-]
-
-const subjectCategoryOptions = [
-  { label: '长度', value: '长度' },
-  { label: '热学', value: '热学' },
-  { label: '力学', value: '力学' },
-  { label: '电磁', value: '电磁' }
-]
-
-const subjectSubCategoryOptions = [
-  { label: '温度 010101', value: '010101' },
-  { label: '压力 020101', value: '020101' },
-  { label: '电压 040101', value: '040101' },
-  { label: '卡尺 050102', value: '050102' }
-]
+const {
+  loading: dictionaryLoading,
+  deviceUsageOptions,
+  verificationCycleOptions,
+  subjectCategoryOptions,
+  specialProjectOptions,
+  getSubjectSubcategoryOptions,
+  loadProductionDictionaries
+} = useProductionDictionaries()
 
 const yesNoOptions = [
   { label: '否', value: 0 },
@@ -48,12 +39,6 @@ const standardDeviceOptions = [
 const confirmIntervalOptions = [
   { label: '周期检定', value: '周期检定' },
   { label: '一次检定', value: '一次检定' }
-]
-
-const verificationCycleOptions = [
-  { label: '6', value: 6 },
-  { label: '12', value: 12 },
-  { label: '24', value: 24 }
 ]
 
 const verificationMethodOptions = [
@@ -89,10 +74,18 @@ function withCurrentOption<T extends string | number>(
   return [{ label: String(current), value: current }, ...options]
 }
 
-const currentDeviceUsageOptions = computed(() => withCurrentOption(deviceUsageOptions, form.deviceUsage))
-const currentSubjectCategoryOptions = computed(() => withCurrentOption(subjectCategoryOptions, form.subjectCategory))
-const currentSubjectSubCategoryOptions = computed(() => withCurrentOption(subjectSubCategoryOptions, form.subjectSubCategory))
-const currentCycleOptions = computed(() => withCurrentOption(verificationCycleOptions, form.verificationCycleMonth))
+const subjectSubCategoryOptions = computed(() =>
+  getSubjectSubcategoryOptions(form.subjectCategory)
+)
+const currentDeviceUsageOptions = computed(() => withCurrentOption(deviceUsageOptions.value, form.deviceUsage))
+const currentSubjectCategoryOptions = computed(() => withCurrentOption(subjectCategoryOptions.value, form.subjectCategory))
+const currentSubjectSubCategoryOptions = computed(() => withCurrentOption(subjectSubCategoryOptions.value, form.subjectSubCategory))
+const currentSpecialProjectOptions = computed(() => withCurrentOption(specialProjectOptions.value, form.specialProject))
+const currentCycleOptions = computed(() => withCurrentOption(verificationCycleOptions.value, form.verificationCycleMonth))
+
+function handleSubjectCategoryChange() {
+  form.subjectSubCategory = undefined
+}
 
 function reset(device?: DeviceVO) {
   Object.assign(form, {
@@ -141,6 +134,14 @@ function submit() {
 
 watch(() => props.device, reset, { immediate: true })
 
+onMounted(async () => {
+  try {
+    await loadProductionDictionaries()
+  } catch (error) {
+    message.warning(error instanceof Error ? error.message : '生产字典加载失败')
+  }
+})
+
 defineExpose({ submit })
 </script>
 
@@ -166,7 +167,7 @@ defineExpose({ submit })
         <label><span>规格型号</span><a-input v-model:value="form.modelSpec" placeholder="填写规格型号" /></label>
         <label>
           <span>设备用途</span>
-          <a-select v-model:value="form.deviceUsage" :options="currentDeviceUsageOptions" placeholder="请选择" allow-clear />
+          <a-select v-model:value="form.deviceUsage" :loading="dictionaryLoading" :options="currentDeviceUsageOptions" placeholder="请选择" allow-clear />
         </label>
         <label><span>测量范围</span><a-input v-model:value="form.measureRange" placeholder="填写测量范围" /></label>
         <label><span>分度值</span><a-input v-model:value="form.resolution" placeholder="填写分度值" /></label>
@@ -183,17 +184,34 @@ defineExpose({ submit })
       <div class="edit-grid">
         <label>
           <span>学科大类</span>
-          <a-select v-model:value="form.subjectCategory" :options="currentSubjectCategoryOptions" placeholder="请选择" allow-clear />
+          <a-select
+            v-model:value="form.subjectCategory"
+            :loading="dictionaryLoading"
+            :options="currentSubjectCategoryOptions"
+            placeholder="请选择"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+            @change="handleSubjectCategoryChange"
+          />
         </label>
         <label>
           <span>学科小类</span>
-          <a-select v-model:value="form.subjectSubCategory" :options="currentSubjectSubCategoryOptions" placeholder="请选择" allow-clear />
+          <a-select
+            v-model:value="form.subjectSubCategory"
+            :loading="dictionaryLoading"
+            :options="currentSubjectSubCategoryOptions"
+            placeholder="请选择"
+            allow-clear
+            show-search
+            option-filter-prop="label"
+          />
         </label>
         <label><span>是否强检</span><a-select v-model:value="form.isMandatory" :options="yesNoOptions" placeholder="请选择" allow-clear /></label>
         <label><span>标准器</span><a-select v-model:value="form.standardDevice" :options="standardDeviceOptions" placeholder="请选择" allow-clear /></label>
         <label><span>确认间隔</span><a-select v-model:value="form.confirmInterval" :options="confirmIntervalOptions" placeholder="请选择" allow-clear /></label>
-        <label><span>专用项目</span><a-input v-model:value="form.specialProject" placeholder="填写专用项目" /></label>
-        <label><span>检定周期</span><a-select v-model:value="form.verificationCycleMonth" :options="currentCycleOptions" placeholder="请选择" allow-clear /></label>
+        <label><span>专用项目</span><a-select v-model:value="form.specialProject" :loading="dictionaryLoading" :options="currentSpecialProjectOptions" placeholder="请选择" allow-clear /></label>
+        <label><span>检定周期</span><a-select v-model:value="form.verificationCycleMonth" :loading="dictionaryLoading" :options="currentCycleOptions" placeholder="请选择" allow-clear /></label>
         <label><span>检定方式</span><a-select v-model:value="form.verificationMethod" :options="verificationMethodOptions" placeholder="请选择" allow-clear /></label>
         <label><span>是否通用设备</span><a-select v-model:value="form.isCommon" :options="yesNoOptions" placeholder="请选择" allow-clear /></label>
         <label><span>检定日期</span><a-input v-model:value="form.lastVerificationDate" type="date" /></label>

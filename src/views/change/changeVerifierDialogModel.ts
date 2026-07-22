@@ -110,11 +110,6 @@ export const verifierResultOptions = [
   { label: '维修', value: 'repair' }
 ] as const
 
-export const verificationCycleOptions = [1, 3, 6, 12, 24].map((value) => ({
-  label: `${value}个月`,
-  value
-}))
-
 export function resolveChangeVerifierDialog(order?: ChangeOrderVO | null): ChangeVerifierDialogConfig {
   const type = order?.changeType as ChangeType | undefined
   const isPeriodicScrapReturn = type === 'scrap' && order?.items?.some((item) => item.scrapType === 'normal')

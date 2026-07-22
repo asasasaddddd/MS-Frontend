@@ -2,6 +2,7 @@
 import { computed, reactive, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
+import { useProductionDictionaries } from '@/composables/useProductionDictionaries'
 import { useSessionStore } from '../../../stores/session'
 import { displayValue } from '../periodicDisplayModel'
 import type { ChangeSubmitRequest } from '../../../types/change'
@@ -38,6 +39,11 @@ const emit = defineEmits<{
 }>()
 
 const session = useSessionStore()
+const {
+  loading: dictionaryLoading,
+  positiveVerificationCycleOptions,
+  loadProductionDictionaries
+} = useProductionDictionaries()
 
 const form = reactive<PeriodicExceptionFormState>({
   actionType: 'seal',
@@ -94,8 +100,14 @@ function createChange() {
 
 watch(
   () => props.open,
-  (open) => {
-    if (open) reset()
+  async (open) => {
+    if (!open) return
+    reset()
+    try {
+      await loadProductionDictionaries()
+    } catch (error) {
+      message.warning(error instanceof Error ? error.message : '检定周期字典加载失败')
+    }
   }
 )
 
@@ -232,13 +244,8 @@ watch(
               <a-select
                 v-model:value="form.newCycleMonth"
                 placeholder="请选择调整后周期"
-                :options="[
-                  { label: '3个月', value: 3 },
-                  { label: '6个月', value: 6 },
-                  { label: '12个月', value: 12 },
-                  { label: '24个月', value: 24 },
-                  { label: '36个月', value: 36 }
-                ]"
+                :loading="dictionaryLoading"
+                :options="positiveVerificationCycleOptions"
               />
             </label>
             <label class="span-4">
