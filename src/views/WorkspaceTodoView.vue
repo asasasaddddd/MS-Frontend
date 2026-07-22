@@ -24,7 +24,7 @@ import {
 } from '@/workflows/metrologyWorkflow'
 import { matchesFirstCheckVerifierRole } from '@/views/firstcheck/firstCheckVerifierModel'
 import { buildPeriodicPlanTodoGroups } from '@/views/periodic/periodicDisplayModel'
-import { changeNodeName, changeTypeName, matchesChangeVerifierRole } from '@/views/change/changeDisplayModel'
+import { changeTypeName, matchesChangeVerifierRole } from '@/views/change/changeDisplayModel'
 import {
   dedupeTodoEntriesByKey,
   filterVisibleTodoEntries,
@@ -186,35 +186,27 @@ const changeTodoEntries = computed<TodoDefinition[]>(() => {
   if (!currentRole || !path || !allowedNodes) return []
 
   const nodeSet = new Set<string>(allowedNodes)
-  const taskByOrder = new Map<string, WorkflowTask>()
-  workflowTasks.value
+  const tasks = uniqueTasksByBusinessId(workflowTasks.value
     .filter((task) => isPendingWorkflowTask(task))
     .filter((task) => matchesBusinessType(task.businessType, 'change'))
     .filter((task) => nodeSet.has(task.nodeCode))
     .filter((task) => {
       const order = changeOrders.value[String(task.businessId)]
       return order ? matchesChangeVerifierRole(order, currentRole) : true
-    })
-    .forEach((task) => taskByOrder.set(String(task.businessId), task))
+    }))
+  if (tasks.length === 0) return []
 
-  return Array.from(taskByOrder.entries())
-    .map(([orderId, task]) => {
-      const order = changeOrders.value[orderId]
-      const typeLabel = order?.changeType ? changeTypeName(order.changeType) : undefined
-      return {
-        key: `change-${orderId}`,
-        type: 'change' as const,
-        title: `状态变更单 ${order?.orderNo || orderId}`,
-        detailTitle: [typeLabel, task.nodeName || changeNodeName(task.nodeCode)].filter(Boolean).join(' · '),
-        count: 1,
-        unit: '单',
-        color: 'blue' as TodoColor,
-        roles: [currentRole],
-        routeByRole: { [currentRole]: path },
-        query: { orderId }
-      }
-    })
-    .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
+  return [{
+    key: 'change-todo-summary',
+    type: 'change' as const,
+    title: '状态变更',
+    detailTitle: `当前共 ${tasks.length} 张状态变更单待处理`,
+    count: tasks.length,
+    unit: '单',
+    color: 'blue' as TodoColor,
+    roles: [currentRole],
+    routeByRole: { [currentRole]: path }
+  }]
 })
 
 const changeHistoryEntries = computed<TodoDefinition[]>(() => {
