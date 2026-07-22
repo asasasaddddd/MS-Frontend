@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { attachmentDownloadUrl, listAttachmentsByGroupId, type AttachmentId, type AttachmentRecord } from '@/api/attachment'
+import { downloadAttachment, listAttachmentsByGroupId, type AttachmentId, type AttachmentRecord } from '@/api/attachment'
 
 const props = withDefaults(
   defineProps<{
@@ -19,6 +19,7 @@ const props = withDefaults(
 
 const open = ref(false)
 const loading = ref(false)
+const downloadingId = ref<string>()
 const records = ref<AttachmentRecord[]>([])
 
 function formatSize(size?: number) {
@@ -42,6 +43,20 @@ async function showAttachments() {
     loading.value = false
   }
 }
+
+async function handleDownload(record: AttachmentRecord) {
+  const id = String(record.id)
+  downloadingId.value = id
+  try {
+    await downloadAttachment(record)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '附件下载失败')
+  } finally {
+    if (downloadingId.value === id) {
+      downloadingId.value = undefined
+    }
+  }
+}
 </script>
 
 <template>
@@ -56,16 +71,23 @@ async function showAttachments() {
             <a-list-item>
               <a-list-item-meta>
                 <template #title>
-                  <a :href="attachmentDownloadUrl(item)" target="_blank" rel="noopener noreferrer">
+                  <a-button
+                    type="link"
+                    class="file-link"
+                    :loading="downloadingId === String(item.id)"
+                    @click="handleDownload(item)"
+                  >
                     {{ item.fileName || item.id }}
-                  </a>
+                  </a-button>
                 </template>
                 <template #description>
                   {{ item.fileMime || item.fileExt || '文件' }} · {{ formatSize(item.fileSize) }}
                   <span v-if="item.uploaderName"> · 上传人：{{ item.uploaderName }}</span>
                 </template>
               </a-list-item-meta>
-              <a :href="attachmentDownloadUrl(item)" target="_blank" rel="noopener noreferrer">下载</a>
+              <a-button type="link" :loading="downloadingId === String(item.id)" @click="handleDownload(item)">
+                下载
+              </a-button>
             </a-list-item>
           </template>
         </a-list>
@@ -77,5 +99,12 @@ async function showAttachments() {
 <style scoped>
 .attachment-list-button {
   display: inline-flex;
+}
+
+.file-link {
+  height: auto;
+  padding: 0;
+  text-align: left;
+  white-space: normal;
 }
 </style>

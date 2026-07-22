@@ -38,7 +38,7 @@ function clearSessionOnUnauthorized(code?: number, status?: number) {
   }
 }
 
-export async function request<T>(config: AxiosRequestConfig): Promise<T> {
+function buildAuthHeaders(config: AxiosRequestConfig): Record<string, string> {
   const session = useSessionStore()
   const user = session.user
   const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData
@@ -60,6 +60,12 @@ export async function request<T>(config: AxiosRequestConfig): Promise<T> {
     headers['X-User-Dept-Name'] = encodeURIComponent(user.deptName || '')
   }
 
+  return headers
+}
+
+export async function request<T>(config: AxiosRequestConfig): Promise<T> {
+  const headers = buildAuthHeaders(config)
+
   try {
     const response = await httpClient.request<ApiResponse<T>>({
       ...config,
@@ -79,6 +85,29 @@ export async function request<T>(config: AxiosRequestConfig): Promise<T> {
       }
       clearSessionOnUnauthorized(undefined, status)
       throw new ApiError(status || 0, error.message || '网络请求失败')
+    }
+    throw error
+  }
+}
+
+export async function requestBlob(config: AxiosRequestConfig): Promise<Blob> {
+  const headers = buildAuthHeaders(config)
+
+  try {
+    const response = await httpClient.request<Blob>({
+      ...config,
+      responseType: 'blob',
+      headers: {
+        ...headers,
+        ...(config.headers || {})
+      }
+    })
+    return response.data
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status
+      clearSessionOnUnauthorized(undefined, status)
+      throw new ApiError(status || 0, error.message || '文件下载失败')
     }
     throw error
   }

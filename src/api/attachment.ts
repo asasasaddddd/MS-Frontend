@@ -1,4 +1,4 @@
-import { request } from '@/api/request'
+import { request, requestBlob } from '@/api/request'
 import {
   attachmentDownloadUrl,
   createAttachmentFormData,
@@ -58,4 +58,25 @@ export function listAttachmentsByCaseId(caseId: string | number) {
     url: `/attachment/cases/${encodeURIComponent(String(caseId))}`,
     method: 'GET'
   })
+}
+
+export async function downloadAttachment(recordOrId: AttachmentRecord | AttachmentId) {
+  const id = typeof recordOrId === 'object' ? recordOrId.id : recordOrId
+  const fileName = typeof recordOrId === 'object' ? recordOrId.fileName || String(id) : String(id)
+  const blob = await requestBlob({
+    url: `/attachment/file/${encodeURIComponent(String(id))}`,
+    method: 'GET'
+  })
+  const url = URL.createObjectURL(blob)
+  try {
+    const link = document.createElement('a')
+    link.href = url
+    link.download = fileName
+    link.rel = 'noopener noreferrer'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  } finally {
+    URL.revokeObjectURL(url)
+  }
 }

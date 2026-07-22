@@ -36,6 +36,7 @@ const group: AttachmentGroupRecord = {
 assert.equal(group.files?.[0].attachmentGroupId, '2070143016618696710')
 
 const attachmentApiSource = readFileSync(new URL('../src/api/attachment.ts', import.meta.url), 'utf8')
+const requestSource = readFileSync(new URL('../src/api/request.ts', import.meta.url), 'utf8')
 const uploadButtonSource = readFileSync(
   new URL('../src/components/AttachmentUploadButton.vue', import.meta.url),
   'utf8'
@@ -48,6 +49,9 @@ const listButtonSource = readFileSync(
 assert.equal(attachmentApiSource.includes('/attachment/upload'), false)
 assert.equal(attachmentApiSource.includes('/attachment/groups'), true)
 assert.equal(attachmentApiSource.includes('/files'), true)
+assert.match(attachmentApiSource, /downloadAttachment/)
+assert.match(requestSource, /requestBlob/)
 assert.equal(uploadButtonSource.includes('businessType: props.businessType'), false)
 assert.equal(uploadButtonSource.includes('businessId: props.businessId'), false)
 assert.equal(listButtonSource.includes('listAttachmentsByGroupId'), true)
+assert.doesNotMatch(listButtonSource, /:href="attachmentDownloadUrl/)

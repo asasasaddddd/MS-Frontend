@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { message } from 'ant-design-vue'
 import {
-  attachmentDownloadUrl,
+  downloadAttachment,
   uploadAttachment,
   type AttachmentId,
   type AttachmentRecord
@@ -33,6 +33,7 @@ const emit = defineEmits<{
 
 const inputRef = ref<HTMLInputElement>()
 const uploading = ref(false)
+const downloadingId = ref<string>()
 const uploadedRecords = ref<AttachmentRecord[]>([])
 
 function chooseFile() {
@@ -65,6 +66,20 @@ async function handleFileChange(event: Event) {
     uploading.value = false
   }
 }
+
+async function handleDownload(record: AttachmentRecord) {
+  const id = String(record.id)
+  downloadingId.value = id
+  try {
+    await downloadAttachment(record)
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '附件下载失败')
+  } finally {
+    if (downloadingId.value === id) {
+      downloadingId.value = undefined
+    }
+  }
+}
 </script>
 
 <template>
@@ -72,15 +87,16 @@ async function handleFileChange(event: Event) {
     <a-button :size="size" :loading="uploading" :disabled="disabled" @click="chooseFile">{{ buttonText }}</a-button>
     <input ref="inputRef" class="file-input" type="file" style="display: none" @change="handleFileChange" />
     <div v-if="uploadedRecords.length > 0" class="uploaded-list">
-      <a
+      <a-button
         v-for="record in uploadedRecords"
         :key="String(record.id)"
-        :href="attachmentDownloadUrl(record)"
-        target="_blank"
-        rel="noopener noreferrer"
+        type="link"
+        class="uploaded-file"
+        :loading="downloadingId === String(record.id)"
+        @click="handleDownload(record)"
       >
         {{ record.fileName || record.id }}
-      </a>
+      </a-button>
     </div>
   </div>
 </template>
@@ -107,8 +123,10 @@ async function handleFileChange(event: Event) {
   font-size: 12px;
 }
 
-.uploaded-list a {
+.uploaded-file {
   max-width: 180px;
+  height: auto;
+  padding: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
