@@ -7,7 +7,6 @@ import {
 
 const props = defineProps<{
   orderId?: number
-  attachmentRequired: boolean
   confirmInterval?: string
   verificationCycleMonth?: number
 }>()
@@ -47,9 +46,12 @@ function refreshValidUntil(record: QualifiedFirstCheckDeviceRow) {
         <a-input v-model:value="record.factoryDate" type="date" />
       </template>
     </a-table-column>
-    <a-table-column title="检定日期" :width="160">
+    <a-table-column :width="160">
+      <template #title>
+        <span>检定日期 <b class="required">*</b></span>
+      </template>
       <template #default="{ record }">
-        <a-input v-model:value="record.verificationDate" type="date" @change="refreshValidUntil(record)" />
+        <a-input v-model:value="record.verificationDate" type="date" required @change="refreshValidUntil(record)" />
       </template>
     </a-table-column>
     <a-table-column title="有效期" :width="160">
@@ -57,7 +59,7 @@ function refreshValidUntil(record: QualifiedFirstCheckDeviceRow) {
         <a-input :value="record.validUntil" readonly placeholder="一次检定无有效期" />
       </template>
     </a-table-column>
-    <a-table-column :title="attachmentRequired ? '检定证书（必传）' : '检定证书（选传）'" :width="250">
+    <a-table-column title="检定证书（选传）" :width="250">
       <template #default="{ record }">
         <AttachmentUploadButton
           v-model="record.certificateAttachmentGroupId"
@@ -75,5 +77,9 @@ function refreshValidUntil(record: QualifiedFirstCheckDeviceRow) {
 <style scoped>
 :deep(.ant-table-cell) {
   vertical-align: top;
+}
+
+.required {
+  color: #ff4d4f;
 }
 </style>

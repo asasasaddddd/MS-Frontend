@@ -361,13 +361,6 @@ function validateSubmission(order: FirstCheckOrder) {
     message.warning('每台合格设备都必须填写检定日期')
     return false
   }
-  if (
-    isExternalCommission.value
-    && qualifiedDevices.value.some((row) => !row.certificateAttachmentGroupId)
-  ) {
-    message.warning('外委设备必须逐台上传检定证书')
-    return false
-  }
   return true
 }
 
@@ -658,7 +651,6 @@ onUnmounted(stopReservationClock)
         <FirstCheckQualifiedDeviceTable
           v-model:rows="qualifiedDevices"
           :order-id="order?.id"
-          :attachment-required="isExternalCommission"
           :confirm-interval="form.confirmInterval"
           :verification-cycle-month="form.verificationCycleMonth"
         />

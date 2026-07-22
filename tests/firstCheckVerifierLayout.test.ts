@@ -13,7 +13,7 @@ const deviceTable = readFileSync(
 assert.doesNotMatch(source, /<label><span>检定日期<\/span>/)
 assert.doesNotMatch(source, /<label><span>有效期<\/span>/)
 assert.match(source, /FirstCheckQualifiedDeviceTable/)
-assert.match(deviceTable, /<a-table-column title="检定日期"[\s\S]*v-model:value="record\.verificationDate"/)
+assert.match(deviceTable, /<span>检定日期 <b class="required">\*<\/b><\/span>[\s\S]*v-model:value="record\.verificationDate"[\s\S]*required/)
 assert.match(deviceTable, /<a-table-column title="有效期"[\s\S]*:value="record\.validUntil"/)
 assert.match(deviceTable, /v-model:value="record\.factoryCode"/)
 assert.match(deviceTable, /v-model="record\.certificateAttachmentGroupId"/)
