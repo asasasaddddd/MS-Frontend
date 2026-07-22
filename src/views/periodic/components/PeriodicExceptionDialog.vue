@@ -52,7 +52,6 @@ const form = reactive<PeriodicExceptionFormState>({
   deferReason: '',
   scrapType: 'damaged',
   scrapReason: '',
-  newCategory: undefined,
   newCycleMonth: undefined,
   adjustmentReason: '',
   remark: ''
@@ -82,7 +81,6 @@ function reset() {
   form.deferReason = ''
   form.scrapType = 'damaged'
   form.scrapReason = ''
-  form.newCategory = undefined
   form.newCycleMonth = undefined
   form.adjustmentReason = ''
   form.remark = ''
@@ -218,15 +216,7 @@ watch(
             </label>
             <label>
               <span>调整后 <b>*</b></span>
-              <a-select
-                v-model:value="form.newCategory"
-                placeholder="请选择调整后类别"
-                :options="[
-                  { label: 'A类', value: 'A类' },
-                  { label: 'B类', value: 'B类' },
-                  { label: 'C类', value: 'C类' }
-                ]"
-              />
+              <a-input value="C类" readonly />
             </label>
             <label class="span-4">
               <span>调整原因 <b>*</b></span>
@@ -328,6 +318,7 @@ watch(
 
 .selected-device-list {
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   padding: 12px 14px;
 }
@@ -421,6 +412,10 @@ watch(
 
   .span-4 {
     grid-column: span 1;
+  }
+
+  .selected-device-list {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -71,7 +71,6 @@ export interface PeriodicExceptionFormState {
   deferReason?: string
   scrapType?: string
   scrapReason?: string
-  newCategory?: string
   newCycleMonth?: number
   adjustmentReason?: string
   remark?: string
@@ -145,7 +144,7 @@ function primaryReason(form: PeriodicExceptionFormState) {
   if (form.actionType === 'seal') return requiredText(form.sealReason, '封存原因')
   if (form.actionType === 'defer') return requiredText(form.deferReason, '缓检原因')
   if (form.actionType === 'scrap') return requiredText(form.scrapReason, '报废原因')
-  if (form.actionType === 'category') return requiredText(form.adjustmentReason || form.newCategory, '调整原因')
+  if (form.actionType === 'category') return requiredText(form.adjustmentReason, '调整原因')
   if (form.actionType === 'cycle') return requiredText(form.adjustmentReason, '调整原因')
   return ''
 }
@@ -192,8 +191,11 @@ export function buildPeriodicExceptionChangeRequest(
       })
     }
     if (form.actionType === 'category') {
+      if (normalizeCategoryCode(task.manageCategory) === 'C') {
+        throw new Error('C类设备不能再次发起周检管理类别调整')
+      }
       Object.assign(item, {
-        newCategory: normalizeCategoryCode(requiredText(form.newCategory, '调整后管理类别')),
+        newCategory: 'C',
         adjustmentReason: reason
       })
     }

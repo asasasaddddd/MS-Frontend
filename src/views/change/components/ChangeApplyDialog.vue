@@ -9,7 +9,9 @@ import type { DeviceVO } from '@/types/device'
 import { useSessionStore } from '@/stores/session'
 import {
   buildBaseChangeItem,
+  categoryTargetOptions,
   changeTypeApplyTitle,
+  deviceRowKey,
   display,
   formatCycleMonth,
   normalizeCategory,
@@ -45,7 +47,7 @@ const form = reactive({
   transferToDeptId: '',
   transferToDeptName: undefined as string | undefined,
   transferReason: '',
-  newCategory: undefined as string | undefined,
+  categoryTargets: {} as Record<string, string | undefined>,
   newCycleMonth: undefined as number | undefined,
   adjustmentReason: '',
   scrapType: 'other',
@@ -60,16 +62,9 @@ const firstDevice = computed(() => props.devices[0])
 const currentCategory = computed(() => normalizeCategory(firstDevice.value?.manageCategory))
 const currentCycle = computed(() => formatCycleMonth(firstDevice.value?.verificationCycleMonth))
 const targetCycle = computed(() => (form.newCycleMonth ? formatCycleMonth(form.newCycleMonth) : ''))
-const targetCategory = computed(() => normalizeCategory(form.newCategory))
 const applyTimeLabel = computed(() => (props.type === 'enable' ? '申请时间' : '申请日期'))
 const applyTimeValue = computed(() => (props.type === 'enable' ? form.applyDateTime : form.applyDate))
 const selectedDeviceCountText = computed(() => (props.devices.length > 1 ? `已选择 ${props.devices.length} 台设备` : ''))
-
-const categoryOptions = [
-  { label: 'A类', value: 'A类' },
-  { label: 'B类', value: 'B类' },
-  { label: 'C类', value: 'C类' }
-]
 
 const transferDeptOptions = [
   { label: '重一', value: '重一' },
@@ -107,21 +102,13 @@ function resetForm() {
   form.transferToDeptId = ''
   form.transferToDeptName = undefined
   form.transferReason = ''
-  form.newCategory = suggestNextCategory(firstDevice.value?.manageCategory)
+  form.categoryTargets = Object.fromEntries(props.devices.map((device) => [deviceRowKey(device), undefined]))
   form.newCycleMonth = undefined
   form.adjustmentReason = ''
   form.scrapType = 'other'
   form.scrapReason = ''
   form.verificationReason = ''
   form.attachmentGroupId = undefined
-}
-
-function suggestNextCategory(value?: string) {
-  const current = normalizeCategory(value)
-  if (current === 'A类') return 'B类'
-  if (current === 'B类') return 'C类'
-  if (current === 'C类') return 'B类'
-  return undefined
 }
 
 function close() {
@@ -162,7 +149,7 @@ function buildItem(device: DeviceVO): ChangeItemSubmitRequest | null {
   }
   if (props.type === 'category') {
     return buildBaseChangeItem(device, {
-      newCategory: normalizeCategoryCode(form.newCategory),
+      newCategory: normalizeCategoryCode(form.categoryTargets[deviceRowKey(device)]),
       adjustmentReason: form.adjustmentReason,
       remark: form.remark
     })
@@ -204,7 +191,20 @@ function validate() {
   if (props.type === 'transfer') {
     return required(form.transferToDeptName, '请选择接收单位') && required(form.transferReason, '请填写转移原因')
   }
-  if (props.type === 'category') return required(form.newCategory, '请选择调整后管理类别')
+  if (props.type === 'category') {
+    for (const device of props.devices) {
+      const target = form.categoryTargets[deviceRowKey(device)]
+      if (!target) {
+        message.warning(`请选择设备 ${device.deviceCode || '-'} 的调整后管理类别`)
+        return false
+      }
+      if (normalizeCategoryCode(target) === normalizeCategoryCode(device.manageCategory)) {
+        message.warning(`设备 ${device.deviceCode || '-'} 的目标类别不能与原类别相同`)
+        return false
+      }
+    }
+    return true
+  }
   if (props.type === 'cycle') {
     return required(form.newCycleMonth, '请选择调整后检定周期') && required(form.adjustmentReason, '请填写检定周期调整原因')
   }
@@ -231,7 +231,7 @@ function resolvePrimaryReason() {
   if (props.type === 'seal') return form.sealReason
   if (props.type === 'enable') return form.enableReason
   if (props.type === 'transfer') return form.transferReason
-  if (props.type === 'category') return `管理类别调整为${normalizeCategory(form.newCategory)}`
+  if (props.type === 'category') return `逐台调整${props.devices.length}台设备的管理类别`
   if (props.type === 'cycle') return `检定周期调整为${targetCycle.value}`
   if (props.type === 'scrap') return form.scrapReason
   if (props.type === 'precheck') return form.verificationReason
@@ -275,8 +275,7 @@ function resolvePrimaryReason() {
           <span>当前类别：</span>
           <strong class="pill">{{ currentCategory }}</strong>
           <em>→</em>
-          <span>调整为：</span>
-          <strong v-if="targetCategory !== '-'">{{ targetCategory }}</strong>
+          <span>请逐台选择调整后类别</span>
         </div>
 
         <a-form layout="vertical" class="prototype-form">
@@ -297,8 +296,21 @@ function resolvePrimaryReason() {
           </template>
 
           <template v-if="type === 'category'">
-            <a-form-item label="调整后管理类别" required>
-              <a-select v-model:value="form.newCategory" size="large" :options="categoryOptions" placeholder="请选择调整后类别" />
+            <a-form-item label="设备管理类别调整" required>
+              <div class="category-device-list">
+                <div v-for="device in devices" :key="deviceRowKey(device)" class="category-device-row">
+                  <div class="category-device-info">
+                    <strong>{{ display(device.deviceCode) }} / {{ display(device.deviceName) }}</strong>
+                    <span>原类别：{{ normalizeCategory(device.manageCategory) }}</span>
+                  </div>
+                  <a-select
+                    v-model:value="form.categoryTargets[deviceRowKey(device)]"
+                    size="large"
+                    :options="categoryTargetOptions(device.manageCategory)"
+                    placeholder="请选择目标类别"
+                  />
+                </div>
+              </div>
             </a-form-item>
           </template>
 
@@ -509,6 +521,41 @@ function resolvePrimaryReason() {
   color: #4b5b76;
 }
 
+.category-device-list {
+  display: grid;
+  gap: 10px;
+}
+
+.category-device-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 180px;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid #d8e0eb;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.category-device-info {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.category-device-info strong {
+  overflow: hidden;
+  color: #10203f;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-device-info span {
+  color: #667085;
+  font-size: 13px;
+}
+
 .field-help {
   margin: 10px 0 0;
   color: #98a2b3;
@@ -585,6 +632,10 @@ function resolvePrimaryReason() {
   }
 
   .segmented {
+    grid-template-columns: 1fr;
+  }
+
+  .category-device-row {
     grid-template-columns: 1fr;
   }
 }

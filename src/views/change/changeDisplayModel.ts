@@ -88,6 +88,22 @@ export function normalizeCategoryCode(value?: string) {
   return value
 }
 
+const categoryOptions = [
+  { label: 'A类', value: 'A类' },
+  { label: 'B类', value: 'B类' },
+  { label: 'C类', value: 'C类' }
+]
+
+export function categoryTargetOptions(currentCategory?: string) {
+  const currentCode = normalizeCategoryCode(currentCategory)
+  return categoryOptions.filter((option) => normalizeCategoryCode(option.value) !== currentCode)
+}
+
+export function haveUniformOriginalCategory(devices: Array<Pick<DeviceVO, 'manageCategory'>>) {
+  const categories = new Set(devices.map((device) => normalizeCategoryCode(device.manageCategory) || ''))
+  return categories.size <= 1
+}
+
 export function deviceStatusName(value?: string) {
   const map: Record<string, string> = {
     in_use: '在用',

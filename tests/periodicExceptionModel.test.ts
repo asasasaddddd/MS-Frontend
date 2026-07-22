@@ -128,7 +128,6 @@ assert.equal(periodicExceptionHandlingType('defer'), 'defer')
 
 const category = buildPeriodicExceptionChangeRequest(task, applicant, {
   actionType: 'category',
-  newCategory: 'C类',
   adjustmentReason: '风险降低',
   scrapType: 'damaged'
 })
@@ -136,6 +135,19 @@ assert.equal(category.changeType, 'category')
 assert.equal(category.items[0].newCategory, 'C')
 assert.equal(category.items[0].adjustmentReason, '风险降低')
 assert.equal(periodicExceptionHandlingType('category'), 'change')
+
+assert.throws(
+  () => buildPeriodicExceptionChangeRequest(
+    { ...task, manageCategory: 'C' },
+    applicant,
+    {
+      actionType: 'category',
+      adjustmentReason: '重复调整',
+      scrapType: 'damaged'
+    }
+  ),
+  /C类设备不能再次发起周检管理类别调整/
+)
 
 const cycle = buildPeriodicExceptionChangeRequest(task, applicant, {
   actionType: 'cycle',

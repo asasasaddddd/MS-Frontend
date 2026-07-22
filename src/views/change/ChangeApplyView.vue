@@ -11,7 +11,8 @@ import {
   deviceRowKey,
   deviceStatusName,
   display,
-  formatDate
+  formatDate,
+  haveUniformOriginalCategory
 } from '@/views/change/changeDisplayModel'
 import ChangeApplyDialog from '@/views/change/components/ChangeApplyDialog.vue'
 
@@ -99,6 +100,10 @@ function selectCheckedDevices() {
 function openDialog(type: ChangeType) {
   if (selectedDevices.value.length === 0) {
     message.warning('请先添加要操作的设备')
+    return
+  }
+  if (type === 'category' && !haveUniformOriginalCategory(selectedDevices.value)) {
+    message.warning('批量调整管理类别时，只能选择原管理类别相同的设备')
     return
   }
   activeType.value = type
