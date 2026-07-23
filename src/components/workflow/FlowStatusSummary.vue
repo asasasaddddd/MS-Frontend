@@ -120,12 +120,15 @@ const dataQualityLogKey = computed(() => {
 })
 
 /**
- * 展开或收起指定状态分块。
+ * 选择指定状态分块。
+ *
+ * 重复点击当前分块时保持展开，只有详情右上角的关闭按钮负责收起，
+ * 避免连续点击或切换分块时意外清空详情。
  *
  * @param groupCode 用户点击的公共分块编码。
  */
-function toggleDimension(groupCode: FlowStatusGroupCode): void {
-  activeGroupCode.value = activeGroupCode.value === groupCode ? '' : groupCode
+function selectDimension(groupCode: FlowStatusGroupCode): void {
+  activeGroupCode.value = groupCode
 }
 
 /**
@@ -160,15 +163,6 @@ function unknownCountMessage(dimension: FlowDimensionView): string {
 function unregisteredStageMessage(dimension: FlowDimensionView): string {
   return `${dimension.label}收到未配置状态码：${dimension.unregisteredStageCodes.join('、')}。数量已原样展示，需补充集中状态定义。`
 }
-
-watch(
-  dimensionGroups,
-  (groups) => {
-    if (activeGroupCode.value && !groups.some((group) => group.code === activeGroupCode.value)) {
-      activeGroupCode.value = ''
-    }
-  }
-)
 
 watch(
   dataQualityLogKey,
@@ -223,7 +217,7 @@ watch(
               { 'dimension-quick-link--warning': group.hasWarning }
             ]"
             :aria-expanded="activeGroupCode === group.code"
-            @click="toggleDimension(group.code)"
+            @click.stop="selectDimension(group.code)"
           >
             <span class="dimension-quick-link__label">{{ group.label }}</span>
             <span class="dimension-quick-link__meta">{{ group.dimensions.length }} 类</span>
