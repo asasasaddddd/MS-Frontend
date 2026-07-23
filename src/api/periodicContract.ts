@@ -1,11 +1,13 @@
 import type {
+  PeriodicJudgementRequest,
+  PeriodicJudgementResult,
   PeriodicScanRequest,
-  PeriodicSecondJudgeDisposal,
-  PeriodicSecondJudgeRequest,
+  PeriodicScrapDisposalRequest,
   PeriodicTaskVO,
   PeriodicVerificationRecordRequest
 } from '@/types/periodic'
 
+/** 周检后端接口路径表。 */
 const periodicEndpoints = {
   generatePlan: '/periodic/plans/generate',
   generateTestPlan: '/periodic/plans/generate-test-one',
@@ -26,12 +28,19 @@ const periodicEndpoints = {
   exceptionChangeSubmit: '/periodic/exception-change/submit',
   supplierFillInfo: '/periodic/supplier-fill-info',
   verifierFillInfo: '/periodic/verifier-fill-info',
-  responsibleSecondJudge: '/periodic/responsible-second-judge',
-  secondJudge: '/periodic/second-judge'
+  judgements: '/periodic/judgements',
+  scrapDisposal: '/periodic/scrap-disposal'
 } as const
 
+/** 周检接口路径表支持的端点键。 */
 export type PeriodicEndpointKey = keyof typeof periodicEndpoints
 
+/**
+ * 解析周检接口路径。
+ *
+ * @param key 接口键。
+ * @param id 详情类接口的业务主键。
+ */
 export function periodicEndpoint(key: PeriodicEndpointKey, id?: string | number) {
   if (key === 'planDetail' && id !== undefined) return `${periodicEndpoints.planDetail}/${id}`
   if (key === 'planTasks' && id !== undefined) return `${periodicEndpoints.planTasks}/${id}/tasks`
@@ -39,6 +48,11 @@ export function periodicEndpoint(key: PeriodicEndpointKey, id?: string | number)
   return periodicEndpoints[key]
 }
 
+/**
+ * 返回周检业务节点的展示名称。
+ *
+ * @param value 周检节点编码。
+ */
 export function periodicNodeName(value?: string) {
   const map: Record<string, string> = {
     plan_issue: '计划下发',
@@ -50,8 +64,12 @@ export function periodicNodeName(value?: string) {
     send_out_return: '外委送回',
     supplier_fill_info: '外扩人员填写检定信息',
     verifier_fill_info: '外委检定员填写检定信息',
+    verifier_second_judge: '外委检定员二次判定',
     responsible_second_judge: '责任工程师二次判定',
-    external_third_judge: '外委检定员三次判定',
+    responsible_third_judge: '责任工程师三次判定',
+    verifier_third_judge: '外委检定员三次判定',
+    responsible_fourth_judge: '责任工程师四次判定',
+    verifier_scrap_disposal: '外委检定员报废处置',
     manager_forward_confirm: '管理员转办确认员',
     confirmer_confirm: '确认员确认',
     exception_disposal: '异常处置',
@@ -133,13 +151,45 @@ export function buildPeriodicVerificationRecordRequest(input: PeriodicVerificati
   }
 }
 
-export function isPeriodicSecondJudgeDisposal(value: string): value is PeriodicSecondJudgeDisposal {
-  return value === 'qualified' || value === 'repair' || value === 'scrap'
+/**
+ * 判断字符串是否为统一周检判定结果。
+ *
+ * @param value 待校验的结果编码。
+ */
+export function isPeriodicJudgementResult(value: string): value is PeriodicJudgementResult {
+  return value === 'qualified' || value === 'unqualified'
 }
 
-export function buildPeriodicSecondJudgeRequest(input: PeriodicSecondJudgeRequest) {
-  if (!isPeriodicSecondJudgeDisposal(input.disposal)) {
-    throw new Error('二次判定结果只能是 qualified、repair 或 scrap')
+/**
+ * 构建统一周检判定请求并清理可选意见。
+ *
+ * @param input 判定表单数据。
+ */
+export function buildPeriodicJudgementRequest(input: PeriodicJudgementRequest): PeriodicJudgementRequest {
+  if (!isPeriodicJudgementResult(input.judgeResult)) {
+    throw new Error('判定结果只能是 qualified 或 unqualified')
   }
-  return input
+  return {
+    ...input,
+    opinion: input.opinion?.trim() || undefined
+  }
+}
+
+/**
+ * 构建外委检定员报废处置请求并校验报废原因。
+ *
+ * @param input 报废处置表单数据。
+ */
+export function buildPeriodicScrapDisposalRequest(
+  input: PeriodicScrapDisposalRequest
+): PeriodicScrapDisposalRequest {
+  const scrapReason = input.scrapReason.trim()
+  if (!scrapReason) {
+    throw new Error('请填写报废原因')
+  }
+  return {
+    ...input,
+    scrapReason,
+    opinion: input.opinion?.trim() || undefined
+  }
 }

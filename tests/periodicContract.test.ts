@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs'
 import {
   buildPeriodicScanRequest,
   buildPeriodicVerificationRecordRequest,
-  isPeriodicSecondJudgeDisposal,
+  isPeriodicJudgementResult,
   periodicEndpoint,
   periodicNodeName
 } from '../src/api/periodicContract.ts'
@@ -12,18 +12,21 @@ import {
 assert.equal(periodicEndpoint('myTasks'), '/periodic/my-tasks')
 assert.equal(periodicEndpoint('generateTestPlan'), '/periodic/plans/generate-test-one')
 assert.equal(periodicEndpoint('supplierFillInfo'), '/periodic/supplier-fill-info')
-assert.equal(periodicEndpoint('responsibleSecondJudge'), '/periodic/responsible-second-judge')
-assert.equal(periodicEndpoint('secondJudge'), '/periodic/second-judge')
+assert.equal(periodicEndpoint('judgements'), '/periodic/judgements')
+assert.equal(periodicEndpoint('scrapDisposal'), '/periodic/scrap-disposal')
 
 assert.equal(periodicNodeName('supplier_fill_info'), '外扩人员填写检定信息')
+assert.equal(periodicNodeName('verifier_second_judge'), '外委检定员二次判定')
 assert.equal(periodicNodeName('responsible_second_judge'), '责任工程师二次判定')
-assert.equal(periodicNodeName('external_third_judge'), '外委检定员三次判定')
+assert.equal(periodicNodeName('responsible_third_judge'), '责任工程师三次判定')
+assert.equal(periodicNodeName('verifier_third_judge'), '外委检定员三次判定')
+assert.equal(periodicNodeName('responsible_fourth_judge'), '责任工程师四次判定')
+assert.equal(periodicNodeName('verifier_scrap_disposal'), '外委检定员报废处置')
 
-assert.equal(isPeriodicSecondJudgeDisposal('qualified'), true)
-assert.equal(isPeriodicSecondJudgeDisposal('repair'), true)
-assert.equal(isPeriodicSecondJudgeDisposal('scrap'), true)
-assert.equal(isPeriodicSecondJudgeDisposal('accept'), false)
-assert.equal(isPeriodicSecondJudgeDisposal('unqualified'), false)
+assert.equal(isPeriodicJudgementResult('qualified'), true)
+assert.equal(isPeriodicJudgementResult('unqualified'), true)
+assert.equal(isPeriodicJudgementResult('repair'), false)
+assert.equal(isPeriodicJudgementResult('scrap'), false)
 
 const longTaskId = '2073579908903317505'
 

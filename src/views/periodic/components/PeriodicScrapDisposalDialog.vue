@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
+import { message } from 'ant-design-vue'
 import { displayValue } from '../periodicDisplayModel'
-import type { PeriodicSecondJudgeDisposal, PeriodicSecondJudgeRequest, PeriodicTaskVO } from '../../../types/periodic'
+import type { PeriodicScrapDisposalRequest, PeriodicTaskVO } from '../../../types/periodic'
+import PeriodicJudgementHistory from './PeriodicJudgementHistory.vue'
 
+/** 报废处置弹窗输入，由当前外委检定员待办提供设备信息。 */
 const props = withDefaults(
   defineProps<{
     open: boolean
@@ -14,25 +17,33 @@ const props = withDefaults(
   }
 )
 
+/** 报废处置弹窗的关闭和提交事件。 */
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  submit: [payload: PeriodicSecondJudgeRequest]
+  submit: [payload: PeriodicScrapDisposalRequest]
 }>()
 
+/** 报废处置表单，只包含报废原因和可选处理意见。 */
 const form = reactive({
-  disposal: 'repair' as PeriodicSecondJudgeDisposal,
-  opinion: '外委通用设备不合格，进行二次判定'
+  scrapReason: '',
+  opinion: ''
 })
 
+/** 关闭报废处置弹窗。 */
 function close() {
   emit('update:open', false)
 }
 
+/** 校验报废原因并提交当前任务的报废处置。 */
 function submit() {
   if (!props.task) return
+  if (!form.scrapReason.trim()) {
+    message.warning('请填写报废原因')
+    return
+  }
   emit('submit', {
     taskId: props.task.id,
-    disposal: form.disposal,
+    scrapReason: form.scrapReason,
     opinion: form.opinion
   })
 }
@@ -41,8 +52,8 @@ watch(
   () => props.open,
   (open) => {
     if (!open) return
-    form.disposal = 'repair'
-    form.opinion = '外委通用设备不合格，进行二次判定'
+    form.scrapReason = ''
+    form.opinion = ''
   }
 )
 </script>
@@ -52,8 +63,8 @@ watch(
     <template #title>
       <div class="dialog-title">
         <div>
-          <div class="dialog-breadcrumb">首页 / 工作台 / 待办事项 / 外委二次判定</div>
-          <strong>外委检定员二次判定</strong>
+          <div class="dialog-breadcrumb">首页 / 工作台 / 待办事项 / 报废处置</div>
+          <strong>外委检定员报废处置</strong>
         </div>
         <div class="dialog-title-actions">
           <a-button @click="close">取消</a-button>
@@ -66,7 +77,7 @@ watch(
       <section class="panel">
         <div class="panel-header">
           <h2>设备信息</h2>
-          <a-tag class="tag red">不合格待判定</a-tag>
+          <a-tag class="tag red">待报废处置</a-tag>
         </div>
         <div class="info-grid">
           <div><span>计量编号</span><strong>{{ displayValue(task?.deviceCode) }}</strong></div>
@@ -76,22 +87,20 @@ watch(
         </div>
       </section>
 
+      <PeriodicJudgementHistory :records="task?.judgementRecords" />
+
       <section class="panel">
         <div class="panel-header">
-          <h2>二次判定</h2>
+          <h2>处置信息</h2>
         </div>
         <div class="form-grid">
           <label>
-            <span>处理方式</span>
-            <a-radio-group v-model:value="form.disposal" button-style="solid">
-              <a-radio-button value="qualified">合格</a-radio-button>
-              <a-radio-button value="repair">维修</a-radio-button>
-              <a-radio-button value="scrap">报废</a-radio-button>
-            </a-radio-group>
+            <span>报废原因</span>
+            <a-textarea v-model:value="form.scrapReason" :rows="3" :maxlength="1000" show-count />
           </label>
           <label>
-            <span>判定意见</span>
-            <a-textarea v-model:value="form.opinion" :rows="3" />
+            <span>处理意见</span>
+            <a-textarea v-model:value="form.opinion" :rows="3" :maxlength="1000" show-count />
           </label>
         </div>
       </section>

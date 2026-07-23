@@ -7,11 +7,12 @@ import {
   confirmerConfirmPeriodic,
   exceptionDisposePeriodic,
   generatePeriodicTestPlan,
+  getPeriodicTask,
   listPeriodicMyHistory,
   listPeriodicMyTasks,
   managerForwardConfirmPeriodic,
-  responsibleSecondJudgePeriodic,
-  secondJudgePeriodic,
+  submitPeriodicJudgement,
+  submitPeriodicScrapDisposal,
   submitPeriodicExceptionChange,
   supplierFillInfoPeriodic,
   verificationRecordPeriodic,
@@ -21,9 +22,9 @@ import { listUsersByDeptAndRole, type SysUserVO } from '../../../api/system'
 import type {
   EntityId,
   PeriodicConfirmerConfirmRequest,
+  PeriodicJudgementRequest,
   PeriodicManagerForwardConfirmRequest,
-  PeriodicResponsibleSecondJudgeRequest,
-  PeriodicSecondJudgeRequest,
+  PeriodicScrapDisposalRequest,
   PeriodicSupplierFillInfoRequest,
   PeriodicTestPlanScenario,
   PeriodicTaskVO,
@@ -38,9 +39,9 @@ import PeriodicDetailDialog from './PeriodicDetailDialog.vue'
 import PeriodicExceptionDialog from './PeriodicExceptionDialog.vue'
 import PeriodicExternalVerifyDialog from './PeriodicExternalVerifyDialog.vue'
 import PeriodicForwardConfirmDialog from './PeriodicForwardConfirmDialog.vue'
+import PeriodicJudgementDialog from './PeriodicJudgementDialog.vue'
 import PeriodicPlanSummary from './PeriodicPlanSummary.vue'
-import PeriodicResponsibleJudgeDialog from './PeriodicResponsibleJudgeDialog.vue'
-import PeriodicSecondJudgeDialog from './PeriodicSecondJudgeDialog.vue'
+import PeriodicScrapDisposalDialog from './PeriodicScrapDisposalDialog.vue'
 import PeriodicSupplierFillDialog from './PeriodicSupplierFillDialog.vue'
 import PeriodicTaskTable from './PeriodicTaskTable.vue'
 import PeriodicVerifyDialog from './PeriodicVerifyDialog.vue'
@@ -50,7 +51,7 @@ import {
   canSubmitPeriodicException,
   type PeriodicExceptionAction
 } from '../periodicExceptionModel'
-import type { PeriodicTableRole } from '../periodicDisplayModel'
+import { getPeriodicJudgementDisplay, type PeriodicTableRole } from '../periodicDisplayModel'
 
 type ActiveTab = 'todo' | 'history'
 
@@ -92,13 +93,16 @@ const detailOpen = ref(false)
 const verifyOpen = ref(false)
 const externalVerifyOpen = ref(false)
 const supplierFillOpen = ref(false)
-const responsibleJudgeOpen = ref(false)
-const secondJudgeOpen = ref(false)
+/** 统一多轮判定弹窗是否打开。 */
+const judgementOpen = ref(false)
+/** 外委检定员报废处置弹窗是否打开。 */
+const scrapDisposalOpen = ref(false)
 const forwardOpen = ref(false)
 const confirmOpen = ref(false)
 const exceptionOpen = ref(false)
 const exceptionTasks = ref<PeriodicTaskVO[]>([])
 
+/** 工作台当前节点筛选项，与后端周检节点编码保持一致。 */
 const statusOptions = computed(() => [
   { label: '当前状态筛选', value: 'all' },
   { label: props.role === 'admin' ? '待异常分流' : '待扫码接收', value: 'plan_confirm' },
@@ -107,10 +111,23 @@ const statusOptions = computed(() => [
   { label: '外委送回', value: 'send_out_return' },
   { label: '外扩填写', value: 'supplier_fill_info' },
   { label: '外委填写', value: 'verifier_fill_info' },
+  { label: '外委二次判定', value: 'verifier_second_judge' },
   { label: '责任工程师二次判定', value: 'responsible_second_judge' },
-  { label: '外委三次判定', value: 'external_third_judge' },
+  { label: '责任工程师三次判定', value: 'responsible_third_judge' },
+  { label: '外委三次判定', value: 'verifier_third_judge' },
+  { label: '责任工程师四次判定', value: 'responsible_fourth_judge' },
+  { label: '外委报废处置', value: 'verifier_scrap_disposal' },
   { label: '报告待转办', value: 'manager_forward_confirm' },
   { label: '报告待确认', value: 'confirmer_confirm' }
+])
+
+/** 统一判定弹窗处理的节点集合。 */
+const judgementNodeCodes = new Set([
+  'verifier_second_judge',
+  'responsible_second_judge',
+  'responsible_third_judge',
+  'verifier_third_judge',
+  'responsible_fourth_judge'
 ])
 
 const testPlanScenarioOptions: Array<{ label: string; value: PeriodicTestPlanScenario }> = [
@@ -270,7 +287,28 @@ function confirmExceptionDispose(task: PeriodicTaskVO) {
   })
 }
 
-function openProcess(task: PeriodicTaskVO) {
+/**
+ * 读取当前任务的权威详情，供判定和报废弹窗展示完整上游记录。
+ *
+ * @param task 当前列表快照。
+ */
+async function loadAuthoritativeTask(task: PeriodicTaskVO) {
+  try {
+    const detail = await getPeriodicTask(task.id)
+    activeTask.value = detail
+    return detail
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '读取周检任务详情失败')
+    return null
+  }
+}
+
+/**
+ * 根据后端返回的当前节点打开对应处理入口。
+ *
+ * @param task 当前待办任务。
+ */
+async function openProcess(task: PeriodicTaskVO) {
   if (activeTab.value === 'history') {
     openDetail(task)
     return
@@ -304,12 +342,14 @@ function openProcess(task: PeriodicTaskVO) {
     externalVerifyOpen.value = true
     return
   }
-  if (node === 'responsible_second_judge') {
-    responsibleJudgeOpen.value = true
+  if (judgementNodeCodes.has(node)) {
+    if (!await loadAuthoritativeTask(task)) return
+    judgementOpen.value = true
     return
   }
-  if (node === 'external_third_judge') {
-    secondJudgeOpen.value = true
+  if (node === 'verifier_scrap_disposal') {
+    if (!await loadAuthoritativeTask(task)) return
+    scrapDisposalOpen.value = true
     return
   }
   if (node === 'confirmer_confirm') {
@@ -507,15 +547,27 @@ async function submitSupplierFill(payload: PeriodicSupplierFillInfoRequest) {
   })
 }
 
-async function submitSecondJudge(payload: PeriodicSecondJudgeRequest) {
-  await runSubmit(() => secondJudgePeriodic(payload), '外委三次判定已提交', () => {
-    secondJudgeOpen.value = false
+/**
+ * 提交当前节点的统一判定，并重新读取后端权威待办。
+ *
+ * @param payload 判定结果与意见。
+ */
+async function handleJudgementSubmit(payload: PeriodicJudgementRequest) {
+  const display = getPeriodicJudgementDisplay(activeTask.value?.currentNode)
+  const successText = display ? `${display.roleName}第${display.round}次判定已提交` : '周检判定已提交'
+  await runSubmit(() => submitPeriodicJudgement(payload), successText, () => {
+    judgementOpen.value = false
   })
 }
 
-async function submitResponsibleJudge(payload: PeriodicResponsibleSecondJudgeRequest) {
-  await runSubmit(() => responsibleSecondJudgePeriodic(payload), '责任工程师二次判定已提交', () => {
-    responsibleJudgeOpen.value = false
+/**
+ * 提交外委检定员报废处置，并重新读取后端权威待办。
+ *
+ * @param payload 报废原因与处理意见。
+ */
+async function handleScrapDisposalSubmit(payload: PeriodicScrapDisposalRequest) {
+  await runSubmit(() => submitPeriodicScrapDisposal(payload), '报废处置已提交', () => {
+    scrapDisposalOpen.value = false
   })
 }
 
@@ -660,17 +712,17 @@ watch(routePlanId, () => {
       :submitting="submitting"
       @submit="submitSupplierFill"
     />
-    <PeriodicResponsibleJudgeDialog
-      v-model:open="responsibleJudgeOpen"
+    <PeriodicJudgementDialog
+      v-model:open="judgementOpen"
       :task="activeTask"
       :submitting="submitting"
-      @submit="submitResponsibleJudge"
+      @submit="handleJudgementSubmit"
     />
-    <PeriodicSecondJudgeDialog
-      v-model:open="secondJudgeOpen"
+    <PeriodicScrapDisposalDialog
+      v-model:open="scrapDisposalOpen"
       :task="activeTask"
       :submitting="submitting"
-      @submit="submitSecondJudge"
+      @submit="handleScrapDisposalSubmit"
     />
     <PeriodicForwardConfirmDialog
       v-model:open="forwardOpen"

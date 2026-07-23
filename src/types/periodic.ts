@@ -2,6 +2,7 @@ export type EntityId = string | number
 
 export type PeriodicTestPlanScenario = 'self' | 'external_common' | 'external_non_common'
 
+/** 周检任务当前业务节点编码。 */
 export type PeriodicNodeCode =
   | 'plan_issue'
   | 'plan_confirm'
@@ -12,8 +13,12 @@ export type PeriodicNodeCode =
   | 'send_out_return'
   | 'supplier_fill_info'
   | 'verifier_fill_info'
+  | 'verifier_second_judge'
   | 'responsible_second_judge'
-  | 'external_third_judge'
+  | 'responsible_third_judge'
+  | 'verifier_third_judge'
+  | 'responsible_fourth_judge'
+  | 'verifier_scrap_disposal'
   | 'manager_forward_confirm'
   | 'confirmer_confirm'
   | 'exception_disposal'
@@ -34,8 +39,9 @@ export type PeriodicTaskStatus =
 
 export type PeriodicVerificationResult = 'qualified' | 'unqualified' | string
 export type PeriodicConfirmResult = 'APPROVE' | 'REJECT' | 'PASS' | 'RETURN' | string
-export type PeriodicResponsibleJudgeResult = 'qualified' | 'unqualified'
-export type PeriodicSecondJudgeDisposal = 'qualified' | 'repair' | 'scrap'
+
+/** 周检多轮判定接口允许提交的判定结果。 */
+export type PeriodicJudgementResult = 'qualified' | 'unqualified'
 
 export interface PeriodicPlanVO {
   id: EntityId
@@ -55,6 +61,20 @@ export interface PeriodicPlanVO {
   statusName?: string
   generatedAt?: string
   remark?: string
+}
+
+/** 周检外委通用设备的一轮正式判定记录。 */
+export interface PeriodicJudgementRecordVO {
+  id: EntityId
+  roundNo: number
+  nodeCode: string
+  judgeRoleCode: string
+  judgeUserId: string
+  judgeUserName: string
+  judgeResult: PeriodicJudgementResult
+  opinion?: string
+  sourceRecordId?: EntityId
+  judgedAt?: string
 }
 
 export interface PeriodicTaskVO {
@@ -108,6 +128,7 @@ export interface PeriodicTaskVO {
   measureManagerName?: string
   verificationTime?: string
   newValidUntil?: string
+  judgementRecords?: PeriodicJudgementRecordVO[]
 }
 
 export interface PeriodicDisplayRow {
@@ -235,14 +256,16 @@ export interface PeriodicVerifierFillInfoRequest {
   opinion?: string
 }
 
-export interface PeriodicSecondJudgeRequest {
+/** 周检多轮判定请求，由后端依据当前待办决定角色、轮次和下一节点。 */
+export interface PeriodicJudgementRequest {
   taskId: EntityId
-  disposal: PeriodicSecondJudgeDisposal | string
+  judgeResult: PeriodicJudgementResult
   opinion?: string
 }
 
-export interface PeriodicResponsibleSecondJudgeRequest {
+/** 外委检定员报废处置请求。 */
+export interface PeriodicScrapDisposalRequest {
   taskId: EntityId
-  judgeResult: PeriodicResponsibleJudgeResult | string
+  scrapReason: string
   opinion?: string
 }

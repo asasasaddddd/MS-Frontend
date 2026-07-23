@@ -1,8 +1,14 @@
 <script setup lang="ts">
-import { reactive, watch } from 'vue'
-import { displayValue } from '../periodicDisplayModel'
-import type { PeriodicResponsibleJudgeResult, PeriodicResponsibleSecondJudgeRequest, PeriodicTaskVO } from '../../../types/periodic'
+import { computed, reactive, watch } from 'vue'
+import { displayValue, getPeriodicJudgementDisplay } from '../periodicDisplayModel'
+import PeriodicJudgementHistory from './PeriodicJudgementHistory.vue'
+import type {
+  PeriodicJudgementRequest,
+  PeriodicJudgementResult,
+  PeriodicTaskVO
+} from '../../../types/periodic'
 
+/** 统一判定弹窗输入，由当前后端待办提供节点和设备信息。 */
 const props = withDefaults(
   defineProps<{
     open: boolean
@@ -14,22 +20,45 @@ const props = withDefaults(
   }
 )
 
+/** 统一判定弹窗的关闭和提交事件。 */
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  submit: [payload: PeriodicResponsibleSecondJudgeRequest]
+  submit: [payload: PeriodicJudgementRequest]
 }>()
 
+/** 当前判定表单，只包含后端统一判定接口接受的业务字段。 */
 const form = reactive({
-  judgeResult: 'qualified' as PeriodicResponsibleJudgeResult,
-  opinion: '责任工程师二次判定合格'
+  judgeResult: 'qualified' as PeriodicJudgementResult,
+  opinion: ''
 })
 
+/** 当前节点对应的处理角色和判定轮次。 */
+const judgementDisplay = computed(() => getPeriodicJudgementDisplay(props.task?.currentNode))
+
+/** 弹窗标题，始终反映当前待办的处理角色和判定轮次。 */
+const dialogTitle = computed(() => {
+  const display = judgementDisplay.value
+  return display ? `${display.roleName}第${display.round}次判定` : '周检判定'
+})
+
+/**
+ * 生成与当前节点和结果一致的默认判定意见。
+ *
+ * @param result 当前选择的判定结果。
+ */
+function defaultOpinion(result: PeriodicJudgementResult) {
+  const resultName = result === 'qualified' ? '合格' : '不合格'
+  return `${dialogTitle.value}${resultName}`
+}
+
+/** 关闭统一判定弹窗。 */
 function close() {
   emit('update:open', false)
 }
 
+/** 提交当前任务的判定结果，不携带角色、轮次或下一节点。 */
 function submit() {
-  if (!props.task) return
+  if (!props.task || !judgementDisplay.value) return
   emit('submit', {
     taskId: props.task.id,
     judgeResult: form.judgeResult,
@@ -42,7 +71,18 @@ watch(
   (open) => {
     if (!open) return
     form.judgeResult = 'qualified'
-    form.opinion = '责任工程师二次判定合格'
+    form.opinion = defaultOpinion(form.judgeResult)
+  }
+)
+
+watch(
+  () => form.judgeResult,
+  (result, previousResult) => {
+    if (!props.open) return
+    const previousDefault = defaultOpinion(previousResult)
+    if (!form.opinion || form.opinion === previousDefault) {
+      form.opinion = defaultOpinion(result)
+    }
   }
 )
 </script>
@@ -52,8 +92,8 @@ watch(
     <template #title>
       <div class="dialog-title">
         <div>
-          <div class="dialog-breadcrumb">首页 / 工作台 / 待办事项 / 责任工程师二次判定</div>
-          <strong>责任工程师二次判定</strong>
+          <div class="dialog-breadcrumb">首页 / 工作台 / 待办事项 / {{ dialogTitle }}</div>
+          <strong>{{ dialogTitle }}</strong>
         </div>
         <div class="dialog-title-actions">
           <a-button @click="close">取消</a-button>
@@ -66,15 +106,19 @@ watch(
       <section class="panel">
         <div class="panel-header">
           <h2>设备信息</h2>
-          <a-tag class="tag orange">待二次判定</a-tag>
+          <a-tag class="tag orange">待判定</a-tag>
         </div>
         <div class="info-grid">
           <div><span>计量编号</span><strong>{{ displayValue(task?.deviceCode) }}</strong></div>
           <div><span>设备名称</span><strong>{{ displayValue(task?.deviceName) }}</strong></div>
           <div><span>规格型号</span><strong>{{ displayValue(task?.modelSpec) }}</strong></div>
           <div><span>使用部门</span><strong>{{ displayValue(task?.deptName) }}</strong></div>
+          <div><span>当前角色</span><strong>{{ displayValue(judgementDisplay?.roleName) }}</strong></div>
+          <div><span>判定轮次</span><strong>第{{ judgementDisplay?.round }}次</strong></div>
         </div>
       </section>
+
+      <PeriodicJudgementHistory :records="task?.judgementRecords" />
 
       <section class="panel">
         <div class="panel-header">
@@ -90,7 +134,7 @@ watch(
           </label>
           <label>
             <span>判定意见</span>
-            <a-textarea v-model:value="form.opinion" :rows="3" />
+            <a-textarea v-model:value="form.opinion" :rows="3" :maxlength="1000" show-count />
           </label>
         </div>
       </section>
@@ -148,17 +192,14 @@ watch(
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .info-grid > div {
   min-height: 74px;
   padding: 14px;
   border-right: 1px solid #e5eaf1;
-}
-
-.info-grid > div:last-child {
-  border-right: 0;
+  border-bottom: 1px solid #e5eaf1;
 }
 
 .info-grid span,
@@ -198,7 +239,6 @@ watch(
 
   .info-grid > div {
     border-right: 0;
-    border-bottom: 1px solid #e5eaf1;
   }
 }
 </style>

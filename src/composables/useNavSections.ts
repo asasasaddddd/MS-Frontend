@@ -42,7 +42,7 @@ const businessRoles: RoleCode[] = [
   'SUPPLIER'
 ]
 
-// 业务处理页只作为工作台待办的跳转目标，不直接出现在侧边栏。
+/** 业务处理页只作为工作台待办的跳转目标，不直接出现在侧边栏。 */
 export const workflowRouteItems: NavItem[] = [
   {
     path: '/periodic/admin',
@@ -63,7 +63,7 @@ export const workflowRouteItems: NavItem[] = [
   {
     path: '/periodic/verifier-external',
     title: '周检',
-    description: '外委送回、否通用检定信息和二次判定',
+    description: '外委送回、检定信息、多轮判定和报废处置',
     module: 'periodic',
     roles: ['VERIFIER_EXTERNAL'],
     nodes: [...workflowNodeGroups.periodic.externalVerifier]
@@ -71,7 +71,7 @@ export const workflowRouteItems: NavItem[] = [
   {
     path: '/periodic/responsible-engineer',
     title: '周检',
-    description: '外委通用设备责任工程师二次判定',
+    description: '外委通用设备责任工程师多轮判定',
     module: 'periodic',
     roles: ['RESPONSIBLE_ENGINEER'],
     nodes: [...workflowNodeGroups.periodic.responsibleEngineer]

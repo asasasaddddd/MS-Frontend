@@ -21,6 +21,31 @@ export type PeriodicDisplayRowWithMeta = PeriodicDisplayRow & {
   tagColor: PeriodicTagColor
 }
 
+/** 周检判定弹窗所需的角色与轮次展示信息。 */
+export interface PeriodicJudgementDisplay {
+  roleCode: 'VERIFIER_EXTERNAL' | 'RESPONSIBLE_ENGINEER'
+  roleName: '外委检定员' | '责任工程师'
+  round: 2 | 3 | 4
+}
+
+/** 各多轮判定节点对应的权威展示信息。 */
+const periodicJudgementDisplays: Readonly<Record<string, PeriodicJudgementDisplay>> = {
+  verifier_second_judge: { roleCode: 'VERIFIER_EXTERNAL', roleName: '外委检定员', round: 2 },
+  responsible_second_judge: { roleCode: 'RESPONSIBLE_ENGINEER', roleName: '责任工程师', round: 2 },
+  responsible_third_judge: { roleCode: 'RESPONSIBLE_ENGINEER', roleName: '责任工程师', round: 3 },
+  verifier_third_judge: { roleCode: 'VERIFIER_EXTERNAL', roleName: '外委检定员', round: 3 },
+  responsible_fourth_judge: { roleCode: 'RESPONSIBLE_ENGINEER', roleName: '责任工程师', round: 4 }
+}
+
+/**
+ * 读取当前周检判定节点的角色与轮次。
+ *
+ * @param nodeCode 当前后端待办节点编码。
+ */
+export function getPeriodicJudgementDisplay(nodeCode?: string) {
+  return nodeCode ? periodicJudgementDisplays[nodeCode] : undefined
+}
+
 export function displayValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '-'
   return String(value)
@@ -73,6 +98,11 @@ function resultName(value?: string) {
   return value ? map[value] || value : '-'
 }
 
+/**
+ * 返回任务表格和详情回退使用的周检节点名称。
+ *
+ * @param value 周检节点编码。
+ */
 function nodeDisplayName(value?: string) {
   const map: Record<string, string> = {
     plan_issue: '计划下发',
@@ -84,8 +114,12 @@ function nodeDisplayName(value?: string) {
     send_out_return: '外委送回',
     supplier_fill_info: '外扩人员填写检定信息',
     verifier_fill_info: '外委检定员填写检定信息',
+    verifier_second_judge: '外委检定员二次判定',
     responsible_second_judge: '责任工程师二次判定',
-    external_third_judge: '外委检定员三次判定',
+    responsible_third_judge: '责任工程师三次判定',
+    verifier_third_judge: '外委检定员三次判定',
+    responsible_fourth_judge: '责任工程师四次判定',
+    verifier_scrap_disposal: '外委检定员报废处置',
     manager_forward_confirm: '管理员转办确认员',
     confirmer_confirm: '确认员判定',
     exception_disposal: '异常处置',
@@ -109,6 +143,11 @@ function statusDisplayName(value?: string) {
   return value ? map[value] || value : '-'
 }
 
+/**
+ * 返回周检节点或任务状态对应的标签颜色。
+ *
+ * @param nodeOrStatus 节点编码或任务状态编码。
+ */
 export function periodicTagColor(nodeOrStatus?: string): PeriodicTagColor {
   const value = String(nodeOrStatus || '').toLowerCase()
   if (['exception_disposal', 'exception', 'rejected', 'cancelled'].includes(value)) return 'red'
@@ -118,6 +157,12 @@ export function periodicTagColor(nodeOrStatus?: string): PeriodicTagColor {
       'plan_confirm',
       'manager_forward_confirm',
       'confirmer_confirm',
+      'verifier_second_judge',
+      'responsible_second_judge',
+      'responsible_third_judge',
+      'verifier_third_judge',
+      'responsible_fourth_judge',
+      'verifier_scrap_disposal',
       'wait_confirm',
       'pending',
       'processing'

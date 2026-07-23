@@ -1,7 +1,8 @@
 import { request } from '@/api/request'
 import {
+  buildPeriodicJudgementRequest,
   buildPeriodicScanRequest,
-  buildPeriodicSecondJudgeRequest,
+  buildPeriodicScrapDisposalRequest,
   buildPeriodicVerificationRecordRequest,
   periodicEndpoint
 } from '@/api/periodicContract'
@@ -11,11 +12,11 @@ import type {
   GeneratePeriodicPlanRequest,
   PeriodicConfirmerConfirmRequest,
   PeriodicExceptionDisposeRequest,
+  PeriodicJudgementRequest,
   PeriodicManagerForwardConfirmRequest,
   PeriodicPlanVO,
-  PeriodicResponsibleSecondJudgeRequest,
   PeriodicScanRequest,
-  PeriodicSecondJudgeRequest,
+  PeriodicScrapDisposalRequest,
   PeriodicSupplierFillInfoRequest,
   PeriodicTestPlanScenario,
   PeriodicTaskVO,
@@ -173,19 +174,29 @@ export function verifierFillInfoPeriodic(data: PeriodicVerifierFillInfoRequest) 
   })
 }
 
-export function secondJudgePeriodic(data: PeriodicSecondJudgeRequest) {
+/**
+ * 提交当前周检待办的统一判定结果。
+ *
+ * @param data 判定结果与处理意见。
+ */
+export function submitPeriodicJudgement(data: PeriodicJudgementRequest) {
   return request<void>({
-    url: periodicEndpoint('secondJudge'),
+    url: periodicEndpoint('judgements'),
     method: 'POST',
-    data: buildPeriodicSecondJudgeRequest(data)
+    data: buildPeriodicJudgementRequest(data)
   })
 }
 
-export function responsibleSecondJudgePeriodic(data: PeriodicResponsibleSecondJudgeRequest) {
+/**
+ * 提交外委检定员的周检报废处置意见。
+ *
+ * @param data 报废原因与处理意见。
+ */
+export function submitPeriodicScrapDisposal(data: PeriodicScrapDisposalRequest) {
   return request<void>({
-    url: periodicEndpoint('responsibleSecondJudge'),
+    url: periodicEndpoint('scrapDisposal'),
     method: 'POST',
-    data
+    data: buildPeriodicScrapDisposalRequest(data)
   })
 }
 

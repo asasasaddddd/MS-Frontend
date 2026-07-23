@@ -16,11 +16,37 @@ assert.deepEqual(workflowNodeGroups.periodic.externalOperator, ['send_out', 'sup
 assert.equal(getRoleWorkflowNodes('periodic', 'EXTERNAL_OPERATOR').some((node) => node.code === 'supplier_fill_info'), true)
 assert.equal(getRoleWorkflowNodes('periodic', 'VERIFIER_EXTERNAL').some((node) => node.code === 'supplier_fill_info'), false)
 
-const responsibleSecondJudgeNode = getWorkflowNode('periodic', 'responsible_second_judge')
-assert.deepEqual(responsibleSecondJudgeNode?.roles, ['RESPONSIBLE_ENGINEER'])
+const responsibleJudgementNodes = [
+  'responsible_second_judge',
+  'responsible_third_judge',
+  'responsible_fourth_judge'
+]
+for (const nodeCode of responsibleJudgementNodes) {
+  const node = getWorkflowNode('periodic', nodeCode)
+  assert.deepEqual(node?.roles, ['RESPONSIBLE_ENGINEER'])
+  assert.equal(node?.api, 'POST /api/periodic/judgements')
+}
 
-const externalThirdJudgeNode = getWorkflowNode('periodic', 'external_third_judge')
-assert.deepEqual(externalThirdJudgeNode?.roles, ['VERIFIER_EXTERNAL'])
+const verifierJudgementNodes = ['verifier_second_judge', 'verifier_third_judge']
+for (const nodeCode of verifierJudgementNodes) {
+  const node = getWorkflowNode('periodic', nodeCode)
+  assert.deepEqual(node?.roles, ['VERIFIER_EXTERNAL'])
+  assert.equal(node?.api, 'POST /api/periodic/judgements')
+}
+
+const verifierScrapDisposalNode = getWorkflowNode('periodic', 'verifier_scrap_disposal')
+assert.deepEqual(verifierScrapDisposalNode?.roles, ['VERIFIER_EXTERNAL'])
+assert.equal(verifierScrapDisposalNode?.api, 'POST /api/periodic/scrap-disposal')
+
+assert.equal(getWorkflowNode('periodic', 'external_third_judge'), undefined)
+
+assert.deepEqual(workflowNodeGroups.periodic.responsibleEngineer, responsibleJudgementNodes)
+assert.equal(
+  ['verifier_second_judge', 'verifier_third_judge', 'verifier_scrap_disposal'].every((nodeCode) =>
+    workflowNodeGroups.periodic.externalVerifier.includes(nodeCode)
+  ),
+  true
+)
 
 assert.deepEqual(firstCheckNodeCodesByRole.MEASURE_ADMIN, ['manager_check'])
 assert.equal(matchesWorkflowTaskRole({ nodeCode: 'manager_check' }, 'firstcheck', 'MEASURE_ADMIN'), true)

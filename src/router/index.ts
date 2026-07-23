@@ -111,7 +111,7 @@ const metaByPath: Partial<Record<string, RouteRecordRaw['meta']>> = {
     breadcrumb: '首页 / 工作台 / 周检'
   },
   '/periodic/responsible-engineer': {
-    title: '责任工程师周检二次判定',
+    title: '责任工程师周检判定',
     breadcrumb: '首页 / 工作台 / 周检'
   },
   '/periodic/external-operator': {
