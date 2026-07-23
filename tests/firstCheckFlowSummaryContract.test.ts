@@ -16,7 +16,7 @@ for (const viewPath of firstCheckViewPaths) {
   assert.match(viewSource, /getFirstCheckFlowSummary/)
   assert.match(viewSource, /getFirstCheckFlowSummary\(\)/)
   assert.match(viewSource, /FlowStatusSummary/)
-  assert.match(viewSource, /title="首检参与流程汇总"/)
+  assert.match(viewSource, /title="首检当前角色待办汇总"/)
   assert.match(viewSource, /:summary="firstCheckFlowSummary"/)
   assert.match(
     viewSource,

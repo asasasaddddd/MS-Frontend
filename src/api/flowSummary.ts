@@ -31,9 +31,9 @@ export function getPeriodicPlanFlowSummary(planId: FlowSummaryEntityId): Promise
 }
 
 /**
- * 读取当前人员参与过的首检流程权威汇总。
+ * 读取当前人员当前角色待办范围内的首检流程权威汇总。
  *
- * @param status 可选首检业务状态过滤条件；不传时统计全部参与记录。
+ * @param status 可选首检业务状态过滤条件；不传时统计当前角色全部待办。
  * @returns 首检单据维度及赋码设备维度的统一快照。
  */
 export function getFirstCheckFlowSummary(status?: string): Promise<FlowSummary> {

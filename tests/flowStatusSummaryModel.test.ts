@@ -12,8 +12,9 @@ const summary: FlowSummary = {
   scope: 'plan:2079830500997668866',
   snapshotAt: '2026-07-22T10:30:00',
   overview: [
-    { metricCode: 'total', countUnit: 'device', value: 6 },
-    { metricCode: 'completed', countUnit: 'device', value: 1 }
+    { metricCode: 'completed', countUnit: 'device', value: 99 },
+    { metricCode: 'today_new', countUnit: 'order', value: 1 },
+    { metricCode: 'pending', countUnit: 'order', value: 6 }
   ],
   dimensions: [
     {
@@ -90,9 +91,49 @@ assert.deepEqual(
     countUnitLabel
   })),
   [
-    { metricCode: 'total', label: '总数', value: 6, countUnitLabel: '台' },
-    { metricCode: 'completed', label: '已完成', value: 1, countUnitLabel: '台' }
+    { metricCode: 'pending', label: '当前角色待办', value: 6, countUnitLabel: '单' },
+    { metricCode: 'today_new', label: '今日新增', value: 1, countUnitLabel: '单' }
+  ],
+  '公共组件顶部只能展示后端返回的当前角色待办和今日新增，不能混入模块自定义指标'
+)
+
+assert.equal(
+  viewModel.pendingDimension?.dimensionCode,
+  'business',
+  '同时存在多个维度时应优先平铺后端业务节点，不能要求用户切换分块'
+)
+assert.deepEqual(
+  viewModel.pendingDimension?.stages.map(({ stageCode, count }) => ({ stageCode, count })),
+  [
+    { stageCode: 'plan_confirm', count: 5 },
+    { stageCode: 'completed', count: 1 }
   ]
+)
+
+const workflowFallbackSummary: FlowSummary = {
+  ...summary,
+  dimensions: [
+    {
+      dimensionCode: 'workflow',
+      countUnit: 'order',
+      totalCount: 2,
+      unknownCount: 0,
+      stageCounts: { dept_leader_approve: 2 }
+    },
+    {
+      dimensionCode: 'physical',
+      countUnit: 'device',
+      totalCount: 2,
+      unknownCount: 0,
+      stageCounts: { wait_verifier_receive: 2 }
+    }
+  ]
+}
+
+assert.equal(
+  buildFlowStatusViewModel(workflowFallbackSummary).pendingDimension?.dimensionCode,
+  'workflow',
+  '没有业务维度时应回退展示工作流待办节点'
 )
 
 const summaryWithUnregisteredStage: FlowSummary = {
@@ -121,7 +162,7 @@ assert.deepEqual(validateFlowSummary(summary), [])
 
 const numericStringSummary = {
   ...summary,
-  overview: [{ metricCode: 'total', countUnit: 'order', value: '5' as unknown as number }],
+  overview: [{ metricCode: 'pending', countUnit: 'order', value: '5' as unknown as number }],
   dimensions: [
     {
       dimensionCode: 'business' as const,
@@ -170,35 +211,52 @@ const componentSource = readFileSync(
   'utf8'
 )
 const apiSource = readFileSync(new URL('../src/api/flowSummary.ts', import.meta.url), 'utf8')
+const changeApplySource = readFileSync(
+  new URL('../src/views/change/ChangeApplyView.vue', import.meta.url),
+  'utf8'
+)
+const changeHistorySource = readFileSync(
+  new URL('../src/views/change/components/ChangeHistoryPanel.vue', import.meta.url),
+  'utf8'
+)
+const changeTodoSources = [
+  '../src/views/change/ChangeVerifierView.vue',
+  '../src/views/change/ChangeDeptLeaderView.vue',
+  '../src/views/change/components/ChangeReceiveAdminPanel.vue'
+].map((source) => readFileSync(new URL(source, import.meta.url), 'utf8'))
 
 assert.match(componentSource, /summary\??:\s*FlowSummary\s*\|\s*null/)
 assert.doesNotMatch(componentSource, /tasks\??\s*:/)
 assert.match(componentSource, /<a-alert/)
 assert.match(componentSource, /countUnitLabel/)
 assert.match(componentSource, /summary-line/)
-assert.match(componentSource, /dimension-quick-links/)
-assert.match(componentSource, /activeGroupCode/)
-assert.match(componentSource, /@click\.stop="selectDimension\(group\.code\)"/)
-assert.match(
-  componentSource,
-  /<template v-for="group in dimensionGroups" :key="group\.code">/
-)
-assert.match(componentSource, /v-show="activeGroupCode === group\.code"/)
-assert.match(componentSource, /v-for="dimension in group\.dimensions"/)
-assert.doesNotMatch(componentSource, /const activeGroup = computed/)
-assert.match(componentSource, /activeGroupCode\.value = groupCode/)
-assert.doesNotMatch(componentSource, /activeGroupCode\.value === groupCode \? '' : groupCode/)
+assert.match(componentSource, /viewModel\.pendingDimension/)
+assert.match(componentSource, /当前待办状态/)
+assert.match(componentSource, /v-for="stage in viewModel\.pendingDimension\.stages"/)
+assert.doesNotMatch(componentSource, /dimension-quick-links/)
+assert.doesNotMatch(componentSource, /dimensionGroups/)
+assert.doesNotMatch(componentSource, /activeGroupCode/)
+assert.doesNotMatch(componentSource, /selectDimension/)
+assert.doesNotMatch(componentSource, /业务流程|实物交接|标签状态/)
+assert.doesNotMatch(componentSource, /@click\.stop/)
+assert.doesNotMatch(componentSource, /v-show=/)
 assert.doesNotMatch(componentSource, /<h2>\{\{ title \}\}<\/h2>/)
 assert.doesNotMatch(componentSource, /setInterval|setTimeout/)
 assert.match(apiSource, /\/periodic\/plans\/\$\{encodeURIComponent\(String\(planId\)\)\}\/summary/)
+assert.doesNotMatch(changeApplySource, /FlowStatusSummary|getChangeFlowSummary/)
+assert.doesNotMatch(changeHistorySource, /FlowStatusSummary|getChangeFlowSummary/)
+changeTodoSources.forEach((source) => {
+  assert.match(source, /FlowStatusSummary/)
+  assert.match(source, /getChangeFlowSummary\('pending'\)/)
+})
 
 const productionContractSummary: FlowSummary = {
   businessType: 'CHANGE',
   scope: 'pending',
   snapshotAt: '2026-07-22T11:00:00',
   overview: [
-    { metricCode: 'total_device', countUnit: 'device', value: 8 },
-    { metricCode: 'type:seal', countUnit: 'order', value: 2 }
+    { metricCode: 'pending', countUnit: 'order', value: 2 },
+    { metricCode: 'today_new', countUnit: 'order', value: 1 }
   ],
   dimensions: [
     {
@@ -233,8 +291,9 @@ const productionContractSummary: FlowSummary = {
 }
 
 const productionContractView = buildFlowStatusViewModel(productionContractSummary)
-assert.equal(productionContractView.overview[0]?.label, '设备总数')
-assert.equal(productionContractView.overview[1]?.label, '封存')
+assert.equal(productionContractView.overview[0]?.label, '当前角色待办')
+assert.equal(productionContractView.overview[1]?.label, '今日新增')
+assert.equal(productionContractView.pendingDimension?.dimensionCode, 'workflow')
 assert.equal(productionContractView.dimensions[0]?.dimensionCode, 'workflow')
 assert.equal(productionContractView.dimensions[0]?.label, '工作流节点')
 assert.equal(productionContractView.dimensions[0]?.stages[0]?.label, '封存 · 待计量领导审批')

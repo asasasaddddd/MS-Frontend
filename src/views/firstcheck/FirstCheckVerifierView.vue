@@ -39,7 +39,7 @@ const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
 const loading = ref(false)
-/** 后端按当前检定员参与范围生成的首检流程汇总快照。 */
+/** 后端按当前检定员角色待办范围生成的首检流程汇总快照。 */
 const firstCheckFlowSummary = ref<FlowSummary | null>(null)
 /** 统一汇总接口的加载状态，与待办表加载状态分别传给各自组件。 */
 const summaryLoading = ref(false)
@@ -202,7 +202,7 @@ async function fetchTaskRows(): Promise<VerifierRow[]> {
 }
 
 /**
- * 并行刷新检定员待办与参与流程汇总，并分别处理两路请求结果。
+ * 并行刷新检定员待办与当前角色待办汇总，并分别处理两路请求结果。
  *
  * 任一路失败只清空其自己的展示数据，避免汇总故障覆盖已成功加载的真实待办。
  */
@@ -227,7 +227,7 @@ async function loadRows(): Promise<void> {
     firstCheckFlowSummary.value = summaryResult.value
   } else {
     firstCheckFlowSummary.value = null
-    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '首检参与流程汇总加载失败')
+    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '首检当前角色待办汇总加载失败')
   }
 
   loading.value = false
@@ -278,8 +278,8 @@ onMounted(loadRows)
     <FlowStatusSummary
       :summary="firstCheckFlowSummary"
       :loading="summaryLoading"
-      title="首检参与流程汇总"
-      empty-text="暂无首检参与流程汇总"
+      title="首检当前角色待办汇总"
+      empty-text="暂无首检当前角色待办汇总"
     />
 
     <template v-if="activeTab === 'todo'">

@@ -2,12 +2,9 @@
 import { onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { getChangeOrderDetail } from '@/api/change'
-import { getChangeFlowSummary } from '@/api/flowSummary'
 import { getWorkflowProcessByBusiness, listWorkflowHistory } from '@/api/workflow'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
-import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import type { ChangeOrderVO } from '@/types/change'
-import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowProcess, WorkflowTask } from '@/types/workflow'
 import { changeTypeName, display, formatDateTime } from '@/views/change/changeDisplayModel'
 import { changeNodeCodesByRole, matchesBusinessType } from '@/workflows/metrologyWorkflow'
@@ -27,7 +24,6 @@ const props = defineProps<{
 const loading = ref(false)
 const rows = ref<HistoryRow[]>([])
 /** 当前角色历史已办范围内由后端生成的权威流程汇总。 */
-const changeFlowSummary = ref<FlowSummary | null>(null)
 const detailOpen = ref(false)
 const activeRow = ref<HistoryRow>()
 
@@ -60,20 +56,8 @@ function openDetail(row: HistoryRow) {
 
 async function loadRows() {
   loading.value = true
-  const [taskResult, summaryResult] = await Promise.allSettled([
-    listWorkflowHistory(),
-    getChangeFlowSummary('history')
-  ])
-
-  if (summaryResult.status === 'fulfilled') {
-    changeFlowSummary.value = summaryResult.value
-  } else {
-    changeFlowSummary.value = null
-    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '状态变更历史流程汇总加载失败')
-  }
-
-  if (taskResult.status === 'fulfilled') {
-    const tasks = taskResult.value
+  try {
+    const tasks = (await listWorkflowHistory())
       .filter((task) => matchesBusinessType(task.businessType, 'change'))
       .filter((task) => changeNodeCodesByRole[props.roleCode as keyof typeof changeNodeCodesByRole]?.includes(task.nodeCode))
       .filter((task) => !props.orderId || String(task.businessId) === props.orderId)
@@ -100,11 +84,12 @@ async function loadRows() {
         order: item.value.order,
         process: item.value.process
       }))
-  } else {
+  } catch (error) {
     rows.value = []
-    message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '状态变更已办加载失败')
+    message.error(error instanceof Error ? error.message : '状态变更已办加载失败')
+  } finally {
+    loading.value = false
   }
-  loading.value = false
 }
 
 onMounted(loadRows)
@@ -112,12 +97,6 @@ onMounted(loadRows)
 
 <template>
   <section class="history-workspace">
-    <FlowStatusSummary
-      :summary="changeFlowSummary"
-      :loading="loading"
-      title="状态变更流程汇总（历史已办）"
-    />
-
     <a-card class="history-panel" :bordered="false">
       <template #title><h2>状态变更已办记录</h2></template>
       <a-table :columns="columns" :data-source="rows" :loading="loading" :pagination="{ pageSize: 10, showSizeChanger: false }" :scroll="{ x: 1250 }" row-key="key" size="middle">

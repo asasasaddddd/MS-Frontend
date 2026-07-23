@@ -3,12 +3,9 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { submitChange } from '@/api/change'
 import { listDevicePage } from '@/api/device'
-import { getChangeFlowSummary } from '@/api/flowSummary'
-import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import { useSessionStore } from '@/stores/session'
 import type { ChangeSubmitRequest, ChangeType } from '@/types/change'
 import type { DeviceVO } from '@/types/device'
-import type { FlowSummary } from '@/types/flowSummary'
 import {
   changeTypeMetas,
   deviceRowKey,
@@ -25,7 +22,6 @@ const loading = ref(false)
 const submitting = ref(false)
 const devices = ref<DeviceVO[]>([])
 /** 当前管理员本人申请范围内由后端生成的权威流程汇总。 */
-const changeFlowSummary = ref<FlowSummary | null>(null)
 const selectedLedgerKeys = ref<string[]>([])
 const selectedDevices = ref<DeviceVO[]>([])
 const activeType = ref<ChangeType>()
@@ -134,32 +130,23 @@ async function loadDevices() {
   loading.value = true
   const keyword = query.keyword.trim()
   const codeLike = /^[A-Za-z0-9._-]+$/.test(keyword)
-  const [deviceResult, summaryResult] = await Promise.allSettled([
-    listDevicePage({
+  try {
+    const page = await listDevicePage({
       current: query.current,
       size: query.size,
       deptName: session.user?.deptName || undefined,
       deviceCode: codeLike ? keyword || undefined : undefined,
       deviceName: !codeLike ? keyword || undefined : undefined
-    }),
-    getChangeFlowSummary('applied')
-  ])
-
-  if (deviceResult.status === 'fulfilled') {
-    devices.value = deviceResult.value.records || []
-    query.total = Number(deviceResult.value.total || 0)
-  } else {
+    })
+    devices.value = page.records || []
+    query.total = Number(page.total || 0)
+  } catch (error) {
     devices.value = []
     query.total = 0
-    message.error(deviceResult.reason instanceof Error ? deviceResult.reason.message : '设备台账加载失败')
+    message.error(error instanceof Error ? error.message : '设备台账加载失败')
+  } finally {
+    loading.value = false
   }
-  if (summaryResult.status === 'fulfilled') {
-    changeFlowSummary.value = summaryResult.value
-  } else {
-    changeFlowSummary.value = null
-    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '本人申请流程汇总加载失败')
-  }
-  loading.value = false
 }
 
 function handlePageChange(page: number, size: number) {
@@ -175,12 +162,6 @@ onMounted(() => {
 
 <template>
   <section class="change-apply-page">
-    <FlowStatusSummary
-      :summary="changeFlowSummary"
-      :loading="loading"
-      title="状态变更流程汇总（本人申请）"
-    />
-
     <section class="panel selected-panel">
       <div class="panel-header">
         <h2>待变更设备</h2>

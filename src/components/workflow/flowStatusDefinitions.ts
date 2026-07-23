@@ -107,6 +107,8 @@ export interface FlowStatusViewModel {
   overview: FlowOverviewMetricView[]
   /** 按业务、工作流、实物、扫码、标签、结果、异常顺序排列的维度。 */
   dimensions: FlowDimensionView[]
+  /** 待办页直接平铺的当前节点维度，优先使用业务节点并回退到工作流节点。 */
+  pendingDimension?: FlowDimensionView
 }
 
 /** 后端汇总契约校验失败的具体问题。 */
@@ -138,7 +140,7 @@ export const FLOW_DIMENSION_DEFINITIONS: Readonly<Record<FlowDimensionCode, Flow
 /** 页面顶部概览指标的中文名称和固定顺序。 */
 export const FLOW_OVERVIEW_METRIC_DEFINITIONS: readonly FlowOverviewMetricDefinition[] = [
   { metricCode: 'total', label: '总数', order: 10 },
-  { metricCode: 'pending', label: '待处理', order: 20 },
+  { metricCode: 'pending', label: '当前角色待办', order: 20 },
   { metricCode: 'in_progress', label: '处理中', order: 30 },
   { metricCode: 'completed', label: '已完成', order: 40 },
   { metricCode: 'exception', label: '异常', order: 50 },
@@ -411,6 +413,7 @@ export function buildFlowStatusViewModel(summary: FlowSummary): FlowStatusViewMo
   const validationIssues = validateFlowSummary(summary)
 
   const overview = summary.overview
+    .filter((metric) => metric.metricCode === 'pending' || metric.metricCode === 'today_new')
     .map((metric): FlowOverviewMetricView => {
       const definition = overviewDefinitionIndex.get(metric.metricCode)
       return {
@@ -469,5 +472,8 @@ export function buildFlowStatusViewModel(summary: FlowSummary): FlowStatusViewMo
     })
     .sort((left, right) => left.order - right.order)
 
-  return { overview, dimensions }
+  const pendingDimension = dimensions.find((dimension) => dimension.dimensionCode === 'business')
+    ?? dimensions.find((dimension) => dimension.dimensionCode === 'workflow')
+
+  return { overview, dimensions, pendingDimension }
 }

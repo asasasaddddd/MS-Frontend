@@ -156,7 +156,7 @@ async function loadRows() {
       productSupportFlowSummary.value = summaryResult.value
     } else {
       productSupportFlowSummary.value = null
-      message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '产品配套流程汇总加载失败')
+      message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '产品配套当前角色待办汇总加载失败')
     }
   } finally {
     loading.value = false
