@@ -98,11 +98,6 @@ const dimensionGroups = computed<FlowStatusGroupView[]>(() =>
   }).filter((group) => group.dimensions.length > 0)
 )
 
-/** 当前展开分块的完整视图模型。 */
-const activeGroup = computed(() =>
-  dimensionGroups.value.find((group) => group.code === activeGroupCode.value) || null
-)
-
 /** 未知状态和契约问题的稳定日志键，避免同一快照重复记录。 */
 const dataQualityLogKey = computed(() => {
   if (!props.summary) return ''
@@ -226,78 +221,80 @@ watch(
         </div>
       </div>
 
-      <section
-        v-if="activeGroup"
-        :key="activeGroup.code"
-        class="dimension-detail"
-        :aria-label="`${activeGroup.label}详情`"
-      >
-        <header class="dimension-detail__header">
-          <div>
-            <h3>{{ activeGroup.label }}</h3>
-            <span>{{ title }} · 快照时间：{{ formatSnapshotTime(summary.snapshotAt) }}</span>
-          </div>
-          <a-tooltip title="收起详情">
-            <a-button
-              type="text"
-              shape="circle"
-              aria-label="收起详情"
-              @click="activeGroupCode = ''"
-            >
-              <template #icon><CloseOutlined /></template>
-            </a-button>
-          </a-tooltip>
-        </header>
-
+      <template v-for="group in dimensionGroups" :key="group.code">
         <section
-          v-for="dimension in activeGroup.dimensions"
-          :key="dimension.dimensionCode"
-          class="dimension-section"
-          :aria-label="dimension.label"
+          v-show="activeGroupCode === group.code"
+          class="dimension-detail"
+          :aria-label="`${group.label}详情`"
+          :aria-hidden="activeGroupCode !== group.code"
         >
-          <header class="dimension-header">
+          <header class="dimension-detail__header">
             <div>
-              <h4>{{ dimension.label }}</h4>
-              <span>统计单位：{{ dimension.countUnitName }}（{{ dimension.countUnitLabel }}）</span>
+              <h3>{{ group.label }}</h3>
+              <span>{{ title }} · 快照时间：{{ formatSnapshotTime(summary.snapshotAt) }}</span>
             </div>
-            <strong>{{ dimension.totalCount }} {{ dimension.countUnitLabel }}</strong>
+            <a-tooltip title="收起详情">
+              <a-button
+                type="text"
+                shape="circle"
+                aria-label="收起详情"
+                @click="activeGroupCode = ''"
+              >
+                <template #icon><CloseOutlined /></template>
+              </a-button>
+            </a-tooltip>
           </header>
 
-          <div v-if="dimension.stages.length" class="stage-list">
-            <a-tag
-              v-for="stage in dimension.stages"
-              :key="stage.stageCode"
-              :class="['flow-stage-tag', `flow-stage-tag--${stage.tone}`]"
-            >
-              <span>{{ stage.label }}</span>
-              <strong>{{ stage.count }} {{ stage.countUnitLabel }}</strong>
-            </a-tag>
-          </div>
-          <a-empty v-else class="dimension-empty" description="暂无已分类状态" :image="null" />
+          <section
+            v-for="dimension in group.dimensions"
+            :key="dimension.dimensionCode"
+            class="dimension-section"
+            :aria-label="dimension.label"
+          >
+            <header class="dimension-header">
+              <div>
+                <h4>{{ dimension.label }}</h4>
+                <span>统计单位：{{ dimension.countUnitName }}（{{ dimension.countUnitLabel }}）</span>
+              </div>
+              <strong>{{ dimension.totalCount }} {{ dimension.countUnitLabel }}</strong>
+            </header>
 
-          <div v-if="dimension.hasWarning" class="dimension-warnings">
-            <a-alert
-              v-if="dimension.unknownCount > 0"
-              type="error"
-              show-icon
-              :message="unknownCountMessage(dimension)"
-            />
-            <a-alert
-              v-if="dimension.unregisteredStageCodes.length > 0"
-              type="error"
-              show-icon
-              :message="unregisteredStageMessage(dimension)"
-            />
-            <a-alert
-              v-for="issue in validationIssues.filter((item) => item.dimensionCode === dimension.dimensionCode)"
-              :key="issue.message"
-              type="error"
-              show-icon
-              :message="issue.message"
-            />
-          </div>
+            <div v-if="dimension.stages.length" class="stage-list">
+              <a-tag
+                v-for="stage in dimension.stages"
+                :key="stage.stageCode"
+                :class="['flow-stage-tag', `flow-stage-tag--${stage.tone}`]"
+              >
+                <span>{{ stage.label }}</span>
+                <strong>{{ stage.count }} {{ stage.countUnitLabel }}</strong>
+              </a-tag>
+            </div>
+            <a-empty v-else class="dimension-empty" description="暂无已分类状态" :image="null" />
+
+            <div v-if="dimension.hasWarning" class="dimension-warnings">
+              <a-alert
+                v-if="dimension.unknownCount > 0"
+                type="error"
+                show-icon
+                :message="unknownCountMessage(dimension)"
+              />
+              <a-alert
+                v-if="dimension.unregisteredStageCodes.length > 0"
+                type="error"
+                show-icon
+                :message="unregisteredStageMessage(dimension)"
+              />
+              <a-alert
+                v-for="issue in validationIssues.filter((item) => item.dimensionCode === dimension.dimensionCode)"
+                :key="issue.message"
+                type="error"
+                show-icon
+                :message="issue.message"
+              />
+            </div>
+          </section>
         </section>
-      </section>
+      </template>
     </template>
   </section>
 </template>

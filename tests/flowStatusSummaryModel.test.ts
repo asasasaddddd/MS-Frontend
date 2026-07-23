@@ -181,8 +181,11 @@ assert.match(componentSource, /activeGroupCode/)
 assert.match(componentSource, /@click\.stop="selectDimension\(group\.code\)"/)
 assert.match(
   componentSource,
-  /<section\s+v-if="activeGroup"\s+:key="activeGroup\.code"\s+class="dimension-detail"/
+  /<template v-for="group in dimensionGroups" :key="group\.code">/
 )
+assert.match(componentSource, /v-show="activeGroupCode === group\.code"/)
+assert.match(componentSource, /v-for="dimension in group\.dimensions"/)
+assert.doesNotMatch(componentSource, /const activeGroup = computed/)
 assert.match(componentSource, /activeGroupCode\.value = groupCode/)
 assert.doesNotMatch(componentSource, /activeGroupCode\.value === groupCode \? '' : groupCode/)
 assert.doesNotMatch(componentSource, /<h2>\{\{ title \}\}<\/h2>/)
