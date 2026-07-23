@@ -119,6 +119,33 @@ assert.equal(unknownStageView.dimensions[0]?.hasWarning, true)
 
 assert.deepEqual(validateFlowSummary(summary), [])
 
+const numericStringSummary = {
+  ...summary,
+  overview: [{ metricCode: 'total', countUnit: 'order', value: '5' as unknown as number }],
+  dimensions: [
+    {
+      dimensionCode: 'business' as const,
+      countUnit: 'order' as const,
+      totalCount: '5' as unknown as number,
+      unknownCount: '0' as unknown as number,
+      stageCounts: {
+        manager_check: '0' as unknown as number,
+        verifier_verify: '4' as unknown as number,
+        completed: '1' as unknown as number
+      }
+    }
+  ]
+}
+
+assert.deepEqual(
+  validateFlowSummary(numericStringSummary),
+  [],
+  '数据库聚合值以数字字符串返回时仍应按数值校验，不能发生字符串拼接'
+)
+assert.equal(buildFlowStatusViewModel(numericStringSummary).overview[0]?.value, 5)
+assert.equal(buildFlowStatusViewModel(numericStringSummary).dimensions[0]?.totalCount, 5)
+assert.equal(buildFlowStatusViewModel(numericStringSummary).dimensions[0]?.stages[0]?.count, 4)
+
 const invalidSummary: FlowSummary = {
   ...summary,
   dimensions: [
@@ -148,6 +175,11 @@ assert.match(componentSource, /summary\??:\s*FlowSummary\s*\|\s*null/)
 assert.doesNotMatch(componentSource, /tasks\??\s*:/)
 assert.match(componentSource, /<a-alert/)
 assert.match(componentSource, /countUnitLabel/)
+assert.match(componentSource, /summary-line/)
+assert.match(componentSource, /dimension-quick-links/)
+assert.match(componentSource, /activeGroupCode/)
+assert.match(componentSource, /@click="toggleDimension\(group\.code\)"/)
+assert.doesNotMatch(componentSource, /<h2>\{\{ title \}\}<\/h2>/)
 assert.doesNotMatch(componentSource, /setInterval|setTimeout/)
 assert.match(apiSource, /\/periodic\/plans\/\$\{encodeURIComponent\(String\(planId\)\)\}\/summary/)
 

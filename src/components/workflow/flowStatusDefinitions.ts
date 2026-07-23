@@ -359,6 +359,17 @@ const overviewDefinitionIndex = new Map(
 )
 
 /**
+ * 将数据库聚合驱动可能返回的数字字符串标准化为前端数值。
+ *
+ * @param value 后端汇总契约中的数量值。
+ * @returns 可参与数量守恒校验和 Ant Design 数字展示的有限数值。
+ */
+function normalizeFlowCount(value: number): number {
+  const normalizedValue = Number(value)
+  return Number.isFinite(normalizedValue) ? normalizedValue : 0
+}
+
+/**
  * 校验后端维度汇总是否满足互斥计数守恒。
  *
  * 函数只报告契约问题，不修改或重算任何后端数量。
@@ -369,17 +380,19 @@ const overviewDefinitionIndex = new Map(
 export function validateFlowSummary(summary: FlowSummary): FlowSummaryValidationIssue[] {
   return summary.dimensions.flatMap((dimension) => {
     const classifiedCount = Object.values(dimension.stageCounts).reduce(
-      (total, count) => total + count,
+      (total, count) => total + normalizeFlowCount(count),
       0
     )
-    const expectedTotal = classifiedCount + dimension.unknownCount
+    const unknownCount = normalizeFlowCount(dimension.unknownCount)
+    const totalCount = normalizeFlowCount(dimension.totalCount)
+    const expectedTotal = classifiedCount + unknownCount
 
-    if (expectedTotal === dimension.totalCount) return []
+    if (expectedTotal === totalCount) return []
 
     return [
       {
         dimensionCode: dimension.dimensionCode,
-        message: `${FLOW_DIMENSION_DEFINITIONS[dimension.dimensionCode].label}总数 ${dimension.totalCount}，已分类 ${classifiedCount}，未知 ${dimension.unknownCount}，数量不守恒`
+        message: `${FLOW_DIMENSION_DEFINITIONS[dimension.dimensionCode].label}总数 ${totalCount}，已分类 ${classifiedCount}，未知 ${unknownCount}，数量不守恒`
       }
     ]
   })
@@ -402,6 +415,7 @@ export function buildFlowStatusViewModel(summary: FlowSummary): FlowStatusViewMo
       const definition = overviewDefinitionIndex.get(metric.metricCode)
       return {
         ...metric,
+        value: normalizeFlowCount(metric.value),
         label: definition?.label || `未配置指标（${metric.metricCode}）`,
         countUnitLabel: FLOW_COUNT_UNIT_DEFINITIONS[metric.countUnit].symbol,
         order: definition?.order ?? Number.MAX_SAFE_INTEGER
@@ -419,7 +433,7 @@ export function buildFlowStatusViewModel(summary: FlowSummary): FlowStatusViewMo
           return {
             stageCode,
             label: definition?.label || `未知状态（${stageCode}）`,
-            count,
+            count: normalizeFlowCount(count),
             countUnitLabel: unitDefinition.symbol,
             tone: definition?.tone || 'error',
             order: definition?.order ?? Number.MAX_SAFE_INTEGER,
@@ -442,13 +456,15 @@ export function buildFlowStatusViewModel(summary: FlowSummary): FlowStatusViewMo
 
       return {
         ...dimension,
+        totalCount: normalizeFlowCount(dimension.totalCount),
+        unknownCount: normalizeFlowCount(dimension.unknownCount),
         label: dimensionDefinition.label,
         countUnitName: unitDefinition.label,
         countUnitLabel: unitDefinition.symbol,
         order: dimensionDefinition.order,
         stages,
         unregisteredStageCodes,
-        hasWarning: dimension.unknownCount > 0 || unregisteredStageCodes.length > 0 || hasContractIssue
+        hasWarning: normalizeFlowCount(dimension.unknownCount) > 0 || unregisteredStageCodes.length > 0 || hasContractIssue
       }
     })
     .sort((left, right) => left.order - right.order)
