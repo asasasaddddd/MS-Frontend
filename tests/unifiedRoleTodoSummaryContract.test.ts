@@ -24,8 +24,12 @@ for (const path of directTodoPages) {
 
 const periodicWorkspace = source('../src/views/periodic/components/PeriodicTaskWorkspace.vue')
 const periodicSummary = source('../src/views/periodic/components/PeriodicPlanSummary.vue')
+const periodicDetail = source('../src/views/periodic/components/PeriodicDetailDialog.vue')
 assert.match(periodicWorkspace, /PeriodicPlanSummary/)
 assert.match(periodicSummary, /FlowStatusSummary/)
+assert.doesNotMatch(periodicSummary, /计划基本信息|plan-panel|a-descriptions/)
+assert.doesNotMatch(periodicDetail, /计划基本信息|PeriodicPlanVO|plan\?\./)
+assert.doesNotMatch(periodicWorkspace, /getPeriodicPlan\(|currentPlan|:plan="currentPlan"/)
 
 const samplingWorkspace = source('../src/views/sampling/components/SamplingTaskWorkspace.vue')
 const samplingSummary = source('../src/views/sampling/components/SamplingPlanSummary.vue')

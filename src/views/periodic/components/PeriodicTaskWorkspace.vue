@@ -7,7 +7,6 @@ import {
   confirmerConfirmPeriodic,
   exceptionDisposePeriodic,
   generatePeriodicTestPlan,
-  getPeriodicPlan,
   listPeriodicMyHistory,
   listPeriodicMyTasks,
   managerForwardConfirmPeriodic,
@@ -23,7 +22,6 @@ import type {
   EntityId,
   PeriodicConfirmerConfirmRequest,
   PeriodicManagerForwardConfirmRequest,
-  PeriodicPlanVO,
   PeriodicResponsibleSecondJudgeRequest,
   PeriodicSecondJudgeRequest,
   PeriodicSupplierFillInfoRequest,
@@ -80,7 +78,6 @@ const statusFilter = ref<string>('all')
 const keyword = ref('')
 const currentTasks = ref<PeriodicTaskVO[]>([])
 const historyTasks = ref<PeriodicTaskVO[]>([])
-const currentPlan = ref<PeriodicPlanVO | null>(null)
 /** 当前路由计划由后端生成的权威流程状态快照。 */
 const periodicFlowSummary = ref<FlowSummary | null>(null)
 const activeTask = ref<PeriodicTaskVO | null>(null)
@@ -327,30 +324,22 @@ function openProcess(task: PeriodicTaskVO) {
 }
 
 /**
- * 读取路由指定计划的基础信息和权威状态快照。
+ * 读取路由指定计划的权威状态快照。
  *
  * 未选择计划时不从任务列表猜测计划，避免把多个计划的明细误展示为同一计划汇总。
  */
-async function loadPlanContext() {
+async function loadPlanFlowSummary() {
   const planId = routePlanId.value
   if (!planId) {
-    currentPlan.value = null
     periodicFlowSummary.value = null
     return
   }
 
-  const [planResult, summaryResult] = await Promise.allSettled([
-    getPeriodicPlan(planId),
-    getPeriodicPlanFlowSummary(planId)
-  ])
-  currentPlan.value = planResult.status === 'fulfilled' ? planResult.value : null
-  periodicFlowSummary.value = summaryResult.status === 'fulfilled' ? summaryResult.value : null
-
-  if (planResult.status === 'rejected') {
-    message.error(planResult.reason instanceof Error ? planResult.reason.message : '周检计划信息加载失败')
-  }
-  if (summaryResult.status === 'rejected') {
-    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '周检状态汇总加载失败')
+  try {
+    periodicFlowSummary.value = await getPeriodicPlanFlowSummary(planId)
+  } catch (error) {
+    periodicFlowSummary.value = null
+    message.error(error instanceof Error ? error.message : '周检状态汇总加载失败')
   }
 }
 
@@ -386,8 +375,8 @@ async function loadData() {
   selectedTasks.value = []
   /** 当前待办与参与记录的独立请求结果，不因单路失败互相清空。 */
   const taskResultsPromise = Promise.allSettled([listPeriodicMyTasks(), listPeriodicMyHistory()])
-  /** 路由计划基础信息和权威汇总与任务列表并行读取。 */
-  const planContextPromise = loadPlanContext()
+  /** 路由计划的权威汇总与任务列表并行读取。 */
+  const planSummaryPromise = loadPlanFlowSummary()
   const [todoResult, historyResult] = await taskResultsPromise
 
   currentTasks.value = todoResult.status === 'fulfilled' ? todoResult.value : []
@@ -401,7 +390,7 @@ async function loadData() {
   }
 
   await Promise.all([
-    planContextPromise,
+    planSummaryPromise,
     loadConfirmers(filterByRoutePlan([...currentTasks.value, ...historyTasks.value]))
   ])
   loading.value = false
@@ -571,13 +560,13 @@ onMounted(loadData)
 watch(routePlanId, () => {
   selectedRowKeys.value = []
   selectedTasks.value = []
-  void loadPlanContext()
+  void loadPlanFlowSummary()
 })
 </script>
 
 <template>
   <section class="periodic-workspace">
-    <PeriodicPlanSummary :plan="currentPlan" :summary="periodicFlowSummary" :loading="loading" />
+    <PeriodicPlanSummary :summary="periodicFlowSummary" :loading="loading" />
 
     <a-card class="panel" :bordered="false">
       <template #title>
@@ -657,7 +646,7 @@ watch(routePlanId, () => {
       />
     </a-card>
 
-    <PeriodicDetailDialog v-model:open="detailOpen" :task="activeTask" :plan="currentPlan" title="周检任务详情" />
+    <PeriodicDetailDialog v-model:open="detailOpen" :task="activeTask" title="周检任务详情" />
     <PeriodicVerifyDialog v-model:open="verifyOpen" :task="activeTask" :submitting="submitting" @submit="submitVerify" />
     <PeriodicExternalVerifyDialog
       v-model:open="externalVerifyOpen"

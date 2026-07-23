@@ -86,7 +86,14 @@ const periodicPlanSummarySource = readFileSync(
   new URL('../src/views/periodic/components/PeriodicPlanSummary.vue', import.meta.url),
   'utf8'
 )
-assert.match(periodicPlanSummarySource, /计划基本信息/)
+assert.doesNotMatch(periodicPlanSummarySource, /计划基本信息/)
+
+const periodicDetailSource = readFileSync(
+  new URL('../src/views/periodic/components/PeriodicDetailDialog.vue', import.meta.url),
+  'utf8'
+)
+assert.doesNotMatch(periodicDetailSource, /计划基本信息|PeriodicPlanVO|plan\?\./)
+assert.doesNotMatch(periodicWorkspaceSource, /getPeriodicPlan\(|currentPlan|:plan="currentPlan"/)
 
 const periodicAdminSource = readFileSync(
   new URL('../src/views/periodic/PeriodicAdminView.vue', import.meta.url),

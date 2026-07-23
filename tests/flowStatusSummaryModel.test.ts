@@ -187,6 +187,34 @@ assert.equal(buildFlowStatusViewModel(numericStringSummary).overview[0]?.value, 
 assert.equal(buildFlowStatusViewModel(numericStringSummary).dimensions[0]?.totalCount, 5)
 assert.equal(buildFlowStatusViewModel(numericStringSummary).dimensions[0]?.stages[0]?.count, 4)
 
+const detailStatusSummary: FlowSummary = {
+  ...summary,
+  overview: [
+    { metricCode: 'pending', countUnit: 'order', value: 6 },
+    { metricCode: 'today_new', countUnit: 'order', value: 2 }
+  ],
+  dimensions: [
+    {
+      dimensionCode: 'business',
+      countUnit: 'order',
+      totalCount: 6,
+      unknownCount: 0,
+      stageCounts: { manager_check: 3, returned: 3 }
+    }
+  ]
+}
+
+assert.deepEqual(
+  buildFlowStatusViewModel(detailStatusSummary).pendingDimension?.stages.map(
+    ({ stageCode, label, count }) => ({ stageCode, label, count })
+  ),
+  [
+    { stageCode: 'manager_check', label: '待分类', count: 3 },
+    { stageCode: 'returned', label: '退回待修改', count: 3 }
+  ],
+  '统一汇总必须按下方待办明细状态分别计数，不能只按相同工作流节点合并'
+)
+
 const invalidSummary: FlowSummary = {
   ...summary,
   dimensions: [

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import AttachmentListButton from '../../../components/AttachmentListButton.vue'
-import type { EntityId, PeriodicPlanVO, PeriodicTaskVO } from '../../../types/periodic'
+import type { EntityId, PeriodicTaskVO } from '../../../types/periodic'
 import { displayValue, mapPeriodicTaskRow } from '../periodicDisplayModel'
 
 type TaskWithAttachment = PeriodicTaskVO & {
@@ -14,12 +14,10 @@ const props = withDefaults(
   defineProps<{
     open: boolean
     task?: PeriodicTaskVO | null
-    plan?: PeriodicPlanVO | null
     title?: string
   }>(),
   {
     task: null,
-    plan: null,
     title: '周检任务详情'
   }
 )
@@ -48,18 +46,6 @@ const attachmentTask = computed(() => props.task as TaskWithAttachment | null)
   >
     <a-empty v-if="!task || !row" description="暂无周检任务详情" />
     <div v-else class="periodic-detail">
-      <section class="detail-section">
-        <div class="detail-section-title">
-          <h3>计划基本信息</h3>
-        </div>
-        <a-descriptions bordered size="small" :column="{ xs: 1, sm: 2, lg: 4 }">
-          <a-descriptions-item label="计划编号">{{ displayValue(plan?.planNo) }}</a-descriptions-item>
-          <a-descriptions-item label="计划名称">{{ displayValue(plan?.planName) }}</a-descriptions-item>
-          <a-descriptions-item label="所属部门">{{ displayValue(plan?.deptName) }}</a-descriptions-item>
-          <a-descriptions-item label="负责人">{{ displayValue(plan?.ownerName) }}</a-descriptions-item>
-        </a-descriptions>
-      </section>
-
       <section class="detail-section">
         <div class="detail-section-title">
           <h3>设备状态基础信息</h3>
