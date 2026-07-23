@@ -179,6 +179,10 @@ assert.match(componentSource, /summary-line/)
 assert.match(componentSource, /dimension-quick-links/)
 assert.match(componentSource, /activeGroupCode/)
 assert.match(componentSource, /@click\.stop="selectDimension\(group\.code\)"/)
+assert.match(
+  componentSource,
+  /<section\s+v-if="activeGroup"\s+:key="activeGroup\.code"\s+class="dimension-detail"/
+)
 assert.match(componentSource, /activeGroupCode\.value = groupCode/)
 assert.doesNotMatch(componentSource, /activeGroupCode\.value === groupCode \? '' : groupCode/)
 assert.doesNotMatch(componentSource, /<h2>\{\{ title \}\}<\/h2>/)

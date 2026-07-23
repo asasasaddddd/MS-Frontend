@@ -226,7 +226,12 @@ watch(
         </div>
       </div>
 
-      <section v-if="activeGroup" class="dimension-detail" :aria-label="`${activeGroup.label}详情`">
+      <section
+        v-if="activeGroup"
+        :key="activeGroup.code"
+        class="dimension-detail"
+        :aria-label="`${activeGroup.label}详情`"
+      >
         <header class="dimension-detail__header">
           <div>
             <h3>{{ activeGroup.label }}</h3>
