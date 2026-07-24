@@ -5,7 +5,7 @@ export type FirstCheckVerifierStatusKey =
   | 'wait_sendout'
   | 'sent_out'
   | 'wait_sendout_return'
-  | 'verifier_verify'
+  | 'verifier_verify_assign'
   | 'unknown'
 
 export type FirstCheckVerifierAction =
@@ -24,15 +24,6 @@ export interface FirstCheckVerifierStatusSource {
   scanStatus?: string
 }
 
-export function matchesFirstCheckVerifierRole(
-  source: Pick<FirstCheckVerifierStatusSource, 'verificationType'>,
-  roleCode?: string
-) {
-  if (roleCode === 'VERIFIER_SELF') return source.verificationType === 'self_check'
-  if (roleCode === 'VERIFIER_EXTERNAL') return source.verificationType === 'external_commission'
-  return true
-}
-
 export interface FirstCheckVerifierResolvedStatus {
   statusKey: FirstCheckVerifierStatusKey
   statusLabel: string
@@ -47,11 +38,11 @@ export function resolveFirstCheckVerifierStatus(source: FirstCheckVerifierStatus
   const nodeCode = workflowNodeCode(source)
   const scanStatus = source.scanStatus || ''
 
-  if (nodeCode === 'verifier_receive' || scanStatus === 'wait_receive') {
+  if (scanStatus === 'wait_receive') {
     return { statusKey: 'wait_receive', statusLabel: '待接收', statusColor: 'orange' }
   }
 
-  if (nodeCode === 'verifier_return_verify' || scanStatus === 'wait_sendout_return') {
+  if (scanStatus === 'wait_sendout_return') {
     return { statusKey: 'wait_sendout_return', statusLabel: '待外委送回', statusColor: 'blue' }
   }
 
@@ -63,12 +54,12 @@ export function resolveFirstCheckVerifierStatus(source: FirstCheckVerifierStatus
     return { statusKey: 'sent_out', statusLabel: '已外委送出', statusColor: 'blue' }
   }
 
-  if (nodeCode === 'verifier_verify') {
+  if (nodeCode === 'verifier_verify_assign') {
     if (source.verificationType === 'external_commission' && scanStatus === 'sendout_returned') {
-      return { statusKey: 'verifier_verify', statusLabel: '外委已送回', statusColor: 'orange' }
+      return { statusKey: 'verifier_verify_assign', statusLabel: '外委已送回', statusColor: 'orange' }
     }
     if (source.verificationType !== 'external_commission' && scanStatus === 'received') {
-      return { statusKey: 'verifier_verify', statusLabel: '已接收', statusColor: 'orange' }
+      return { statusKey: 'verifier_verify_assign', statusLabel: '已接收', statusColor: 'orange' }
     }
   }
 
@@ -83,7 +74,7 @@ export function firstCheckVerifierAction(source: FirstCheckVerifierStatusSource)
   const status = resolveFirstCheckVerifierStatus(source)
   if (status.statusKey === 'wait_receive') return 'scan_receive'
   if (status.statusKey === 'wait_sendout_return') return 'scan_sendout_return'
-  if (status.statusKey === 'verifier_verify') return 'verify'
+  if (status.statusKey === 'verifier_verify_assign') return 'verify'
   return 'wait'
 }
 

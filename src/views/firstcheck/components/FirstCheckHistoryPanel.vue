@@ -6,8 +6,7 @@ import { listWorkflowHistory } from '@/api/workflow'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { WorkflowTask } from '@/types/workflow'
-import { matchesBusinessType, matchesWorkflowTaskRole } from '@/workflows/metrologyWorkflow'
-import { matchesFirstCheckVerifierRole } from '@/views/firstcheck/firstCheckVerifierModel'
+import { matchesBusinessType } from '@/workflows/metrologyWorkflow'
 
 interface HistoryRow {
   key: string
@@ -16,7 +15,6 @@ interface HistoryRow {
 }
 
 const props = defineProps<{
-  roleCode: string
   orderId?: string
 }>()
 
@@ -31,7 +29,7 @@ const columns = [
   { title: '数量', dataIndex: ['order', 'quantity'], key: 'quantity', width: 86 },
   { title: '使用部门', dataIndex: ['order', 'applyDeptName'], key: 'applyDeptName', width: 160 },
   { title: '本人已办节点', dataIndex: ['task', 'nodeName'], key: 'nodeName', width: 170 },
-  { title: '处理结果', dataIndex: ['task', 'action'], key: 'action', width: 110 },
+  { title: '处理结果', dataIndex: ['task', 'outcomeCode'], key: 'outcomeCode', width: 140 },
   { title: '完成时间', dataIndex: ['task', 'completedAt'], key: 'completedAt', width: 180 },
   { title: '当前流转节点', dataIndex: ['order', 'currentNodeName'], key: 'currentNodeName', width: 180 },
   { title: '操作', key: 'operation', fixed: 'right', width: 90 }
@@ -49,13 +47,15 @@ function dateTime(value?: string) {
 
 function actionName(action?: string) {
   const names: Record<string, string> = {
-    approve: '同意',
-    reject: '驳回',
-    return: '退回',
-    complete: '完成',
-    submit: '提交'
+    TO_MANAGER_CLASSIFY: '提交首检',
+    TO_DEPT_LEADER: '提交审批',
+    APPROVE_TO_ENGINEER: '审批同意',
+    RETURN_TO_MANAGER: '退回修改',
+    TO_VERIFIER: '确认检定路径',
+    QUALIFIED_TO_COMPLETE: '合格完成',
+    UNQUALIFIED_TO_COMPLETE: '不合格完成'
   }
-  return action ? names[action.toLowerCase()] || '已处理' : '已处理'
+  return action ? names[action] || action : '已处理'
 }
 
 function openDetail(row: HistoryRow) {
@@ -67,9 +67,8 @@ async function loadRows() {
   loading.value = true
   try {
     const taskByOrder = new Map<string, WorkflowTask>()
-    const tasks = (await listWorkflowHistory())
+    const tasks = (await listWorkflowHistory('FIRST_CHECK'))
       .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))
-      .filter((task) => matchesWorkflowTaskRole(task, 'firstcheck', props.roleCode))
       .filter((task) => !props.orderId || String(task.businessId) === props.orderId)
 
     tasks.forEach((task) => {
@@ -80,12 +79,11 @@ async function loadRows() {
     const details = await Promise.allSettled(
       Array.from(taskByOrder.values()).map(async (task) => ({
         task,
-        order: await getFirstCheckDetail(task.businessId)
+        order: await getFirstCheckDetail(task.businessId, task.taskId)
       }))
     )
     rows.value = details
       .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: FirstCheckOrder }> => item.status === 'fulfilled')
-      .filter((item) => matchesFirstCheckVerifierRole(item.value.order, props.roleCode))
       .map((item) => ({
         key: String(item.value.task.businessId),
         task: item.value.task,
@@ -120,8 +118,8 @@ onMounted(loadRows)
         <template v-else-if="column.key === 'quantity'">{{ display(record.order.quantity) }}</template>
         <template v-else-if="column.key === 'applyDeptName'">{{ display(record.order.applyDeptName) }}</template>
         <template v-else-if="column.key === 'nodeName'">{{ display(record.task.nodeName) }}</template>
-        <template v-else-if="column.key === 'action'">
-          <a-tag color="green">{{ actionName(record.task.action) }}</a-tag>
+        <template v-else-if="column.key === 'outcomeCode'">
+          <a-tag color="green">{{ actionName(record.task.outcomeCode) }}</a-tag>
         </template>
         <template v-else-if="column.key === 'completedAt'">{{ dateTime(record.task.completedAt) }}</template>
         <template v-else-if="column.key === 'currentNodeName'">
@@ -139,7 +137,7 @@ onMounted(loadRows)
       <div><span>首检编号</span><strong>{{ display(activeRow.order.orderNo) }}</strong></div>
       <div><span>当前流转节点</span><strong>{{ display(activeRow.order.currentNodeName || activeRow.order.currentNode) }}</strong></div>
       <div><span>本人已办节点</span><strong>{{ display(activeRow.task.nodeName) }}</strong></div>
-      <div><span>本人处理结果</span><strong>{{ actionName(activeRow.task.action) }}</strong></div>
+      <div><span>本人处理结果</span><strong>{{ actionName(activeRow.task.outcomeCode) }}</strong></div>
       <div class="full"><span>本人处理意见</span><strong>{{ display(activeRow.task.opinion) }}</strong></div>
       <div><span>设备名称</span><strong>{{ display(activeRow.order.deviceName) }}</strong></div>
       <div><span>规格型号</span><strong>{{ display(activeRow.order.modelSpec) }}</strong></div>

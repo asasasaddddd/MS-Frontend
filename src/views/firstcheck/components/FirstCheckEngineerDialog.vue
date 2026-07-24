@@ -9,6 +9,9 @@ import type { FirstCheckOrder, VerificationType } from '@/types/firstcheck'
 const props = defineProps<{
   open: boolean
   order?: FirstCheckOrder
+  taskId?: string | number
+  taskRowVersion?: number
+  allowedActions: string[]
 }>()
 
 const emit = defineEmits<{
@@ -95,6 +98,10 @@ async function submit() {
     message.warning('外委时必须选择外委检定员和外扩人员')
     return
   }
+  if (props.taskId === undefined || props.taskRowVersion === undefined || !props.allowedActions.includes('SUBMIT_RETURN')) {
+    message.warning('任务上下文已失效，请刷新待办后重试')
+    return
+  }
 
   const selfVerifier = selfVerifiers.value.find((user) => user.employeeId === form.selfVerifierId)
   const externalVerifier = externalVerifiers.value.find((user) => user.employeeId === form.externalVerifierId)
@@ -104,6 +111,8 @@ async function submit() {
   try {
     await engineerConfirmTypeFirstCheck({
       orderId: order.id,
+      taskId: props.taskId,
+      taskRowVersion: props.taskRowVersion,
       verificationType: form.verificationType,
       isCommon: form.verificationType === 'self_check' ? 1 : form.isCommon,
       selfVerifierId: form.verificationType === 'self_check' ? form.selfVerifierId : undefined,
@@ -127,6 +136,10 @@ async function submit() {
 function returnOrder() {
   const order = props.order
   if (!order) return
+  if (props.taskId === undefined || props.taskRowVersion === undefined || !props.allowedActions.includes('SUBMIT_RETURN')) {
+    message.warning('任务上下文已失效，请刷新待办后重试')
+    return
+  }
   if (!form.opinion.trim()) {
     message.warning('请输入退回意见')
     return
@@ -142,6 +155,8 @@ function returnOrder() {
       try {
         await engineerReturnFirstCheck({
           orderId: order.id,
+          taskId: props.taskId!,
+          taskRowVersion: props.taskRowVersion!,
           opinion: form.opinion.trim()
         })
         message.success('已退回计量管理员修改')

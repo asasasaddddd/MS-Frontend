@@ -26,6 +26,9 @@ import type {
 const props = defineProps<{
   open: boolean
   order?: FirstCheckOrder
+  taskId?: string | number
+  taskRowVersion?: number
+  allowedActions: string[]
 }>()
 
 const emit = defineEmits<{
@@ -254,11 +257,17 @@ async function generateDeviceCodes() {
     message.warning('请选择 6 位学科小类编码')
     return
   }
+  if (props.taskId === undefined || props.taskRowVersion === undefined) {
+    message.warning('任务上下文已失效，请刷新待办后重试')
+    return
+  }
 
   reserving.value = true
   try {
     const result = await reserveDeviceCodesFirstCheck({
       orderId: order.id,
+      taskId: props.taskId,
+      taskRowVersion: props.taskRowVersion,
       subjectSubcategory: form.subjectSubcategory!,
       qualifiedQuantity
     })
@@ -282,9 +291,12 @@ function optionalText(value: string) {
 }
 
 function buildPayload(order: FirstCheckOrder): VerifierVerifyAndAssignRequest {
+  const qualifiedQuantity = Number(form.qualifiedQuantity || 0)
   return {
     orderId: order.id,
-    reservationId: reservation.value!.reservationId,
+    taskId: props.taskId!,
+    taskRowVersion: props.taskRowVersion!,
+    reservationId: qualifiedQuantity > 0 ? reservation.value?.reservationId : undefined,
     verificationResult: form.verificationResult,
     qualifiedQuantity: Number(form.qualifiedQuantity || 0),
     unqualifiedQuantity: Number(form.unqualifiedQuantity || 0),
@@ -329,8 +341,8 @@ function validateSubmission(order: FirstCheckOrder) {
   const quantity = Number(order.quantity || 0)
   const qualified = Number(form.qualifiedQuantity || 0)
   const unqualified = Number(form.unqualifiedQuantity || 0)
-  if (qualified <= 0 || qualified + unqualified !== quantity) {
-    message.warning('合格数量与不合格数量之和必须等于申请数量，且至少有 1 台合格设备')
+  if (qualified < 0 || qualified + unqualified !== quantity || quantity <= 0) {
+    message.warning('合格数量与不合格数量之和必须等于申请数量')
     return false
   }
   if (requiresConfirmer.value && !form.confirmerId) {
@@ -353,7 +365,7 @@ function validateSubmission(order: FirstCheckOrder) {
     message.warning('请填写单台检定费用')
     return false
   }
-  if (!reservationReady.value) {
+  if (qualified > 0 && !reservationReady.value) {
     message.warning('请先生成有效的正式计量编号')
     return false
   }
@@ -367,6 +379,10 @@ function validateSubmission(order: FirstCheckOrder) {
 async function submit() {
   const order = props.order
   if (!order || !validateSubmission(order)) return
+  if (props.taskId === undefined || props.taskRowVersion === undefined || !props.allowedActions.includes('SUBMIT')) {
+    message.warning('任务上下文已失效，请刷新待办后重试')
+    return
+  }
 
   submitting.value = true
   try {

@@ -48,7 +48,16 @@ assert.equal(
   true
 )
 
-assert.deepEqual(firstCheckNodeCodesByRole.MEASURE_ADMIN, ['manager_check'])
-assert.equal(matchesWorkflowTaskRole({ nodeCode: 'manager_check' }, 'firstcheck', 'MEASURE_ADMIN'), true)
-assert.equal(matchesWorkflowTaskRole({ nodeCode: 'verifier_verify' }, 'firstcheck', 'MEASURE_ADMIN'), false)
-assert.equal(matchesWorkflowTaskRole({ nodeCode: 'verifier_verify' }, 'firstcheck', 'VERIFIER_SELF'), true)
+assert.deepEqual(firstCheckNodeCodesByRole.MEASURE_ADMIN, ['manager_classify', 'manager_revise'])
+assert.equal(
+  matchesWorkflowTaskRole({ nodeCode: 'manager_classify', requiredRoleCode: 'MEASURE_ADMIN' }, 'firstcheck', 'MEASURE_ADMIN'),
+  true
+)
+assert.equal(
+  matchesWorkflowTaskRole({ nodeCode: 'verifier_verify_assign', requiredRoleCode: 'VERIFIER_SELF' }, 'firstcheck', 'MEASURE_ADMIN'),
+  false
+)
+assert.equal(
+  matchesWorkflowTaskRole({ nodeCode: 'verifier_verify_assign', requiredRoleCode: 'VERIFIER_SELF' }, 'firstcheck', 'VERIFIER_SELF'),
+  true
+)

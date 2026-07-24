@@ -3,9 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getFirstCheckDetail } from '@/api/firstcheck'
-import { getFirstCheckFlowSummary } from '@/api/flowSummary'
 import { listWorkflowTasks } from '@/api/workflow'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
+import { buildWorkflowTaskSummary } from '@/components/workflow/workflowTaskSummary'
 import type { FirstCheckAdminRow, FirstCheckOrder } from '@/types/firstcheck'
 import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
@@ -14,7 +14,7 @@ import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import FirstCheckCategoryDialog from '@/views/firstcheck/components/FirstCheckCategoryDialog.vue'
 import FirstCheckHistoryPanel from '@/views/firstcheck/components/FirstCheckHistoryPanel.vue'
 
-type StatusFilter = 'all' | 'manager_check' | 'returned'
+type StatusFilter = 'all' | 'manager_classify' | 'manager_revise'
 
 const route = useRoute()
 const loading = ref(false)
@@ -43,8 +43,8 @@ function matchesRouteOrder(task: WorkflowTask) {
 
 const statusOptions = [
   { label: '当前状态筛选', value: 'all' },
-  { label: '待分类', value: 'manager_check' },
-  { label: '退回待修改', value: 'returned' }
+  { label: '待分类', value: 'manager_classify' },
+  { label: '退回待修改', value: 'manager_revise' }
 ]
 
 const filteredRows = computed(() => {
@@ -53,7 +53,6 @@ const filteredRows = computed(() => {
     const order = row.order
     const matchesStatus =
       statusFilter.value === 'all' ||
-      (statusFilter.value === 'returned' && row.statusLabel.includes('退回')) ||
       row.nodeCode === statusFilter.value
     const matchesKeyword =
       !text ||
@@ -93,7 +92,8 @@ function resolveStatus(task: WorkflowTask, order: FirstCheckOrder): Pick<FirstCh
   if (/退回|驳回|reject|return/i.test(statusText)) {
     return { statusLabel: '退回待修改', statusColor: 'red' }
   }
-  if (nodeCode === 'manager_check') return { statusLabel: '待分类', statusColor: 'orange' }
+  if (nodeCode === 'manager_classify') return { statusLabel: '待分类', statusColor: 'orange' }
+  if (nodeCode === 'manager_revise') return { statusLabel: '退回待修改', statusColor: 'red' }
   return { statusLabel: getWorkflowNodeName('firstcheck', nodeCode, order.currentNodeName || '待处理'), statusColor: 'orange' }
 }
 
@@ -101,8 +101,10 @@ function toRow(task: WorkflowTask, order: FirstCheckOrder): FirstCheckAdminRow {
   const nodeCode = task.nodeCode || order.currentNodeCode || order.currentNode || ''
   const status = resolveStatus(task, order)
   return {
-    key: task.businessId,
-    taskId: task.id,
+    key: String(task.businessId),
+    taskId: task.taskId,
+    taskRowVersion: task.rowVersion,
+    allowedActions: task.allowedActions,
     nodeCode,
     nodeName: task.nodeName || order.currentNodeName || getWorkflowNodeName('firstcheck', nodeCode),
     order,
@@ -117,7 +119,7 @@ function resetFilter() {
 
 function openDetail(row: FirstCheckAdminRow) {
   activeRow.value = row
-  if (row.nodeCode === 'manager_check') {
+  if (row.allowedActions.includes('SUBMIT') || row.allowedActions.includes('RESUBMIT')) {
     categoryOpen.value = true
     return
   }
@@ -132,8 +134,8 @@ function openDetail(row: FirstCheckAdminRow) {
  * @returns 已成功取得真实首检详情的管理员待办行。
  * @throws {ApiError} 工作流任务列表请求失败时抛出。
  */
-async function fetchTaskRows(): Promise<FirstCheckAdminRow[]> {
-  const tasks = await listWorkflowTasks()
+async function fetchTaskRows(): Promise<{ rows: FirstCheckAdminRow[]; tasks: WorkflowTask[] }> {
+  const tasks = await listWorkflowTasks('FIRST_CHECK')
   const adminNodeSet = new Set<string>(workflowNodeGroups.firstcheck.admin)
   const firstCheckTasks = tasks.filter((task) => {
     const pending = isPendingWorkflowTask(task)
@@ -143,13 +145,14 @@ async function fetchTaskRows(): Promise<FirstCheckAdminRow[]> {
   const details = await Promise.allSettled(
     firstCheckTasks.map(async (task) => ({
       task,
-      order: await getFirstCheckDetail(task.businessId)
+      order: await getFirstCheckDetail(task.businessId, task.taskId)
     }))
   )
 
-  return details
+  const taskRows = details
     .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: FirstCheckOrder }> => item.status === 'fulfilled')
     .map((item) => toRow(item.value.task, item.value.order))
+  return { rows: taskRows, tasks: firstCheckTasks }
 }
 
 /**
@@ -161,23 +164,14 @@ async function loadRows(): Promise<void> {
   loading.value = true
   summaryLoading.value = true
 
-  const [taskResult, summaryResult] = await Promise.allSettled([
-    fetchTaskRows(),
-    getFirstCheckFlowSummary()
-  ])
-
-  if (taskResult.status === 'fulfilled') {
-    rows.value = taskResult.value
-  } else {
+  try {
+    const result = await fetchTaskRows()
+    rows.value = result.rows
+    firstCheckFlowSummary.value = buildWorkflowTaskSummary(result.tasks, 'FIRST_CHECK')
+  } catch (error) {
     rows.value = []
-    message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '首检待办加载失败')
-  }
-
-  if (summaryResult.status === 'fulfilled') {
-    firstCheckFlowSummary.value = summaryResult.value
-  } else {
     firstCheckFlowSummary.value = null
-    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '首检当前角色待办汇总加载失败')
+    message.error(error instanceof Error ? error.message : '首检待办加载失败')
   }
 
   loading.value = false
@@ -257,7 +251,7 @@ onMounted(loadRows)
     </a-card>
     </template>
 
-    <FirstCheckHistoryPanel v-else role-code="MEASURE_ADMIN" :order-id="routeOrderId" />
+    <FirstCheckHistoryPanel v-else :order-id="routeOrderId" />
 
     <a-modal v-model:open="detailOpen" title="首检单详情" width="920px" :footer="null">
       <div v-if="activeRow" class="detail-grid">
@@ -284,7 +278,14 @@ onMounted(loadRows)
       </div>
     </a-modal>
 
-    <FirstCheckCategoryDialog v-model:open="categoryOpen" :order="activeRow?.order" @success="loadRows" />
+    <FirstCheckCategoryDialog
+      v-model:open="categoryOpen"
+      :order="activeRow?.order"
+      :task-id="activeRow?.taskId"
+      :task-row-version="activeRow?.taskRowVersion"
+      :allowed-actions="activeRow?.allowedActions || []"
+      @success="loadRows"
+    />
   </section>
 </template>
 

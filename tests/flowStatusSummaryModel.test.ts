@@ -170,8 +170,8 @@ const numericStringSummary = {
       totalCount: '5' as unknown as number,
       unknownCount: '0' as unknown as number,
       stageCounts: {
-        manager_check: '0' as unknown as number,
-        verifier_verify: '4' as unknown as number,
+        manager_classify: '0' as unknown as number,
+        verifier_verify_assign: '4' as unknown as number,
         completed: '1' as unknown as number
       }
     }
@@ -199,7 +199,7 @@ const detailStatusSummary: FlowSummary = {
       countUnit: 'order',
       totalCount: 6,
       unknownCount: 0,
-      stageCounts: { manager_check: 3, returned: 3 }
+      stageCounts: { manager_classify: 3, manager_revise: 3 }
     }
   ]
 }
@@ -209,8 +209,8 @@ assert.deepEqual(
     ({ stageCode, label, count }) => ({ stageCode, label, count })
   ),
   [
-    { stageCode: 'manager_check', label: '待分类', count: 3 },
-    { stageCode: 'returned', label: '退回待修改', count: 3 }
+    { stageCode: 'manager_classify', label: '待分类', count: 3 },
+    { stageCode: 'manager_revise', label: '退回待修改', count: 3 }
   ],
   '统一汇总必须按下方待办明细状态分别计数，不能只按相同工作流节点合并'
 )

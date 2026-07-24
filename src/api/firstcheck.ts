@@ -14,25 +14,18 @@ import type {
 } from '@/types/firstcheck'
 
 export function startFirstCheck(data: StartFirstCheckRequest) {
-  return request<number>({
+  return request<string | number>({
     url: '/firstcheck/start',
     method: 'POST',
     data
   })
 }
 
-export function getFirstCheckDetail(orderId: number) {
+export function getFirstCheckDetail(orderId: string | number, taskId: string | number) {
   return request<FirstCheckOrder>({
     url: `/firstcheck/detail/${orderId}`,
-    method: 'GET'
-  })
-}
-
-export function getMyFirstCheckTasks(status?: string) {
-  return request<FirstCheckOrder[]>({
-    url: '/firstcheck/my-tasks',
     method: 'GET',
-    params: { status }
+    params: { taskId }
   })
 }
 

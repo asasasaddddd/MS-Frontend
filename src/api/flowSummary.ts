@@ -30,20 +30,6 @@ export function getPeriodicPlanFlowSummary(planId: FlowSummaryEntityId): Promise
   })
 }
 
-/**
- * 读取当前人员当前角色待办范围内的首检流程权威汇总。
- *
- * @param status 可选首检业务状态过滤条件；不传时统计当前角色全部待办。
- * @returns 首检单据维度及赋码设备维度的统一快照。
- */
-export function getFirstCheckFlowSummary(status?: string): Promise<FlowSummary> {
-  return request<FlowSummary>({
-    url: '/firstcheck/summary',
-    method: 'GET',
-    params: status ? { status } : undefined
-  })
-}
-
 /** 状态变更汇总可查询的权限范围。 */
 export type ChangeFlowSummaryScope = 'pending' | 'history' | 'applied'
 

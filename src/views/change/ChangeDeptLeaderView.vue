@@ -94,7 +94,7 @@ function rowKey(row: ChangeTaskRow) {
 function toRow(task: WorkflowTask, order: ChangeOrderVO): ChangeTaskRow {
   return {
     key: String(task.businessId),
-    taskId: task.id,
+    taskId: task.taskId,
     nodeCode: task.nodeCode,
     nodeName: task.nodeName,
     order

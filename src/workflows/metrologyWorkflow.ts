@@ -11,13 +11,11 @@ export const businessTypeAliases: Record<WorkflowModule, string[]> = {
 
 export const firstCheckNodes: WorkflowNode[] = [
   { code: 'supplier_submit', name: '供应商提交', module: 'firstcheck', roles: ['SUPPLIER'], api: 'POST /api/firstcheck/start' },
-  { code: 'manager_check', name: '待分类', module: 'firstcheck', roles: ['MEASURE_ADMIN'], api: 'POST /api/firstcheck/confirm-category' },
+  { code: 'manager_classify', name: '待分类', module: 'firstcheck', roles: ['MEASURE_ADMIN'], api: 'POST /api/firstcheck/confirm-category' },
+  { code: 'manager_revise', name: '退回待修改', module: 'firstcheck', roles: ['MEASURE_ADMIN'], api: 'POST /api/firstcheck/confirm-category' },
   { code: 'dept_leader_approve', name: '主管领导审批', module: 'firstcheck', roles: ['DEPT_LEADER'], api: 'POST /api/firstcheck/dept-leader-approve' },
-  { code: 'engineer_confirm_type', name: '责任工程师确认', module: 'firstcheck', roles: ['RESPONSIBLE_ENGINEER'], api: 'POST /api/firstcheck/engineer-confirm-type' },
-  { code: 'verifier_receive', name: '检定员扫码接收', module: 'firstcheck', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: '公共扫码模块' },
-  { code: 'external_sendout', name: '外扩人员外委送出', module: 'firstcheck', roles: ['EXTERNAL_OPERATOR'], api: 'POST /api/scan/firstcheck/sendout' },
-  { code: 'verifier_return_verify', name: '检定员外委送回接收', module: 'firstcheck', roles: ['VERIFIER_EXTERNAL'], api: 'POST /api/scan/firstcheck/sendout-return' },
-  { code: 'verifier_verify', name: '检定录入与逐台赋码', module: 'firstcheck', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: 'POST /api/firstcheck/verifier-verify-and-assign' }
+  { code: 'engineer_route', name: '责任工程师确认检定路径', module: 'firstcheck', roles: ['RESPONSIBLE_ENGINEER'], api: 'POST /api/firstcheck/engineer-confirm-type' },
+  { code: 'verifier_verify_assign', name: '检定录入与逐台赋码', module: 'firstcheck', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: 'POST /api/firstcheck/verifier-verify-and-assign' }
 ]
 
 /** 周检节点、处理角色与后端接口契约。 */
@@ -58,11 +56,11 @@ export const workflowNodes: Record<WorkflowModule, WorkflowNode[]> = {
 export const workflowNodeGroups = {
   firstcheck: {
     supplier: ['supplier_submit'],
-    admin: ['manager_check'],
+    admin: ['manager_classify', 'manager_revise'],
     leader: ['dept_leader_approve'],
-    engineer: ['engineer_confirm_type'],
-    verifier: ['verifier_receive', 'verifier_return_verify', 'verifier_verify'],
-    externalOperator: ['external_sendout']
+    engineer: ['engineer_route'],
+    verifier: ['verifier_verify_assign'],
+    externalOperator: []
   },
   periodic: {
     admin: ['plan_confirm', 'manager_forward_confirm'],
@@ -120,16 +118,15 @@ export function isPendingWorkflowTask(task: Pick<WorkflowTask, 'taskStatus'>) {
 }
 
 export function matchesWorkflowTaskRole(
-  task: Pick<WorkflowTask, 'nodeCode'>,
+  task: Pick<WorkflowTask, 'nodeCode' | 'requiredRoleCode'>,
   module: WorkflowModule,
   roleCode?: string
 ) {
   if (!roleCode) return false
-  const allowedNodes = module === 'firstcheck'
-    ? firstCheckNodeCodesByRole[roleCode as RoleCode]
-    : module === 'change'
-      ? changeNodeCodesByRole[roleCode as RoleCode]
-      : getRoleWorkflowNodes(module, roleCode).map((node) => node.code)
+  if (module === 'firstcheck') return task.requiredRoleCode === roleCode
+  const allowedNodes = module === 'change'
+    ? changeNodeCodesByRole[roleCode as RoleCode]
+    : getRoleWorkflowNodes(module, roleCode).map((node) => node.code)
   return Boolean(allowedNodes?.includes(task.nodeCode))
 }
 

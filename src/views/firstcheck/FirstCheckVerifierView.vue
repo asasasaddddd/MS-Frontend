@@ -3,9 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getFirstCheckDetail } from '@/api/firstcheck'
-import { getFirstCheckFlowSummary } from '@/api/flowSummary'
 import { listWorkflowTasks } from '@/api/workflow'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
+import { buildWorkflowTaskSummary } from '@/components/workflow/workflowTaskSummary'
 import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
@@ -16,7 +16,6 @@ import FirstCheckVerifyDialog from '@/views/firstcheck/components/FirstCheckVeri
 import {
   canOpenFirstCheckVerify,
   firstCheckVerifierAction,
-  matchesFirstCheckVerifierRole,
   resolveFirstCheckVerifierStatus,
   type FirstCheckVerifierStatusKey
 } from '@/views/firstcheck/firstCheckVerifierModel'
@@ -26,7 +25,9 @@ type StatusFilter = 'all' | FirstCheckVerifierStatusKey
 
 interface VerifierRow {
   key: string
-  taskId: string
+  taskId: string | number
+  taskRowVersion: number
+  allowedActions: string[]
   nodeCode: string
   nodeName?: string
   statusKey: FirstCheckVerifierStatusKey
@@ -66,7 +67,7 @@ function matchesRouteOrder(task: WorkflowTask) {
 const statusOptions = [
   { label: '当前状态筛选', value: 'all' },
   { label: '待接收', value: 'wait_receive' },
-  { label: '已接收', value: 'verifier_verify' },
+  { label: '已接收', value: 'verifier_verify_assign' },
   { label: '待外委送出', value: 'wait_sendout' },
   { label: '已外委送出', value: 'sent_out' },
   { label: '待外委送回', value: 'wait_sendout_return' },
@@ -147,7 +148,9 @@ function toRow(task: WorkflowTask, order: FirstCheckOrder): VerifierRow {
   const status = resolveFirstCheckVerifierStatus(statusSource(task, order))
   return {
     key: String(task.businessId || order.id),
-    taskId: String(task.id),
+    taskId: task.taskId,
+    taskRowVersion: task.rowVersion,
+    allowedActions: task.allowedActions,
     nodeCode,
     nodeName: task.nodeName || order.currentNodeName,
     order,
@@ -180,8 +183,8 @@ function resetFilter() {
  * @returns 已成功取得真实首检详情且匹配当前检定角色的待办行。
  * @throws {ApiError} 工作流任务列表请求失败时抛出。
  */
-async function fetchTaskRows(): Promise<VerifierRow[]> {
-  const tasks = await listWorkflowTasks()
+async function fetchTaskRows(): Promise<{ rows: VerifierRow[]; tasks: WorkflowTask[] }> {
+  const tasks = await listWorkflowTasks('FIRST_CHECK')
   const verifierNodeSet = new Set<string>(workflowNodeGroups.firstcheck.verifier)
   const firstCheckTasks = tasks.filter((task) => {
     const pending = isPendingWorkflowTask(task)
@@ -191,14 +194,14 @@ async function fetchTaskRows(): Promise<VerifierRow[]> {
   const details = await Promise.allSettled(
     firstCheckTasks.map(async (task) => ({
       task,
-      order: await getFirstCheckDetail(task.businessId)
+      order: await getFirstCheckDetail(task.businessId, task.taskId)
     }))
   )
 
-  return details
+  const taskRows = details
     .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: FirstCheckOrder }> => item.status === 'fulfilled')
-    .filter((item) => matchesFirstCheckVerifierRole(item.value.order, session.user?.roleCode))
     .map((item) => toRow(item.value.task, item.value.order))
+  return { rows: taskRows, tasks: firstCheckTasks }
 }
 
 /**
@@ -211,23 +214,14 @@ async function loadRows(): Promise<void> {
   summaryLoading.value = true
   selectedRowKeys.value = []
 
-  const [taskResult, summaryResult] = await Promise.allSettled([
-    fetchTaskRows(),
-    getFirstCheckFlowSummary()
-  ])
-
-  if (taskResult.status === 'fulfilled') {
-    rows.value = taskResult.value
-  } else {
+  try {
+    const result = await fetchTaskRows()
+    rows.value = result.rows
+    firstCheckFlowSummary.value = buildWorkflowTaskSummary(result.tasks, 'FIRST_CHECK')
+  } catch (error) {
     rows.value = []
-    message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '检定员首检待办加载失败')
-  }
-
-  if (summaryResult.status === 'fulfilled') {
-    firstCheckFlowSummary.value = summaryResult.value
-  } else {
     firstCheckFlowSummary.value = null
-    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '首检当前角色待办汇总加载失败')
+    message.error(error instanceof Error ? error.message : '检定员首检待办加载失败')
   }
 
   loading.value = false
@@ -237,6 +231,10 @@ async function loadRows(): Promise<void> {
 function openVerify(row: VerifierRow) {
   if (!canOpenFirstCheckVerify(rowStatusSource(row))) {
     message.info('实物未完成扫码接收，暂不能填写检定信息')
+    return
+  }
+  if (!row.allowedActions.includes('SUBMIT')) {
+    message.info('当前检定任务条件尚未满足，请刷新实物交接状态')
     return
   }
   activeRow.value = row
@@ -321,7 +319,7 @@ onMounted(loadRows)
             {{ commonText(record.order.isCommon) }}
           </template>
           <template v-else-if="column.key === 'attachment'">
-            <a-button v-if="record.statusKey === 'verifier_verify'" size="small" @click="openVerify(record)">上传附件</a-button>
+            <a-button v-if="record.statusKey === 'verifier_verify_assign'" size="small" @click="openVerify(record)">上传附件</a-button>
             <span v-else class="muted-text">待填写节点</span>
           </template>
           <template v-else-if="column.key === 'action'">
@@ -340,16 +338,15 @@ onMounted(loadRows)
     </a-card>
     </template>
 
-    <FirstCheckHistoryPanel
-      v-else
-      :role-code="session.user?.roleCode || 'VERIFIER_SELF'"
-      :order-id="routeOrderId"
-    />
+    <FirstCheckHistoryPanel v-else :order-id="routeOrderId" />
 
     <FirstCheckVerifyDialog
       v-model:open="verifyOpen"
       v-model:submitting="actionLoading"
       :order="activeRow?.order"
+      :task-id="activeRow?.taskId"
+      :task-row-version="activeRow?.taskRowVersion"
+      :allowed-actions="activeRow?.allowedActions || []"
       @success="loadRows"
     />
   </section>

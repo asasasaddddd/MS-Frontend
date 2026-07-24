@@ -7,8 +7,11 @@ function source(path: string) {
 
 const historyPanel = source('../src/views/firstcheck/components/FirstCheckHistoryPanel.vue')
 assert.match(historyPanel, /listWorkflowHistory/)
-assert.match(historyPanel, /matchesWorkflowTaskRole/)
-assert.match(historyPanel, /matchesFirstCheckVerifierRole/)
+assert.match(historyPanel, /listWorkflowHistory\('FIRST_CHECK'\)/)
+assert.match(historyPanel, /getFirstCheckDetail\(task\.businessId, task\.taskId\)/)
+assert.match(historyPanel, /outcomeCode/)
+assert.doesNotMatch(historyPanel, /matchesWorkflowTaskRole|matchesFirstCheckVerifierRole/)
+assert.doesNotMatch(historyPanel, /task\.action/)
 assert.match(historyPanel, /当前流转节点/)
 assert.match(historyPanel, /本人处理意见/)
 assert.match(historyPanel, /AttachmentListButton/)

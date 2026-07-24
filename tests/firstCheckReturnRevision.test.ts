@@ -9,7 +9,7 @@ const initialHistory = {
     {
       id: '10',
       actionCode: 'APPROVE_AND_FORWARD',
-      nodeCode: 'manager_check',
+      nodeCode: 'manager_classify',
       operatorId: 'U03013971',
       operatorName: '王熙然',
       opinion: '首次分类提交',
@@ -37,7 +37,7 @@ const returnedHistory = {
     {
       id: '12',
       actionCode: 'RETURN_AND_FORWARD',
-      nodeCode: 'engineer_confirm_type',
+      nodeCode: 'engineer_route',
       nodeName: '责任工程师确认',
       operatorId: 'U00108072',
       operatorName: '责任工程师乙',
@@ -58,7 +58,7 @@ const returnedHistory = {
 assert.deepEqual(latestFirstCheckReturnFeedback(returnedHistory), {
   operatorId: 'U00108072',
   operatorName: '责任工程师乙',
-  nodeCode: 'engineer_confirm_type',
+  nodeCode: 'engineer_route',
   nodeName: '责任工程师确认',
   opinion: '检定方式需要调整',
   operatedAt: '2026-07-21T11:00:00'

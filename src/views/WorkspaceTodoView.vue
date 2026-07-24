@@ -624,7 +624,7 @@ async function loadWorkflowSummary() {
     Promise.allSettled(
       firstCheckTasks.map(async (task) => ({
         orderId: String(task.businessId),
-        order: await getFirstCheckDetail(task.businessId)
+        order: await getFirstCheckDetail(task.businessId, task.taskId)
       }))
     ),
     Promise.allSettled(

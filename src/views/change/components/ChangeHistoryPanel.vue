@@ -106,7 +106,7 @@ onMounted(loadRows)
           <template v-else-if="column.key === 'itemCount'">{{ display(record.order.itemCount || record.order.items?.length) }}</template>
           <template v-else-if="column.key === 'deptName'">{{ display(record.order.applyDeptName) }}</template>
           <template v-else-if="column.key === 'nodeName'">{{ display(record.task.nodeName) }}</template>
-          <template v-else-if="column.key === 'action'"><a-tag color="green">{{ actionName(record.task.action) }}</a-tag></template>
+          <template v-else-if="column.key === 'action'"><a-tag color="green">{{ actionName(record.task.outcomeCode) }}</a-tag></template>
           <template v-else-if="column.key === 'completedAt'">{{ formatDateTime(record.task.completedAt) }}</template>
           <template v-else-if="column.key === 'currentNodeName'"><a-tag color="blue">{{ display(record.process?.currentNodeName || record.order.workflowStatus || record.order.statusName) }}</a-tag></template>
           <template v-else-if="column.key === 'operation'"><a-button type="link" @click="openDetail(record)">查看</a-button></template>
@@ -119,7 +119,7 @@ onMounted(loadRows)
         <div><span>变更单号</span><strong>{{ display(activeRow.order.orderNo) }}</strong></div>
         <div><span>当前流转节点</span><strong>{{ display(activeRow.process?.currentNodeName || activeRow.order.workflowStatus || activeRow.order.statusName) }}</strong></div>
         <div><span>本人已办节点</span><strong>{{ display(activeRow.task.nodeName) }}</strong></div>
-        <div><span>本人处理结果</span><strong>{{ actionName(activeRow.task.action) }}</strong></div>
+        <div><span>本人处理结果</span><strong>{{ actionName(activeRow.task.outcomeCode) }}</strong></div>
         <div class="full"><span>本人处理意见</span><strong>{{ display(activeRow.task.opinion) }}</strong></div>
         <div><span>变更类型</span><strong>{{ changeTypeName(activeRow.order.changeType) }}</strong></div>
         <div><span>申请部门</span><strong>{{ display(activeRow.order.applyDeptName) }}</strong></div>

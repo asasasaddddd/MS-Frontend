@@ -11,6 +11,9 @@ import { latestFirstCheckReturnFeedback } from '@/views/firstcheck/firstCheckRet
 const props = defineProps<{
   open: boolean
   order?: FirstCheckOrder
+  taskId?: string | number
+  taskRowVersion?: number
+  allowedActions: string[]
 }>()
 
 const emit = defineEmits<{
@@ -42,9 +45,11 @@ const engineerOptions = computed(() =>
 
 const returnFeedback = computed(() => latestFirstCheckReturnFeedback(props.order?.history))
 
-const canSubmit = computed(() =>
-  Boolean(props.order && form.isWithReport !== undefined && form.requestedCategory && form.responsibleEngineerId)
-)
+const canSubmit = computed(() => Boolean(
+  props.order && props.taskId !== undefined && props.taskRowVersion !== undefined &&
+  (props.allowedActions.includes('SUBMIT') || props.allowedActions.includes('RESUBMIT')) &&
+  form.isWithReport !== undefined && form.requestedCategory && form.responsibleEngineerId
+))
 
 function close() {
   emit('update:open', false)
@@ -118,6 +123,14 @@ async function submit() {
     message.warning('请选择责任工程师')
     return
   }
+  if (props.taskId === undefined || props.taskRowVersion === undefined) {
+    message.warning('任务上下文已失效，请刷新待办后重试')
+    return
+  }
+  if (!props.allowedActions.includes('SUBMIT') && !props.allowedActions.includes('RESUBMIT')) {
+    message.warning('当前任务已流转，请刷新待办')
+    return
+  }
 
   const engineer = engineers.value.find((user) => user.employeeId === form.responsibleEngineerId)
 
@@ -125,6 +138,8 @@ async function submit() {
   try {
     await confirmCategoryFirstCheck({
       orderId: order.id,
+      taskId: props.taskId,
+      taskRowVersion: props.taskRowVersion,
       isWithReport: form.isWithReport,
       reportFileId: form.reportFileId,
       usageScenario: form.usageScenario.trim() || undefined,

@@ -6,7 +6,7 @@ import {
 } from '@/views/firstcheck/firstCheckQualifiedDeviceModel'
 
 const props = defineProps<{
-  orderId?: number
+  orderId?: string | number
   confirmInterval?: string
   verificationCycleMonth?: number
 }>()

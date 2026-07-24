@@ -3,9 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { batchDeptLeaderApproveFirstCheck, getFirstCheckDetail } from '@/api/firstcheck'
-import { getFirstCheckFlowSummary } from '@/api/flowSummary'
 import { listWorkflowTasks } from '@/api/workflow'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
+import { buildWorkflowTaskSummary } from '@/components/workflow/workflowTaskSummary'
 import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
@@ -16,6 +16,8 @@ import FirstCheckHistoryPanel from '@/views/firstcheck/components/FirstCheckHist
 interface LeaderRow {
   key: string
   taskId: string | number
+  taskRowVersion: number
+  allowedActions: string[]
   nodeCode: string
   order: FirstCheckOrder
 }
@@ -98,8 +100,8 @@ function openLeader(row: LeaderRow) {
  * @returns 已成功取得真实首检详情的主管领导待办行。
  * @throws {ApiError} 工作流任务列表请求失败时抛出。
  */
-async function fetchTaskRows(): Promise<LeaderRow[]> {
-  const tasks = await listWorkflowTasks()
+async function fetchTaskRows(): Promise<{ rows: LeaderRow[]; tasks: WorkflowTask[] }> {
+  const tasks = await listWorkflowTasks('FIRST_CHECK')
   const leaderNodeSet = new Set<string>(workflowNodeGroups.firstcheck.leader)
   const firstCheckTasks = tasks.filter((task) => {
     const pending = isPendingWorkflowTask(task)
@@ -109,18 +111,21 @@ async function fetchTaskRows(): Promise<LeaderRow[]> {
   const details = await Promise.allSettled(
     firstCheckTasks.map(async (task) => ({
       task,
-      order: await getFirstCheckDetail(task.businessId)
+      order: await getFirstCheckDetail(task.businessId, task.taskId)
     }))
   )
 
-  return details
+  const taskRows = details
     .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: FirstCheckOrder }> => item.status === 'fulfilled')
     .map((item) => ({
       key: String(item.value.task.businessId),
-      taskId: item.value.task.id,
+      taskId: item.value.task.taskId,
+      taskRowVersion: item.value.task.rowVersion,
+      allowedActions: item.value.task.allowedActions,
       nodeCode: item.value.task.nodeCode,
       order: item.value.order
     }))
+  return { rows: taskRows, tasks: firstCheckTasks }
 }
 
 /**
@@ -133,23 +138,14 @@ async function loadRows(): Promise<void> {
   summaryLoading.value = true
   selectedRowKeys.value = []
 
-  const [taskResult, summaryResult] = await Promise.allSettled([
-    fetchTaskRows(),
-    getFirstCheckFlowSummary()
-  ])
-
-  if (taskResult.status === 'fulfilled') {
-    rows.value = taskResult.value
-  } else {
+  try {
+    const result = await fetchTaskRows()
+    rows.value = result.rows
+    firstCheckFlowSummary.value = buildWorkflowTaskSummary(result.tasks, 'FIRST_CHECK')
+  } catch (error) {
     rows.value = []
-    message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '主管领导首检待办加载失败')
-  }
-
-  if (summaryResult.status === 'fulfilled') {
-    firstCheckFlowSummary.value = summaryResult.value
-  } else {
     firstCheckFlowSummary.value = null
-    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '首检当前角色待办汇总加载失败')
+    message.error(error instanceof Error ? error.message : '主管领导首检待办加载失败')
   }
 
   loading.value = false
@@ -164,7 +160,15 @@ async function submitBatchApprove() {
   submitting.value = true
   try {
     const result = await batchDeptLeaderApproveFirstCheck({
-      orderIds: selectedRowKeys.value,
+      items: selectedRowKeys.value.map((orderId) => {
+        const row = rows.value.find((item) => item.key === orderId)
+        if (!row) throw new Error(`首检单 ${orderId} 的任务上下文不存在`)
+        return {
+          orderId: row.order.id,
+          taskId: row.taskId,
+          taskRowVersion: row.taskRowVersion
+        }
+      }),
       opinion: '主管领导批量审批同意'
     })
     const failedCount = result.failedItems?.length || 0
@@ -242,9 +246,16 @@ onMounted(loadRows)
     </a-card>
     </template>
 
-    <FirstCheckHistoryPanel v-else role-code="DEPT_LEADER" :order-id="routeOrderId" />
+    <FirstCheckHistoryPanel v-else :order-id="routeOrderId" />
 
-    <FirstCheckLeaderDialog v-model:open="leaderOpen" :order="activeRow?.order" @success="loadRows" />
+    <FirstCheckLeaderDialog
+      v-model:open="leaderOpen"
+      :order="activeRow?.order"
+      :task-id="activeRow?.taskId"
+      :task-row-version="activeRow?.taskRowVersion"
+      :allowed-actions="activeRow?.allowedActions || []"
+      @success="loadRows"
+    />
   </section>
 </template>
 

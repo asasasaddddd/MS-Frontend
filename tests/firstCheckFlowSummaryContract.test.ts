@@ -13,16 +13,17 @@ for (const viewPath of firstCheckViewPaths) {
   /** 当前角色工作台源码，仅用于静态约束汇总接线且不执行 Vue 运行时。 */
   const viewSource = readFileSync(new URL(viewPath, import.meta.url), 'utf8')
 
-  assert.match(viewSource, /getFirstCheckFlowSummary/)
-  assert.match(viewSource, /getFirstCheckFlowSummary\(\)/)
+  assert.match(viewSource, /buildWorkflowTaskSummary/)
+  assert.match(viewSource, /buildWorkflowTaskSummary\(result\.tasks,\s*'FIRST_CHECK'\)/)
   assert.match(viewSource, /FlowStatusSummary/)
   assert.match(viewSource, /title="首检当前角色待办汇总"/)
   assert.match(viewSource, /:summary="firstCheckFlowSummary"/)
   assert.match(
     viewSource,
-    /Promise\.allSettled\(\s*\[\s*fetchTaskRows\(\),\s*getFirstCheckFlowSummary\(\)\s*\]\s*\)/
+    /listWorkflowTasks\('FIRST_CHECK'\)/
   )
   assert.match(viewSource, /listWorkflowTasks/)
+  assert.doesNotMatch(viewSource, /getFirstCheckFlowSummary/)
 
   assert.doesNotMatch(viewSource, /const\s+(?:metrics|todayKey)\b/)
   assert.doesNotMatch(viewSource, /class="(?:summary-line|metric-grid|status-strip)\b/)

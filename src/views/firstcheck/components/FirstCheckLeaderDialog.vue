@@ -8,6 +8,9 @@ import type { FirstCheckOrder } from '@/types/firstcheck'
 const props = defineProps<{
   open: boolean
   order?: FirstCheckOrder
+  taskId?: string | number
+  taskRowVersion?: number
+  allowedActions: string[]
 }>()
 
 const emit = defineEmits<{
@@ -37,10 +40,16 @@ function normalizeDate(value?: string) {
 async function submit() {
   const order = props.order
   if (!order) return
+  if (props.taskId === undefined || props.taskRowVersion === undefined || !props.allowedActions.includes('APPROVE_RETURN')) {
+    message.warning('任务上下文已失效，请刷新待办后重试')
+    return
+  }
   submitting.value = true
   try {
     await deptLeaderApproveFirstCheck({
       orderId: order.id,
+      taskId: props.taskId,
+      taskRowVersion: props.taskRowVersion,
       opinion: form.opinion || '主管领导审批同意'
     })
     message.success('已同意，流程已流转到责任工程师')
@@ -56,6 +65,10 @@ async function submit() {
 function returnOrder() {
   const order = props.order
   if (!order) return
+  if (props.taskId === undefined || props.taskRowVersion === undefined || !props.allowedActions.includes('APPROVE_RETURN')) {
+    message.warning('任务上下文已失效，请刷新待办后重试')
+    return
+  }
   if (!form.opinion.trim()) {
     message.warning('请输入退回意见')
     return
@@ -71,6 +84,8 @@ function returnOrder() {
       try {
         await deptLeaderReturnFirstCheck({
           orderId: order.id,
+          taskId: props.taskId!,
+          taskRowVersion: props.taskRowVersion!,
           opinion: form.opinion.trim()
         })
         message.success('已退回计量管理员修改')

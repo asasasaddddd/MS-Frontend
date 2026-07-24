@@ -2,7 +2,7 @@ import type { BusinessCaseDetailVO, BusinessFlowLogVO } from '@/types/device'
 
 const RETURNABLE_FIRST_CHECK_NODES = new Set([
   'dept_leader_approve',
-  'engineer_confirm_type'
+  'engineer_route'
 ])
 
 export interface FirstCheckReturnFeedback {
@@ -20,9 +20,8 @@ function isFirstCheckRevisionReturn(log: BusinessFlowLogVO) {
 }
 
 /**
- * Returns the latest leader/engineer revision request recorded in the unified
- * first-check timeline. An initial manager classification has no matching
- * RETURN_AND_FORWARD event and therefore returns undefined.
+ * 返回统一首检轨迹中最近一次主管领导或责任工程师退回修订记录。
+ * 首次分类不存在退回流转记录，因此返回 undefined。
  */
 export function latestFirstCheckReturnFeedback(
   history?: BusinessCaseDetailVO
