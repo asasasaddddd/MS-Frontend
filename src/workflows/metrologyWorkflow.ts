@@ -89,15 +89,6 @@ export const workflowNodeGroups = {
   }
 } as const
 
-export const changeNodeCodesByRole: Partial<Record<RoleCode, readonly string[]>> = {
-  MEASURE_ADMIN: ['receive_admin_confirm'],
-  DEPT_LEADER: ['dept_leader_approve', 'receive_dept_leader_confirm'],
-  MEASURE_LEADER: ['measure_leader_review'],
-  RESPONSIBLE_ENGINEER: ['responsible_engineer_review'],
-  VERIFIER_SELF: ['verifier_handle'],
-  VERIFIER_EXTERNAL: ['verifier_handle']
-}
-
 export const firstCheckNodeCodesByRole: Partial<Record<RoleCode, readonly string[]>> = {
   MEASURE_ADMIN: workflowNodeGroups.firstcheck.admin,
   DEPT_LEADER: workflowNodeGroups.firstcheck.leader,
@@ -118,16 +109,12 @@ export function isPendingWorkflowTask(task: Pick<WorkflowTask, 'taskStatus'>) {
 }
 
 export function matchesWorkflowTaskRole(
-  task: Pick<WorkflowTask, 'nodeCode' | 'requiredRoleCode'>,
-  module: WorkflowModule,
+  task: Pick<WorkflowTask, 'requiredRoleCode'>,
+  _module: WorkflowModule,
   roleCode?: string
 ) {
   if (!roleCode) return false
-  if (module === 'firstcheck') return task.requiredRoleCode === roleCode
-  const allowedNodes = module === 'change'
-    ? changeNodeCodesByRole[roleCode as RoleCode]
-    : getRoleWorkflowNodes(module, roleCode).map((node) => node.code)
-  return Boolean(allowedNodes?.includes(task.nodeCode))
+  return task.requiredRoleCode === roleCode
 }
 
 export function getWorkflowNode(module: WorkflowModule, nodeCode?: string) {

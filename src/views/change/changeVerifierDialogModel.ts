@@ -154,8 +154,13 @@ export function buildChangeVerifierHandleRequest(
   order: ChangeOrderVO,
   form: ChangeVerifierFormState
 ): ChangeVerifierHandleRequest {
+  if (order.taskId === undefined || order.rowVersion === undefined) {
+    throw new Error('状态变更任务身份不完整，请刷新后重试')
+  }
   return {
     orderId: order.id,
+    taskId: order.taskId,
+    rowVersion: order.rowVersion,
     verificationResult: form.result,
     verificationDate: form.verificationDate || undefined,
     validUntil: form.validUntil || undefined,

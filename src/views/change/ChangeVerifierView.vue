@@ -6,27 +6,25 @@ import { getChangeOrderDetail, verifierHandleChange } from '@/api/change'
 import { getChangeFlowSummary } from '@/api/flowSummary'
 import { listWorkflowTasks } from '@/api/workflow'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
-import { useSessionStore } from '@/stores/session'
-import type { RoleCode } from '@/types/common'
 import type { ChangeOrderVO, ChangeVerifierHandleRequest } from '@/types/change'
 import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
 import {
+  CHANGE_VERIFY_ACTION,
   changeTagColor,
   changeNodeName,
   changeTypeName,
   display,
   formatDateTime,
-  matchesChangeVerifierRole,
+  hasChangeAction,
   resolveItemSnapshot,
   type ChangeTaskRow
 } from '@/views/change/changeDisplayModel'
 import ChangeVerifierHandleDialog from '@/views/change/components/ChangeVerifierHandleDialog.vue'
 import ChangeHistoryPanel from '@/views/change/components/ChangeHistoryPanel.vue'
-import { changeNodeCodesByRole, isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
+import { isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 
 const route = useRoute()
-const session = useSessionStore()
 const loading = ref(false)
 const rows = ref<ChangeTaskRow[]>([])
 /** 当前检定员待办范围内由后端生成的权威流程汇总。 */
@@ -86,21 +84,27 @@ function resetFilter() {
 }
 
 function toRow(task: WorkflowTask, order: ChangeOrderVO): ChangeTaskRow {
+  const actionableOrder: ChangeOrderVO = {
+    ...order,
+    taskId: task.taskId,
+    rowVersion: task.rowVersion,
+    allowedActions: [...task.allowedActions]
+  }
   return {
     key: String(task.businessId),
     taskId: task.taskId,
+    rowVersion: task.rowVersion,
+    allowedActions: [...task.allowedActions],
     nodeCode: task.nodeCode,
     nodeName: task.nodeName,
-    order
+    order: actionableOrder
   }
 }
 
 async function loadRows() {
   loading.value = true
-  const currentRole = session.user?.roleCode as RoleCode | undefined
-  const nodeSet = new Set<string>(currentRole ? changeNodeCodesByRole[currentRole] || [] : [])
   const [taskResult, summaryResult] = await Promise.allSettled([
-    listWorkflowTasks(),
+    listWorkflowTasks('CHANGE'),
     getChangeFlowSummary('pending')
   ])
 
@@ -113,7 +117,7 @@ async function loadRows() {
 
   if (taskResult.status === 'fulfilled') {
     const tasks = taskResult.value.filter(
-      (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change') && nodeSet.has(task.nodeCode)
+      (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change')
     )
     const details = await Promise.allSettled(
       tasks.map(async (task) => ({
@@ -124,7 +128,6 @@ async function loadRows() {
     rows.value = details
       .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: ChangeOrderVO }> => item.status === 'fulfilled')
       .map((item) => toRow(item.value.task, item.value.order))
-      .filter((row) => matchesChangeVerifierRole(row.order, currentRole))
     const targetOrderId = route.query.orderId ? String(route.query.orderId) : ''
     const targetRow = targetOrderId ? rows.value.find((row) => String(row.order.id) === targetOrderId) : undefined
     if (targetRow) openDetail(targetRow)
@@ -136,6 +139,10 @@ async function loadRows() {
 }
 
 function openDetail(row: ChangeTaskRow) {
+  if (!hasChangeAction(row, CHANGE_VERIFY_ACTION)) {
+    message.warning('当前任务已无检定处理权限，请刷新后重试')
+    return
+  }
   activeOrder.value = row.order
   detailOpen.value = true
 }
@@ -225,7 +232,13 @@ onMounted(loadRows)
           <template v-else-if="column.key === 'category'">{{ display(record.order.items?.[0]?.newCategory || record.order.items?.[0]?.oldCategory) }}</template>
           <template v-else-if="column.key === 'applyTime'">{{ formatDateTime(record.order.applyTime) }}</template>
           <template v-else-if="column.key === 'action'">
-            <a-button type="link" class="button-link" @click="openDetail(record)">处理</a-button>
+            <a-button
+              v-if="hasChangeAction(record, CHANGE_VERIFY_ACTION)"
+              type="link"
+              class="button-link"
+              @click="openDetail(record)"
+            >处理</a-button>
+            <span v-else>-</span>
           </template>
         </template>
       </a-table>
@@ -234,7 +247,6 @@ onMounted(loadRows)
 
     <ChangeHistoryPanel
       v-else
-      :role-code="session.user?.roleCode || 'VERIFIER_SELF'"
       :order-id="routeOrderId"
     />
 

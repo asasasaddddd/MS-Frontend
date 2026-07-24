@@ -21,7 +21,7 @@ const routeOrderId = computed(() => {
     </a-tabs>
 
     <ChangeReceiveAdminPanel v-if="activeTab === 'todo'" />
-    <ChangeHistoryPanel v-else role-code="MEASURE_ADMIN" :order-id="routeOrderId" />
+    <ChangeHistoryPanel v-else :order-id="routeOrderId" />
   </section>
 </template>
 

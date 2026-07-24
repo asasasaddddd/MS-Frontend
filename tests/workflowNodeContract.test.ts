@@ -61,3 +61,7 @@ assert.equal(
   matchesWorkflowTaskRole({ nodeCode: 'verifier_verify_assign', requiredRoleCode: 'VERIFIER_SELF' }, 'firstcheck', 'VERIFIER_SELF'),
   true
 )
+assert.equal(
+  matchesWorkflowTaskRole({ nodeCode: 'verifier_handle', requiredRoleCode: 'VERIFIER_EXTERNAL' }, 'change', 'VERIFIER_SELF'),
+  false
+)

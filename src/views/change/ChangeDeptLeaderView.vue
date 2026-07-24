@@ -6,27 +6,26 @@ import { approveChange, getChangeOrderDetail, rejectChange } from '@/api/change'
 import { getChangeFlowSummary } from '@/api/flowSummary'
 import { listWorkflowTasks } from '@/api/workflow'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
-import { useSessionStore } from '@/stores/session'
-import type { RoleCode } from '@/types/common'
 import type { ChangeOrderVO } from '@/types/change'
 import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
 import {
+  CHANGE_APPROVE_ACTION,
   changeNodeName,
   changeStatusName,
   changeTagColor,
   changeTypeName,
   display,
   formatDateTime,
+  hasChangeAction,
   normalizeChangeType,
   statusTagColor,
   type ChangeTaskRow
 } from '@/views/change/changeDisplayModel'
 import ChangeApprovalDialog from '@/views/change/components/ChangeApprovalDialog.vue'
 import ChangeHistoryPanel from '@/views/change/components/ChangeHistoryPanel.vue'
-import { changeNodeCodesByRole, isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
+import { isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 
-const session = useSessionStore()
 const route = useRoute()
 const loading = ref(false)
 const submitting = ref(false)
@@ -77,9 +76,10 @@ const rowSelection = computed(() => ({
   },
   getCheckboxProps: (record: ChangeTaskRow) => ({
     disabled:
-      selectedRows.value.length > 0 &&
-      !selectedRowKeys.value.includes(record.key) &&
-      normalizeChangeType(record.order.changeType) !== selectedChangeType.value
+      !hasChangeAction(record, CHANGE_APPROVE_ACTION) ||
+      (selectedRows.value.length > 0 &&
+        !selectedRowKeys.value.includes(record.key) &&
+        normalizeChangeType(record.order.changeType) !== selectedChangeType.value)
   })
 }))
 
@@ -92,22 +92,28 @@ function rowKey(row: ChangeTaskRow) {
 }
 
 function toRow(task: WorkflowTask, order: ChangeOrderVO): ChangeTaskRow {
+  const actionableOrder: ChangeOrderVO = {
+    ...order,
+    taskId: task.taskId,
+    rowVersion: task.rowVersion,
+    allowedActions: [...task.allowedActions]
+  }
   return {
     key: String(task.businessId),
     taskId: task.taskId,
+    rowVersion: task.rowVersion,
+    allowedActions: [...task.allowedActions],
     nodeCode: task.nodeCode,
     nodeName: task.nodeName,
-    order
+    order: actionableOrder
   }
 }
 
 async function loadRows() {
   loading.value = true
   selectedRowKeys.value = []
-  const currentRole = session.user?.roleCode as RoleCode | undefined
-  const nodeSet = new Set<string>(currentRole ? changeNodeCodesByRole[currentRole] || [] : [])
   const [taskResult, summaryResult] = await Promise.allSettled([
-    listWorkflowTasks(),
+    listWorkflowTasks('CHANGE'),
     getChangeFlowSummary('pending')
   ])
 
@@ -120,7 +126,7 @@ async function loadRows() {
 
   if (taskResult.status === 'fulfilled') {
     const tasks = taskResult.value.filter(
-      (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change') && nodeSet.has(task.nodeCode)
+      (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change')
     )
     const details = await Promise.allSettled(
       tasks.map(async (task) => ({
@@ -155,6 +161,10 @@ function openApproval(targetRows: ChangeTaskRow[]) {
     message.warning('只能同时选择相同变更类型的状态变更单')
     return
   }
+  if (targetRows.some((row) => !hasChangeAction(row, CHANGE_APPROVE_ACTION))) {
+    message.warning('当前任务已无审批权限，请刷新后重试')
+    return
+  }
   activeOrders.value = targetRows.map((row) => row.order)
   approvalOpen.value = true
 }
@@ -164,11 +174,27 @@ function openDetail(row: ChangeTaskRow) {
 }
 
 async function approveOrder(order: ChangeOrderVO, opinion = '同意') {
-  await approveChange({ orderId: order.id, opinion })
+  if (order.taskId === undefined || order.rowVersion === undefined) {
+    throw new Error('状态变更任务身份不完整，请刷新后重试')
+  }
+  await approveChange({
+    orderId: order.id,
+    taskId: order.taskId,
+    rowVersion: order.rowVersion,
+    opinion
+  })
 }
 
 async function rejectOrder(order: ChangeOrderVO, reason = '退回修改') {
-  await rejectChange({ orderId: order.id, reason })
+  if (order.taskId === undefined || order.rowVersion === undefined) {
+    throw new Error('状态变更任务身份不完整，请刷新后重试')
+  }
+  await rejectChange({
+    orderId: order.id,
+    taskId: order.taskId,
+    rowVersion: order.rowVersion,
+    reason
+  })
 }
 
 async function handleApprove(opinion: string) {
@@ -264,7 +290,13 @@ onMounted(loadRows)
             <a-tag :class="['tag', statusTagColor(record.order.status)]">{{ changeStatusName(record.order.status) }}</a-tag>
           </template>
           <template v-else-if="column.key === 'action'">
-            <a-button type="link" class="button-link" @click="openDetail(record)">处理</a-button>
+            <a-button
+              v-if="hasChangeAction(record, CHANGE_APPROVE_ACTION)"
+              type="link"
+              class="button-link"
+              @click="openDetail(record)"
+            >处理</a-button>
+            <span v-else>-</span>
           </template>
         </template>
       </a-table>
@@ -273,7 +305,6 @@ onMounted(loadRows)
 
     <ChangeHistoryPanel
       v-else
-      :role-code="session.user?.roleCode || 'DEPT_LEADER'"
       :order-id="routeOrderId"
     />
 

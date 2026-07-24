@@ -59,17 +59,28 @@ export interface ChangeSubmitRequest {
 
 export interface ChangeApproveRequest {
   orderId: EntityId
+  /** 统一工作流任务主键。 */
+  taskId: EntityId
+  /** 统一工作流任务乐观并发版本。 */
+  rowVersion: number
   opinion?: string
 }
 
 export interface ChangeRejectRequest {
   orderId: EntityId
+  /** 统一工作流任务主键。 */
+  taskId: EntityId
+  /** 统一工作流任务乐观并发版本。 */
+  rowVersion: number
   reason?: string
-  opinion?: string
 }
 
 export interface ChangeVerifierHandleRequest {
   orderId: EntityId
+  /** 统一工作流任务主键。 */
+  taskId: EntityId
+  /** 统一工作流任务乐观并发版本。 */
+  rowVersion: number
   verificationResult: 'qualified' | 'unqualified' | 'scrap' | 'repair' | string
   verificationDate?: string
   validUntil?: string
@@ -148,5 +159,11 @@ export interface ChangeOrderVO {
   submittedAt?: string
   remark?: string
   attachmentGroupId?: EntityId
+  processInstanceId?: EntityId
+  taskId?: EntityId
+  rowVersion?: number
+  currentNodeCode?: string
+  currentNodeName?: string
+  allowedActions?: string[]
   items?: ChangeItemVO[]
 }

@@ -1,7 +1,6 @@
 import type { ChangeItemSubmitRequest, ChangeItemVO, ChangeOrderVO, ChangeType } from '@/types/change'
 import type { DeviceVO } from '@/types/device'
 import type { EntityId } from '@/types/periodic'
-import type { RoleCode } from '@/types/common'
 
 export interface ChangeTypeMeta {
   value: ChangeType
@@ -14,10 +13,23 @@ export interface ChangeTypeMeta {
 
 export interface ChangeTaskRow {
   key: string
-  taskId?: EntityId
+  taskId: EntityId
+  rowVersion: number
+  allowedActions: string[]
   nodeCode?: string
   nodeName?: string
   order: ChangeOrderVO
+}
+
+/** 状态变更审批节点的统一操作编码。 */
+export const CHANGE_APPROVE_ACTION = 'APPROVE_REJECT'
+
+/** 状态变更检定节点的统一操作编码。 */
+export const CHANGE_VERIFY_ACTION = 'SUBMIT_REJECT'
+
+/** 判断后端是否允许当前身份执行指定节点操作。 */
+export function hasChangeAction(row: ChangeTaskRow, action: string) {
+  return row.allowedActions.includes(action)
 }
 
 export const changeTypeMetas: ChangeTypeMeta[] = [
@@ -166,14 +178,6 @@ export function changeNodeName(value?: string) {
     verifier_handle: '检定员处理'
   }
   return value ? map[value] || value : '-'
-}
-
-export function matchesChangeVerifierRole(order: ChangeOrderVO, roleCode?: RoleCode) {
-  if (roleCode !== 'VERIFIER_SELF' && roleCode !== 'VERIFIER_EXTERNAL') return true
-  const requiresExternalVerifier =
-    normalizeChangeType(order.changeType) === 'scrap' ||
-    Boolean(order.items?.some((item) => item.sendOutRequired === 1))
-  return roleCode === 'VERIFIER_EXTERNAL' ? requiresExternalVerifier : !requiresExternalVerifier
 }
 
 export function changeTagColor(value?: string): ChangeTypeMeta['color'] {

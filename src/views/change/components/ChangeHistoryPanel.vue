@@ -7,7 +7,6 @@ import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import type { ChangeOrderVO } from '@/types/change'
 import type { WorkflowProcess, WorkflowTask } from '@/types/workflow'
 import { changeTypeName, display, formatDateTime } from '@/views/change/changeDisplayModel'
-import { changeNodeCodesByRole, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 
 interface HistoryRow {
   key: string
@@ -17,7 +16,6 @@ interface HistoryRow {
 }
 
 const props = defineProps<{
-  roleCode: string
   orderId?: string
 }>()
 
@@ -57,9 +55,7 @@ function openDetail(row: HistoryRow) {
 async function loadRows() {
   loading.value = true
   try {
-    const tasks = (await listWorkflowHistory())
-      .filter((task) => matchesBusinessType(task.businessType, 'change'))
-      .filter((task) => changeNodeCodesByRole[props.roleCode as keyof typeof changeNodeCodesByRole]?.includes(task.nodeCode))
+    const tasks = (await listWorkflowHistory('CHANGE'))
       .filter((task) => !props.orderId || String(task.businessId) === props.orderId)
     const taskByOrder = new Map<string, WorkflowTask>()
     tasks.forEach((task) => {

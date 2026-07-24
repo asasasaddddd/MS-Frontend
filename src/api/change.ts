@@ -1,5 +1,11 @@
 import { request } from '@/api/request'
-import { buildChangeSubmitRequest, changeEndpoint } from '@/api/changeContract'
+import {
+  buildChangeApproveRequest,
+  buildChangeRejectRequest,
+  buildChangeSubmitRequest,
+  buildChangeVerifierHandleRequest,
+  changeEndpoint
+} from '@/api/changeContract'
 import type {
   ChangeApproveRequest,
   ChangeOrderVO,
@@ -22,7 +28,7 @@ export function approveChange(data: ChangeApproveRequest) {
   return request<void>({
     url: changeEndpoint('approve'),
     method: 'POST',
-    data
+    data: buildChangeApproveRequest(data)
   })
 }
 
@@ -30,10 +36,7 @@ export function rejectChange(data: ChangeRejectRequest) {
   return request<void>({
     url: changeEndpoint('reject'),
     method: 'POST',
-    data: {
-      orderId: data.orderId,
-      reason: data.reason || data.opinion
-    }
+    data: buildChangeRejectRequest(data)
   })
 }
 
@@ -41,7 +44,7 @@ export function verifierHandleChange(data: ChangeVerifierHandleRequest) {
   return request<void>({
     url: changeEndpoint('verifierHandle'),
     method: 'POST',
-    data
+    data: buildChangeVerifierHandleRequest(data)
   })
 }
 

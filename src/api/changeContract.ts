@@ -1,4 +1,9 @@
-import type { ChangeSubmitRequest } from '@/types/change'
+import type {
+  ChangeApproveRequest,
+  ChangeRejectRequest,
+  ChangeSubmitRequest,
+  ChangeVerifierHandleRequest
+} from '@/types/change'
 
 const changeEndpoints = {
   submit: '/change/submit',
@@ -49,4 +54,21 @@ export function buildChangeSubmitRequest(input: ChangeSubmitRequest): ChangeSubm
     ...input,
     items: input.items.map((item) => ({ ...item }))
   }
+}
+
+/** 构造状态变更审批请求并完整保留统一任务身份。 */
+export function buildChangeApproveRequest(input: ChangeApproveRequest): ChangeApproveRequest {
+  return { ...input }
+}
+
+/** 构造状态变更驳回请求并完整保留统一任务身份。 */
+export function buildChangeRejectRequest(input: ChangeRejectRequest): ChangeRejectRequest {
+  return { ...input }
+}
+
+/** 构造状态变更检定请求并完整保留统一任务身份。 */
+export function buildChangeVerifierHandleRequest(
+  input: ChangeVerifierHandleRequest
+): ChangeVerifierHandleRequest {
+  return { ...input }
 }

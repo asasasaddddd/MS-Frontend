@@ -10,16 +10,18 @@ import type { ChangeOrderVO } from '@/types/change'
 import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
 import {
+  CHANGE_APPROVE_ACTION,
   changeNodeName,
   changeStatusName,
   changeTagColor,
   changeTypeName,
   display,
   formatDateTime,
+  hasChangeAction,
   statusTagColor,
   type ChangeTaskRow
 } from '@/views/change/changeDisplayModel'
-import { changeNodeCodesByRole, isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
+import { isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 import ChangeApprovalDialog from '@/views/change/components/ChangeApprovalDialog.vue'
 
 const route = useRoute()
@@ -42,12 +44,20 @@ const columns = [
 ]
 
 function toRow(task: WorkflowTask, order: ChangeOrderVO): ChangeTaskRow {
+  const actionableOrder: ChangeOrderVO = {
+    ...order,
+    taskId: task.taskId,
+    rowVersion: task.rowVersion,
+    allowedActions: [...task.allowedActions]
+  }
   return {
     key: String(task.businessId),
     taskId: task.taskId,
+    rowVersion: task.rowVersion,
+    allowedActions: [...task.allowedActions],
     nodeCode: task.nodeCode,
     nodeName: task.nodeName,
-    order
+    order: actionableOrder
   }
 }
 
@@ -56,15 +66,18 @@ function rowKey(row: ChangeTaskRow) {
 }
 
 function openOrder(row: ChangeTaskRow) {
+  if (!hasChangeAction(row, CHANGE_APPROVE_ACTION)) {
+    message.warning('当前任务已无审批权限，请刷新后重试')
+    return
+  }
   activeOrders.value = [row.order]
   dialogOpen.value = true
 }
 
 async function loadRows() {
   loading.value = true
-  const nodeSet = new Set<string>(changeNodeCodesByRole.MEASURE_ADMIN || [])
   const [taskResult, summaryResult] = await Promise.allSettled([
-    listWorkflowTasks(),
+    listWorkflowTasks('CHANGE'),
     getChangeFlowSummary('pending')
   ])
 
@@ -77,7 +90,7 @@ async function loadRows() {
 
   if (taskResult.status === 'fulfilled') {
     const tasks = taskResult.value.filter(
-      (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change') && nodeSet.has(task.nodeCode)
+      (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change')
     )
     const details = await Promise.allSettled(
       tasks.map(async (task) => ({
@@ -104,7 +117,15 @@ async function handleApprove(opinion: string) {
   if (!order) return
   submitting.value = true
   try {
-    await approveChange({ orderId: order.id, opinion })
+    if (order.taskId === undefined || order.rowVersion === undefined) {
+      throw new Error('状态变更任务身份不完整，请刷新后重试')
+    }
+    await approveChange({
+      orderId: order.id,
+      taskId: order.taskId,
+      rowVersion: order.rowVersion,
+      opinion
+    })
     message.success('接收管理员确认已提交')
     dialogOpen.value = false
     activeOrders.value = []
@@ -121,7 +142,15 @@ async function handleReject(reason: string) {
   if (!order) return
   submitting.value = true
   try {
-    await rejectChange({ orderId: order.id, reason })
+    if (order.taskId === undefined || order.rowVersion === undefined) {
+      throw new Error('状态变更任务身份不完整，请刷新后重试')
+    }
+    await rejectChange({
+      orderId: order.id,
+      taskId: order.taskId,
+      rowVersion: order.rowVersion,
+      reason
+    })
     message.success('接收管理员已退回变更单')
     dialogOpen.value = false
     activeOrders.value = []
@@ -170,7 +199,13 @@ onMounted(loadRows)
             <a-tag :class="['tag', statusTagColor(record.order.status)]">{{ changeStatusName(record.order.status) }}</a-tag>
           </template>
           <template v-else-if="column.key === 'action'">
-            <a-button type="link" class="button-link" @click="openOrder(record)">处理</a-button>
+            <a-button
+              v-if="hasChangeAction(record, CHANGE_APPROVE_ACTION)"
+              type="link"
+              class="button-link"
+              @click="openOrder(record)"
+            >处理</a-button>
+            <span v-else>-</span>
           </template>
         </template>
         <template #emptyText>
