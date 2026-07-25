@@ -79,8 +79,8 @@ export interface NodeScopeGrantDraft {
 }
 
 export interface NodeGrantVO extends NodeScopeGrantRequest {
-  id?: string
-  grantId?: string
+  id?: string | number
+  grantId?: string | number
   userId?: string
   businessType?: string
   businessName?: string
@@ -90,7 +90,7 @@ export interface NodeGrantVO extends NodeScopeGrantRequest {
   operationName?: string
   scopeOrgName?: string
   scopeOrgPath?: string
-  rowVersion?: number
+  rowVersion?: string | number
   createdAt?: string
   updatedAt?: string
 }
@@ -116,9 +116,9 @@ export interface NodeScopeGrantPreviewVO {
   effectiveTo?: string | null
   grantReason?: string | null
   manualElevation: boolean
-  existingGrantId?: string | null
+  existingGrantId?: string | number | null
   existingGrantStatus?: string | null
-  existingRowVersion?: number | null
+  existingRowVersion?: string | number | null
   warnings: string[]
 }
 
@@ -143,7 +143,7 @@ export interface NodeGrantPreviewDisplay {
   existingGrant: {
     id: string
     status: string
-    rowVersion: number | null
+    rowVersion: string | number | null
   } | null
 }
 
@@ -325,15 +325,27 @@ export function buildNodeGrantRevokeCommand(
   reason: string
 ): NodeGrantRevokeCommand | null {
   const grantId = grant.grantId ?? grant.id
+  const rowVersion = parseSafeNonNegativeInteger(grant.rowVersion)
   const normalizedReason = reason.trim()
   if (!userId || grantId == null || !String(grantId).trim()) return null
-  if (!Number.isInteger(grant.rowVersion) || Number(grant.rowVersion) < 0 || !normalizedReason) return null
+  if (rowVersion == null || !normalizedReason) return null
   return {
     userId,
     grantId: String(grantId),
-    rowVersion: Number(grant.rowVersion),
+    rowVersion,
     reason: normalizedReason
   }
+}
+
+function parseSafeNonNegativeInteger(value: string | number | undefined): number | null {
+  if (typeof value === 'number') {
+    return Number.isSafeInteger(value) && value >= 0 ? value : null
+  }
+
+  const normalized = value?.trim()
+  if (!normalized || !/^\d+$/.test(normalized)) return null
+  const parsed = Number(normalized)
+  return Number.isSafeInteger(parsed) ? parsed : null
 }
 
 function namedCode(name: string | null | undefined, code: string | null | undefined) {
@@ -368,7 +380,7 @@ export function buildNodeGrantPreviewDisplay(
     warnings: [...(preview.warnings || [])],
     existingGrant: hasExistingGrant
       ? {
-          id: preview.existingGrantId || '-',
+          id: preview.existingGrantId == null ? '-' : String(preview.existingGrantId),
           status: preview.existingGrantStatus || '-',
           rowVersion: preview.existingRowVersion ?? null
         }

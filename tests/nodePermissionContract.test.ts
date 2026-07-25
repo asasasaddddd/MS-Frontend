@@ -59,7 +59,7 @@ const buildNodeGrantPreviewDisplay = runtime.buildNodeGrantPreviewDisplay as (
   effectiveTo: string
   grantReason: string
   warnings: string[]
-  existingGrant: { id: string; status: string; rowVersion: number | null } | null
+  existingGrant: { id: string; status: string; rowVersion: string | number | null } | null
 }
 const validateNodeScopeGrantDraft = runtime.validateNodeScopeGrantDraft as (
   draft: Record<string, unknown>
@@ -157,7 +157,7 @@ const flatPreview = {
   manualElevation: true,
   existingGrantId: '2090000000000000001',
   existingGrantStatus: 'ACTIVE',
-  existingRowVersion: 7,
+  existingRowVersion: '7',
   warnings: ['部门提权将在到期后失效']
 }
 const previewDisplay = buildNodeGrantPreviewDisplay(flatPreview)
@@ -177,7 +177,7 @@ assert.deepEqual(previewDisplay.warnings, ['部门提权将在到期后失效'])
 assert.deepEqual(previewDisplay.existingGrant, {
   id: '2090000000000000001',
   status: 'ACTIVE',
-  rowVersion: 7
+  rowVersion: '7'
 })
 
 const baseDraft = {
@@ -227,7 +227,7 @@ const fulfilledRelations = {
 } as const
 const fulfilledGrants = {
   status: 'fulfilled',
-  value: [{ id: 'GRANT-1', rowVersion: 4 }]
+  value: [{ id: 'GRANT-1', rowVersion: '4' }]
 } as const
 const readyDetails = resolvePermissionDetailLoad(
   fulfilledRoles,
@@ -332,7 +332,7 @@ assert.equal(canSaveNodeGrantPreview({
 assert.deepEqual(
   buildNodeGrantRevokeCommand(
     'U00109024',
-    { id: '2090000000000000001', rowVersion: 7 },
+    { id: '2090000000000000001', rowVersion: '7' },
     ' 岗位调整 '
   ),
   {
@@ -342,6 +342,17 @@ assert.deepEqual(
     reason: '岗位调整'
   }
 )
+for (const invalidVersion of ['7.5', '-1', '9007199254740992', Number.MAX_SAFE_INTEGER + 1]) {
+  assert.equal(
+    buildNodeGrantRevokeCommand(
+      'U00109024',
+      { id: '2090000000000000001', rowVersion: invalidVersion },
+      '岗位调整'
+    ),
+    null,
+    `不安全的版本号必须拒绝：${String(invalidVersion)}`
+  )
+}
 
 function source(path: string) {
   const url = new URL(path, import.meta.url)
