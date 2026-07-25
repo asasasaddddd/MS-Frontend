@@ -1,8 +1,8 @@
 import { request } from '@/api/request'
 import type {
-  NodeGrantPreviewVO,
   NodeGrantVO,
   NodeOperationVO,
+  NodeScopeGrantPreviewVO,
   NodeScopeGrantRequest
 } from '@/types/nodePermission'
 
@@ -22,7 +22,7 @@ export function getUserNodeGrants(userId: string) {
 }
 
 export function previewUserNodeGrant(userId: string, data: NodeScopeGrantRequest) {
-  return request<NodeGrantPreviewVO>({
+  return request<NodeScopeGrantPreviewVO>({
     url: `/system/users/${encodeURIComponent(userId)}/node-grants/preview`,
     method: 'POST',
     data

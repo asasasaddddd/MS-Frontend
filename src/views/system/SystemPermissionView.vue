@@ -22,11 +22,18 @@ import {
   saveUserNodeGrant
 } from '@/api/nodePermission'
 import type {
-  NodeGrantPreviewVO,
   NodeGrantVO,
   NodeOperationVO,
+  NodeScopeGrantPreviewVO,
   NodeScopeGrantRequest,
   NodeScopeType
+} from '@/types/nodePermission'
+import {
+  buildNodeGrantPreviewDisplay,
+  buildNodeScopeGrantRequest,
+  isSelectableOrganization,
+  normalizeOrganizationType,
+  validateNodeScopeGrantDraft
 } from '@/types/nodePermission'
 import { roleNameMap } from '@/types/common'
 
@@ -117,7 +124,7 @@ const selectedRoleCodes = ref<string[]>([])
 const savedRoleCodes = ref<string[]>([])
 const nodeOperations = ref<NormalizedNodeOperation[]>([])
 const nodeGrants = ref<NodeGrantVO[]>([])
-const previewResult = ref<NodeGrantPreviewVO | null>(null)
+const previewResult = ref<NodeScopeGrantPreviewVO | null>(null)
 const previewedPayload = ref<NodeScopeGrantRequest | null>(null)
 
 const selectedDeptId = ref('')
@@ -251,71 +258,41 @@ const grantSource = computed(() =>
 
 const isElevation = computed(() => grantForm.scopeType !== 'GROUP')
 
+const previewDisplay = computed(() =>
+  previewResult.value ? buildNodeGrantPreviewDisplay(previewResult.value) : null
+)
+
 const previewRows = computed(() => {
-  const preview = previewResult.value
+  const preview = previewDisplay.value
   if (!preview) return []
   return [
-    {
-      label: '人员',
-      value: preview.user?.employeeName || preview.user?.userName || preview.userName || preview.user?.employeeId || preview.user?.userId || preview.userId || '-'
-    },
-    {
-      label: '节点',
-      value: preview.node?.nodeName || preview.nodeName || preview.node?.nodeCode || preview.nodeCode || '-'
-    },
-    {
-      label: '操作',
-      value: preview.operation?.operationName || preview.operationName || preview.operation?.operationCode || preview.operationCode || preview.operation?.permissionCode || preview.permissionCode || '-'
-    },
-    {
-      label: '范围',
-      value: preview.scope?.scopeType || preview.scopeType || '-'
-    },
-    {
-      label: '组织',
-      value: preview.scope?.scopeOrgName || preview.scopeOrgName || preview.scope?.scopeOrgId || preview.scopeOrgId || '-'
-    },
-    {
-      label: '组织路径',
-      value: preview.scope?.scopeOrgPath || preview.scopeOrgPath || '-'
-    },
-    { label: '效果', value: preview.effect || '-' },
-    { label: '来源', value: preview.grantSource || '-' },
-    { label: '生效时间', value: preview.effectiveFrom || '立即生效' },
-    { label: '失效时间', value: preview.effectiveTo || '长期有效' }
+    { label: '人员', value: preview.user },
+    { label: '操作角色', value: preview.role },
+    { label: '业务', value: preview.business },
+    { label: '流程类型', value: preview.process },
+    { label: '节点', value: preview.node },
+    { label: '操作', value: preview.operation },
+    { label: '权限编码', value: preview.permissionCode },
+    { label: '范围', value: preview.scope },
+    { label: '组织', value: preview.organization },
+    { label: '组织路径', value: preview.organizationPath },
+    { label: '效果', value: preview.effect },
+    { label: '来源', value: preview.source },
+    { label: '人工提权', value: preview.manualElevation },
+    { label: '生效时间', value: preview.effectiveFrom },
+    { label: '失效时间', value: preview.effectiveTo },
+    { label: '授权原因', value: preview.grantReason }
   ]
 })
 
-const previewExistingGrant = computed(() =>
-  previewResult.value?.existingGrantSnapshot || previewResult.value?.existingGrant || null
-)
-
-function normalizeOrgType(value?: string): NodeScopeType | null {
-  const normalized = String(value || '').trim().toUpperCase()
-  if (['COMPANY', 'CORPORATION', '公司', '单位'].includes(normalized)) return 'COMPANY'
-  if (['DEPARTMENT', 'DEPT', '部门'].includes(normalized)) return 'DEPARTMENT'
-  if (['GROUP', 'TEAM', '班组', '小组'].includes(normalized)) return 'GROUP'
-  return null
-}
+const existingGrant = computed(() => previewDisplay.value?.existingGrant || null)
 
 function orgTypeOf(org: SysOrgVO) {
-  return normalizeOrgType(org.orgType || org.orgCate)
-}
-
-function isOrgEnabled(org: SysOrgVO) {
-  const enabledFlag = String(org.enabled ?? '').trim().toLowerCase()
-  if (['false', '0', 'no', 'n'].includes(enabledFlag)) return false
-  const status = String(org.status || '').trim().toLowerCase()
-  return !['disabled', 'inactive', '0', '停用', '禁用'].includes(status)
-}
-
-function isVirtualOrg(org: SysOrgVO) {
-  const virtualFlag = String(org.isVirtual ?? org.virtual ?? '').trim().toLowerCase()
-  return ['true', '1', 'yes', 'y'].includes(virtualFlag)
+  return normalizeOrganizationType(org.orgType || org.orgCate)
 }
 
 function isSelectableOrg(org: SysOrgVO) {
-  return Boolean(org.orgId && orgTypeOf(org) && isOrgEnabled(org) && !isVirtualOrg(org))
+  return isSelectableOrganization(org)
 }
 
 function formatOrgName(org: SysOrgVO) {
@@ -416,7 +393,7 @@ function filterScopeOrgTreeNode(input: string, node: { searchText?: string }) {
 }
 
 function relationTypeOf(relation: SysUserOrgRelationVO) {
-  return normalizeOrgType(relation.orgType || relation.orgCate)
+  return normalizeOrganizationType(relation.orgType || relation.orgCate)
 }
 
 function relationName(relation: SysUserOrgRelationVO) {
@@ -736,34 +713,13 @@ function handleScopeChange() {
 
 function validateGrantForm() {
   if (rolesDirty.value) return '人员角色有未保存变更，请先保存角色'
-  if (!grantForm.roleCode) return '请选择操作角色'
   if (!grantForm.businessType) return '请选择业务'
   if (!grantForm.nodeCode) return '请选择节点'
-  if (!grantForm.permissionCode) return '请选择操作'
-  if (!grantForm.scopeOrgId) return '请选择授权组织'
-  if (isElevation.value && !grantForm.grantReason.trim()) return '部门/公司提权必须填写原因'
-  if (isElevation.value && !grantForm.effectiveTo) return '部门/公司提权必须设置失效时间'
-  if (grantForm.scopeType === 'COMPANY' && !grantForm.companyElevationConfirmed) {
-    return '公司提权必须明确确认风险'
-  }
-  return ''
+  return validateNodeScopeGrantDraft(grantForm)[0] || ''
 }
 
 function buildGrantRequest(): NodeScopeGrantRequest {
-  return {
-    roleCode: grantForm.roleCode,
-    permissionCode: grantForm.permissionCode,
-    scopeType: grantForm.scopeType,
-    scopeOrgId: grantForm.scopeOrgId,
-    effect: grantForm.effect,
-    grantSource: grantSource.value,
-    effectiveFrom: grantForm.effectiveFrom || undefined,
-    effectiveTo: grantForm.effectiveTo || undefined,
-    grantReason: grantForm.grantReason.trim() || undefined,
-    companyElevationConfirmed: grantForm.scopeType === 'COMPANY'
-      ? grantForm.companyElevationConfirmed
-      : undefined
-  }
+  return buildNodeScopeGrantRequest(grantForm)
 }
 
 async function handlePreviewGrant() {
@@ -1233,18 +1189,17 @@ onMounted(async () => {
                 </a-descriptions-item>
               </a-descriptions>
               <a-alert
-                v-for="warning in previewResult.warnings || []"
+                v-for="warning in previewDisplay?.warnings || []"
                 :key="warning"
                 type="warning"
                 show-icon
                 :message="warning"
               />
-              <div v-if="previewExistingGrant" class="existing-snapshot">
+              <div v-if="existingGrant" class="existing-snapshot">
                 <strong>现有授权快照</strong>
                 <span>
-                  {{ previewExistingGrant.roleCode }} · {{ previewExistingGrant.permissionCode }} ·
-                  {{ previewExistingGrant.scopeType }} / {{ previewExistingGrant.scopeOrgName || previewExistingGrant.scopeOrgId }} ·
-                  {{ previewExistingGrant.effect }}
+                  授权ID {{ existingGrant.id }} · 状态 {{ existingGrant.status }} ·
+                  版本 {{ existingGrant.rowVersion ?? '-' }}
                 </span>
               </div>
             </section>

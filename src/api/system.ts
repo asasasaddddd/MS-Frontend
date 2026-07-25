@@ -26,9 +26,7 @@ export interface SysOrgVO {
   orgFullPath?: string
   orgCate?: string
   orgType?: string
-  enabled?: boolean | number | string
-  isVirtual?: boolean | number | string
-  virtual?: boolean | number | string
+  orgFictitious?: boolean | number | string
   status?: string
   children?: SysOrgVO[]
 }
