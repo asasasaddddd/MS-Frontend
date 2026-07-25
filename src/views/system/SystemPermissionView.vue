@@ -1,25 +1,41 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import type { TablePaginationConfig } from 'ant-design-vue'
 import {
   assignUserRoles,
+  getUserOrgRelations,
   getUserRoles,
   listSystemOrgs,
   listSystemRoles,
   listSystemUsers,
   type SysOrgVO,
   type SysRoleVO,
+  type SysUserOrgRelationVO,
   type SysUserVO
 } from '@/api/system'
+import {
+  deleteUserNodeGrant,
+  getUserNodeGrants,
+  listNodeOperations,
+  previewUserNodeGrant,
+  saveUserNodeGrant
+} from '@/api/nodePermission'
+import type {
+  NodeGrantPreviewVO,
+  NodeGrantVO,
+  NodeOperationVO,
+  NodeScopeGrantRequest,
+  NodeScopeType
+} from '@/types/nodePermission'
 import { roleNameMap } from '@/types/common'
 
 interface OrgOption {
   key: string
   name: string
   fullPath: string
-  level?: string
-  cate?: string
+  type: NodeScopeType
+  selectable: boolean
   descendantIds: string[]
 }
 
@@ -27,26 +43,99 @@ interface OrgTreeNode {
   value: string
   title: string
   searchText: string
+  orgType: NodeScopeType
+  disabled: boolean
   children?: OrgTreeNode[]
 }
+
+interface PermissionPerson extends SysUserVO {
+  relations: SysUserOrgRelationVO[]
+  existingRoles: string[]
+  primaryOrgName: string
+  departmentName: string
+  groupName: string
+}
+
+interface NormalizedNodeOperation {
+  businessType: string
+  nodeCode: string
+  nodeName: string
+  operationCode: string
+  operationName: string
+  permissionCode: string
+}
+
+interface GrantForm {
+  roleCode: string
+  businessType: string
+  nodeCode: string
+  permissionCode: string
+  effect: 'ALLOW' | 'DENY'
+  scopeType: NodeScopeType
+  scopeOrgId: string
+  effectiveFrom: string
+  effectiveTo: string
+  grantReason: string
+  companyElevationConfirmed: boolean
+}
+
+const businessOptions = [
+  { label: '首检', value: 'FIRST_CHECK' },
+  { label: '周期检定', value: 'PERIODIC' },
+  { label: '状态变更', value: 'CHANGE' },
+  { label: 'C类抽检', value: 'SAMPLING' },
+  { label: '产品配套', value: 'PRODUCT_SUPPORT' }
+]
+
+const scopeOptions = [
+  { label: '班组', value: 'GROUP' },
+  { label: '部门提权', value: 'DEPARTMENT' },
+  { label: '公司提权', value: 'COMPANY' }
+]
+
+const externalRoleCodes = new Set(['SUPPLIER', 'EXTERNAL_OPERATOR'])
+const allowedOrgTypes = new Set<NodeScopeType>(['COMPANY', 'DEPARTMENT', 'GROUP'])
 
 const loading = ref(false)
 const orgLoading = ref(false)
 const roleLoading = ref(false)
-const saveLoading = ref(false)
-const modalOpen = ref(false)
+const permissionDetailLoading = ref(false)
+const roleSaveLoading = ref(false)
+const nodeOperationLoading = ref(false)
+const grantLoading = ref(false)
+const previewLoading = ref(false)
+const grantSaveLoading = ref(false)
+const deleteLoading = ref(false)
 
 const orgTree = ref<SysOrgVO[]>([])
 const orgs = ref<OrgOption[]>([])
-const users = ref<SysUserVO[]>([])
+const users = ref<PermissionPerson[]>([])
 const roles = ref<SysRoleVO[]>([])
-const selectedUser = ref<SysUserVO | null>(null)
+const selectedUser = ref<PermissionPerson | null>(null)
+const selectedUserRelations = ref<SysUserOrgRelationVO[]>([])
 const selectedRoleCodes = ref<string[]>([])
+const savedRoleCodes = ref<string[]>([])
+const nodeOperations = ref<NormalizedNodeOperation[]>([])
+const nodeGrants = ref<NodeGrantVO[]>([])
+const previewResult = ref<NodeGrantPreviewVO | null>(null)
+const previewedPayload = ref<NodeScopeGrantRequest | null>(null)
+
 const selectedDeptId = ref('')
 const tempSelectedDeptId = ref('')
 const defaultExpandedOrgKeys = ref<string[]>([])
 const orgExpandedKeys = ref<string[]>([])
 const orgModalOpen = ref(false)
+const orgSearchKeyword = ref('')
+const permissionModalOpen = ref(false)
+const deleteModalOpen = ref(false)
+const deleteTarget = ref<{ grant: NodeGrantVO; userId: string } | null>(null)
+const deleteReason = ref('')
+
+let userRequestSerial = 0
+let permissionRequestSerial = 0
+let nodeOperationRequestSerial = 0
+let grantRequestSerial = 0
+let previewRequestSerial = 0
 
 const filters = reactive({
   employeeId: '',
@@ -59,6 +148,41 @@ const pager = reactive({
   total: 0
 })
 
+const grantForm = reactive<GrantForm>({
+  roleCode: '',
+  businessType: '',
+  nodeCode: '',
+  permissionCode: '',
+  effect: 'ALLOW',
+  scopeType: 'GROUP',
+  scopeOrgId: '',
+  effectiveFrom: '',
+  effectiveTo: '',
+  grantReason: '',
+  companyElevationConfirmed: false
+})
+
+const userColumns = [
+  { title: '工号', dataIndex: 'employeeId', width: 140 },
+  { title: '姓名', dataIndex: 'employeeName', width: 120 },
+  { title: '主组织', dataIndex: 'primaryOrgName', width: 180, ellipsis: true },
+  { title: '部门', dataIndex: 'departmentName', width: 160, ellipsis: true },
+  { title: '班组', dataIndex: 'groupName', width: 150, ellipsis: true },
+  { title: '已有角色', dataIndex: 'existingRoles', width: 260 },
+  { title: '状态', dataIndex: 'status', width: 90 },
+  { title: '操作', dataIndex: 'action', width: 110, fixed: 'right' }
+]
+
+const grantColumns = [
+  { title: '角色', dataIndex: 'roleCode', width: 150 },
+  { title: '节点 / 操作', dataIndex: 'nodeOperation', width: 220 },
+  { title: '范围', dataIndex: 'scope', width: 220 },
+  { title: '效果', dataIndex: 'effect', width: 90 },
+  { title: '来源', dataIndex: 'grantSource', width: 160 },
+  { title: '有效期', dataIndex: 'validity', width: 220 },
+  { title: '操作', dataIndex: 'action', width: 90, fixed: 'right' }
+]
+
 const tempSelectedDeptKeys = computed(() => (tempSelectedDeptId.value ? [tempSelectedDeptId.value] : []))
 
 const selectedDeptIds = computed(() => {
@@ -67,12 +191,12 @@ const selectedDeptIds = computed(() => {
   return org?.descendantIds.length ? org.descendantIds : [selectedDeptId.value]
 })
 
-const orgTreeData = computed(() => {
-  return toOrgTreeNodes(orgTree.value)
-})
+const orgTreeData = computed(() => toOrgTreeNodes(orgTree.value))
+
+const grantOrgTreeData = computed(() => toScopeOrgTreeNodes(orgTree.value, grantForm.scopeType))
 
 const selectedDeptName = computed(() => {
-  if (!selectedDeptId.value) return '全部部门'
+  if (!selectedDeptId.value) return '全部组织'
   return orgs.value.find((org) => org.key === selectedDeptId.value)?.name || selectedDeptId.value
 })
 
@@ -81,7 +205,7 @@ const selectedDeptDescription = computed(() => {
   const org = orgs.value.find((item) => item.key === selectedDeptId.value)
   if (!org) return selectedDeptId.value
   const childCount = Math.max(org.descendantIds.length - 1, 0)
-  return `${org.key}${childCount ? ` · 含${childCount}个下级组织` : ''}`
+  return `${org.fullPath}${childCount ? ` · 含${childCount}个可用下级组织` : ''}`
 })
 
 const roleOptions = computed(() =>
@@ -91,75 +215,177 @@ const roleOptions = computed(() =>
   }))
 )
 
-const columns = [
-  { title: '工号', dataIndex: 'employeeId', width: 150 },
-  { title: '姓名', dataIndex: 'employeeName', width: 140 },
-  { title: '部门', dataIndex: 'deptName', ellipsis: true },
-  { title: '部门编号', dataIndex: 'deptId', width: 160 },
-  { title: '联系电话', dataIndex: 'phone', width: 140 },
-  { title: '状态', dataIndex: 'status', width: 100 },
-  { title: '操作', dataIndex: 'action', width: 120, fixed: 'right' }
-]
+const grantRoleOptions = computed(() =>
+  savedRoleCodes.value.map((roleCode) => ({
+    label: `${roleNameMap[roleCode as keyof typeof roleNameMap] || roleCode}（${roleCode}）`,
+    value: roleCode
+  }))
+)
 
-const visibleOrgLevels = new Set(['4', '5', '6'])
+const rolesDirty = computed(() => !sameCodeSet(selectedRoleCodes.value, savedRoleCodes.value))
+
+const externalAccount = computed(() => savedRoleCodes.value.some((roleCode) => externalRoleCodes.has(roleCode)))
+
+const nodeOptions = computed(() => {
+  const seen = new Set<string>()
+  return nodeOperations.value.reduce<Array<{ label: string; value: string }>>((options, item) => {
+    if (seen.has(item.nodeCode)) return options
+    seen.add(item.nodeCode)
+    options.push({ label: `${item.nodeName}（${item.nodeCode}）`, value: item.nodeCode })
+    return options
+  }, [])
+})
+
+const operationOptions = computed(() =>
+  nodeOperations.value
+    .filter((item) => item.nodeCode === grantForm.nodeCode)
+    .map((item) => ({
+      label: `${item.operationName}（${item.operationCode}）`,
+      value: item.permissionCode
+    }))
+)
+
+const grantSource = computed(() =>
+  grantForm.scopeType === 'GROUP' ? 'NORMAL_CONFIG' : 'MANUAL_ELEVATION'
+)
+
+const isElevation = computed(() => grantForm.scopeType !== 'GROUP')
+
+const previewRows = computed(() => {
+  const preview = previewResult.value
+  if (!preview) return []
+  return [
+    {
+      label: '人员',
+      value: preview.user?.employeeName || preview.user?.userName || preview.userName || preview.user?.employeeId || preview.user?.userId || preview.userId || '-'
+    },
+    {
+      label: '节点',
+      value: preview.node?.nodeName || preview.nodeName || preview.node?.nodeCode || preview.nodeCode || '-'
+    },
+    {
+      label: '操作',
+      value: preview.operation?.operationName || preview.operationName || preview.operation?.operationCode || preview.operationCode || preview.operation?.permissionCode || preview.permissionCode || '-'
+    },
+    {
+      label: '范围',
+      value: preview.scope?.scopeType || preview.scopeType || '-'
+    },
+    {
+      label: '组织',
+      value: preview.scope?.scopeOrgName || preview.scopeOrgName || preview.scope?.scopeOrgId || preview.scopeOrgId || '-'
+    },
+    {
+      label: '组织路径',
+      value: preview.scope?.scopeOrgPath || preview.scopeOrgPath || '-'
+    },
+    { label: '效果', value: preview.effect || '-' },
+    { label: '来源', value: preview.grantSource || '-' },
+    { label: '生效时间', value: preview.effectiveFrom || '立即生效' },
+    { label: '失效时间', value: preview.effectiveTo || '长期有效' }
+  ]
+})
+
+const previewExistingGrant = computed(() =>
+  previewResult.value?.existingGrantSnapshot || previewResult.value?.existingGrant || null
+)
+
+function normalizeOrgType(value?: string): NodeScopeType | null {
+  const normalized = String(value || '').trim().toUpperCase()
+  if (['COMPANY', 'CORPORATION', '公司', '单位'].includes(normalized)) return 'COMPANY'
+  if (['DEPARTMENT', 'DEPT', '部门'].includes(normalized)) return 'DEPARTMENT'
+  if (['GROUP', 'TEAM', '班组', '小组'].includes(normalized)) return 'GROUP'
+  return null
+}
+
+function orgTypeOf(org: SysOrgVO) {
+  return normalizeOrgType(org.orgType || org.orgCate)
+}
+
+function isOrgEnabled(org: SysOrgVO) {
+  const enabledFlag = String(org.enabled ?? '').trim().toLowerCase()
+  if (['false', '0', 'no', 'n'].includes(enabledFlag)) return false
+  const status = String(org.status || '').trim().toLowerCase()
+  return !['disabled', 'inactive', '0', '停用', '禁用'].includes(status)
+}
+
+function isVirtualOrg(org: SysOrgVO) {
+  const virtualFlag = String(org.isVirtual ?? org.virtual ?? '').trim().toLowerCase()
+  return ['true', '1', 'yes', 'y'].includes(virtualFlag)
+}
+
+function isSelectableOrg(org: SysOrgVO) {
+  return Boolean(org.orgId && orgTypeOf(org) && isOrgEnabled(org) && !isVirtualOrg(org))
+}
 
 function formatOrgName(org: SysOrgVO) {
   return org.orgSimpleCName || org.orgFullCName || org.orgId
 }
 
-function formatOrgTitle(org: SysOrgVO) {
-  return formatOrgName(org)
-}
-
-function isVisibleOrgLevel(level?: string) {
-  return visibleOrgLevels.has(String(level || '').trim())
+function formatOrgPath(org: SysOrgVO) {
+  return org.orgFullPath || org.orgFullCName || org.orgSimpleCName || org.orgId
 }
 
 function flattenOrgs(input: SysOrgVO[], bucket: OrgOption[] = []): string[] {
-  const ids: string[] = []
+  const selectableIds: string[] = []
   for (const org of input) {
     const childIds = flattenOrgs(org.children || [], bucket)
-    if (org.orgId && isVisibleOrgLevel(org.orgLevel)) {
-      const descendantIds = [org.orgId, ...childIds]
-      bucket.push({
-        key: org.orgId,
-        name: formatOrgName(org),
-        fullPath: org.orgFullPath || org.orgFullCName || org.orgSimpleCName || org.orgId,
-        level: org.orgLevel,
-        cate: org.orgCate,
-        descendantIds
-      })
-      ids.push(...descendantIds)
-    } else {
-      ids.push(...childIds)
+    const type = orgTypeOf(org)
+    if (!org.orgId || !type || !allowedOrgTypes.has(type)) {
+      selectableIds.push(...childIds)
+      continue
     }
+    const selectable = isSelectableOrg(org)
+    const descendantIds = [...(selectable ? [org.orgId] : []), ...childIds]
+    bucket.push({
+      key: org.orgId,
+      name: formatOrgName(org),
+      fullPath: formatOrgPath(org),
+      type,
+      selectable,
+      descendantIds
+    })
+    selectableIds.push(...descendantIds)
   }
-  return ids
+  return selectableIds
 }
 
 function toOrgTreeNodes(input: SysOrgVO[]): OrgTreeNode[] {
   const nodes: OrgTreeNode[] = []
   for (const org of input) {
-    const children = org.children?.length ? toOrgTreeNodes(org.children) : []
-    if (!org.orgId || !isVisibleOrgLevel(org.orgLevel)) {
+    const children = toOrgTreeNodes(org.children || [])
+    const orgType = orgTypeOf(org)
+    if (!org.orgId || !orgType) {
       nodes.push(...children)
       continue
     }
+    const name = formatOrgName(org)
     nodes.push({
       value: org.orgId,
-      title: formatOrgTitle(org),
-      searchText: [
-        org.orgId,
-        org.orgFullCName,
-        org.orgSimpleCName,
-        org.orgFullPath,
-        org.orgCate,
-        org.orgLevel
-      ].filter(Boolean).join(' '),
+      title: `${name} · ${orgType}`,
+      searchText: [org.orgId, name, org.orgFullCName, org.orgFullPath].filter(Boolean).join(' ').toLowerCase(),
+      orgType,
+      disabled: !isSelectableOrg(org),
       children: children.length ? children : undefined
     })
   }
   return nodes
+}
+
+function toScopeOrgTreeNodes(input: SysOrgVO[], targetType: NodeScopeType): OrgTreeNode[] {
+  return toOrgTreeNodes(input).map((node) => ({
+    ...node,
+    disabled: node.disabled || node.orgType !== targetType,
+    children: node.children ? mapScopeChildren(node.children, targetType) : undefined
+  }))
+}
+
+function mapScopeChildren(input: OrgTreeNode[], targetType: NodeScopeType): OrgTreeNode[] {
+  return input.map((node) => ({
+    ...node,
+    disabled: node.disabled || node.orgType !== targetType,
+    children: node.children ? mapScopeChildren(node.children, targetType) : undefined
+  }))
 }
 
 function findOrgNode(nodes: OrgTreeNode[], value: string): OrgTreeNode | null {
@@ -174,14 +400,128 @@ function findOrgNode(nodes: OrgTreeNode[], value: string): OrgTreeNode | null {
 function collectKeys(nodes: OrgTreeNode[], maxDepth = Number.POSITIVE_INFINITY, depth = 0): string[] {
   const keys: string[] = []
   for (const node of nodes) {
-    if (depth <= maxDepth) {
-      keys.push(node.value)
-    }
-    if (node.children?.length) {
-      keys.push(...collectKeys(node.children, maxDepth, depth + 1))
-    }
+    if (depth <= maxDepth) keys.push(node.value)
+    if (node.children?.length) keys.push(...collectKeys(node.children, maxDepth, depth + 1))
   }
   return keys
+}
+
+function filterTreeNode(node: { searchText?: string }) {
+  const keyword = orgSearchKeyword.value.trim().toLowerCase()
+  return !keyword || String(node.searchText || '').includes(keyword)
+}
+
+function filterScopeOrgTreeNode(input: string, node: { searchText?: string }) {
+  return String(node.searchText || '').includes(input.trim().toLowerCase())
+}
+
+function relationTypeOf(relation: SysUserOrgRelationVO) {
+  return normalizeOrgType(relation.orgType || relation.orgCate)
+}
+
+function relationName(relation: SysUserOrgRelationVO) {
+  return relation.orgName || relation.orgFullName || relation.orgId
+}
+
+function isPrimaryRelation(relation: SysUserOrgRelationVO) {
+  return relation.primary === true || ['true', '1'].includes(String(relation.isPrimary).toLowerCase())
+}
+
+function personFromDetails(
+  user: SysUserVO,
+  relations: SysUserOrgRelationVO[],
+  roleCodes: string[]
+): PermissionPerson {
+  const primary = relations.find(isPrimaryRelation)
+  const department = relations.find((relation) => relationTypeOf(relation) === 'DEPARTMENT')
+  const group = relations.find((relation) => relationTypeOf(relation) === 'GROUP')
+  return {
+    ...user,
+    relations,
+    existingRoles: roleCodes,
+    primaryOrgName: primary ? relationName(primary) : user.orgName || '-',
+    departmentName: department ? relationName(department) : user.deptName || '-',
+    groupName: group ? relationName(group) : '-'
+  }
+}
+
+async function enrichPerson(user: SysUserVO) {
+  const [relationResult, roleResult] = await Promise.allSettled([
+    getUserOrgRelations(user.employeeId),
+    getUserRoles(user.employeeId)
+  ])
+  const relations = relationResult.status === 'fulfilled' ? relationResult.value || [] : []
+  const roleCodes = roleResult.status === 'fulfilled'
+    ? roleResult.value || []
+    : user.roles || (user.role ? [user.role] : [])
+  return personFromDetails(user, relations, roleCodes)
+}
+
+function sameCodeSet(left: string[], right: string[]) {
+  if (left.length !== right.length) return false
+  const rightSet = new Set(right)
+  return left.every((item) => rightSet.has(item))
+}
+
+function roleLabel(roleCode: string) {
+  const role = roles.value.find((item) => item.roleCode === roleCode)
+  return role?.roleName || roleNameMap[roleCode as keyof typeof roleNameMap] || roleCode
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error && error.message ? error.message : fallback
+}
+
+function flattenNodeOperations(input: NodeOperationVO[]) {
+  const flattened: NormalizedNodeOperation[] = []
+  for (const node of input || []) {
+    if (node.operations?.length) {
+      for (const operation of node.operations) {
+        flattened.push({
+          businessType: node.businessType,
+          nodeCode: node.nodeCode,
+          nodeName: node.nodeName || node.nodeCode,
+          operationCode: operation.operationCode,
+          operationName: operation.operationName || operation.operationCode,
+          permissionCode: operation.permissionCode
+        })
+      }
+      continue
+    }
+    if (!node.permissionCode || !node.operationCode) continue
+    flattened.push({
+      businessType: node.businessType,
+      nodeCode: node.nodeCode,
+      nodeName: node.nodeName || node.nodeCode,
+      operationCode: node.operationCode,
+      operationName: node.operationName || node.operationCode,
+      permissionCode: node.permissionCode
+    })
+  }
+  return flattened
+}
+
+function resetGrantEditor() {
+  grantForm.roleCode = ''
+  grantForm.businessType = ''
+  grantForm.nodeCode = ''
+  grantForm.permissionCode = ''
+  grantForm.effect = 'ALLOW'
+  grantForm.scopeType = 'GROUP'
+  grantForm.scopeOrgId = ''
+  grantForm.effectiveFrom = ''
+  grantForm.effectiveTo = ''
+  grantForm.grantReason = ''
+  grantForm.companyElevationConfirmed = false
+  nodeOperations.value = []
+  previewResult.value = null
+  previewedPayload.value = null
+}
+
+function invalidatePreview() {
+  previewResult.value = null
+  previewedPayload.value = null
+  previewRequestSerial += 1
 }
 
 async function loadOrgs() {
@@ -193,6 +533,8 @@ async function loadOrgs() {
     orgs.value = flattened
     defaultExpandedOrgKeys.value = collectKeys(toOrgTreeNodes(orgTree.value), 1)
     orgExpandedKeys.value = defaultExpandedOrgKeys.value
+  } catch (error) {
+    message.error(errorMessage(error, '组织树加载失败'))
   } finally {
     orgLoading.value = false
   }
@@ -202,12 +544,15 @@ async function loadRoles() {
   roleLoading.value = true
   try {
     roles.value = await listSystemRoles()
+  } catch (error) {
+    message.error(errorMessage(error, '角色列表加载失败'))
   } finally {
     roleLoading.value = false
   }
 }
 
 async function loadUsers(page = pager.current) {
+  const requestId = ++userRequestSerial
   loading.value = true
   try {
     const result = await listSystemUsers({
@@ -219,12 +564,49 @@ async function loadUsers(page = pager.current) {
       employeeName: filters.employeeName.trim() || undefined,
       status: 'enabled'
     })
-    users.value = result.records || []
+    const enrichedUsers = await Promise.all((result.records || []).map(enrichPerson))
+    if (requestId !== userRequestSerial) return
+    users.value = enrichedUsers
     pager.current = Number(result.current || page)
     pager.size = Number(result.size || pager.size)
     pager.total = Number(result.total || 0)
+  } catch (error) {
+    if (requestId === userRequestSerial) message.error(errorMessage(error, '人员列表加载失败'))
   } finally {
-    loading.value = false
+    if (requestId === userRequestSerial) loading.value = false
+  }
+}
+
+async function loadNodeGrants(userId: string) {
+  const requestId = ++grantRequestSerial
+  grantLoading.value = true
+  try {
+    const grants = await getUserNodeGrants(userId)
+    if (requestId !== grantRequestSerial || selectedUser.value?.employeeId !== userId) return
+    nodeGrants.value = grants || []
+  } catch (error) {
+    if (requestId === grantRequestSerial) message.error(errorMessage(error, '节点授权加载失败'))
+  } finally {
+    if (requestId === grantRequestSerial) grantLoading.value = false
+  }
+}
+
+async function loadOperations(businessType: string) {
+  const requestId = ++nodeOperationRequestSerial
+  nodeOperations.value = []
+  if (!businessType) {
+    nodeOperationLoading.value = false
+    return
+  }
+  nodeOperationLoading.value = true
+  try {
+    const operations = await listNodeOperations(businessType)
+    if (requestId !== nodeOperationRequestSerial || grantForm.businessType !== businessType) return
+    nodeOperations.value = flattenNodeOperations(operations || [])
+  } catch (error) {
+    if (requestId === nodeOperationRequestSerial) message.error(errorMessage(error, '节点操作加载失败'))
+  } finally {
+    if (requestId === nodeOperationRequestSerial) nodeOperationLoading.value = false
   }
 }
 
@@ -236,23 +618,20 @@ function handleSelectDept(deptId: string) {
 
 function openOrgPicker() {
   tempSelectedDeptId.value = selectedDeptId.value
+  orgSearchKeyword.value = ''
   orgExpandedKeys.value = defaultExpandedOrgKeys.value
   orgModalOpen.value = true
 }
 
 function handleOrgTreeSelect(keys: (string | number)[]) {
   const nextKey = keys[0] ? String(keys[0]) : ''
-  tempSelectedDeptId.value = nextKey
-
   const node = findOrgNode(orgTreeData.value, nextKey)
-  if (!node?.children?.length) return
-
+  if (!node || node.disabled) return
+  tempSelectedDeptId.value = nextKey
+  if (!node.children?.length) return
   const expanded = new Set(orgExpandedKeys.value)
-  if (expanded.has(nextKey)) {
-    expanded.delete(nextKey)
-  } else {
-    expanded.add(nextKey)
-  }
+  if (expanded.has(nextKey)) expanded.delete(nextKey)
+  else expanded.add(nextKey)
   orgExpandedKeys.value = Array.from(expanded)
 }
 
@@ -288,29 +667,229 @@ function handleTableChange(nextPager: TablePaginationConfig) {
   loadUsers(pager.current)
 }
 
-async function openRoleModal(user: SysUserVO) {
+function tableRow(record: PermissionPerson) {
+  return { onClick: () => openPermissionModal(record) }
+}
+
+async function openPermissionModal(user: PermissionPerson) {
+  const requestId = ++permissionRequestSerial
   selectedUser.value = user
-  modalOpen.value = true
-  roleLoading.value = true
-  try {
-    selectedRoleCodes.value = await getUserRoles(user.employeeId)
-  } finally {
-    roleLoading.value = false
+  selectedUserRelations.value = user.relations
+  selectedRoleCodes.value = [...user.existingRoles]
+  savedRoleCodes.value = [...user.existingRoles]
+  nodeGrants.value = []
+  resetGrantEditor()
+  permissionModalOpen.value = true
+  permissionDetailLoading.value = true
+  const [roleResult, relationResult, grantResult] = await Promise.allSettled([
+    getUserRoles(user.employeeId),
+    getUserOrgRelations(user.employeeId),
+    getUserNodeGrants(user.employeeId)
+  ])
+  if (requestId !== permissionRequestSerial || selectedUser.value?.employeeId !== user.employeeId) return
+  if (roleResult.status === 'fulfilled') {
+    selectedRoleCodes.value = [...(roleResult.value || [])]
+    savedRoleCodes.value = [...(roleResult.value || [])]
   }
+  if (relationResult.status === 'fulfilled') selectedUserRelations.value = relationResult.value || []
+  if (grantResult.status === 'fulfilled') nodeGrants.value = grantResult.value || []
+  if ([roleResult, relationResult, grantResult].some((result) => result.status === 'rejected')) {
+    message.warning('部分人员权限详情加载失败，请稍后重试')
+  }
+  grantForm.roleCode = savedRoleCodes.value[0] || ''
+  permissionDetailLoading.value = false
 }
 
 async function handleSaveRoles() {
-  if (!selectedUser.value) return
-  saveLoading.value = true
+  const user = selectedUser.value
+  if (!user) return
+  roleSaveLoading.value = true
   try {
-    await assignUserRoles(selectedUser.value.employeeId, selectedRoleCodes.value)
-    message.success('角色配置已保存')
-    modalOpen.value = false
-    await loadUsers(pager.current)
+    await assignUserRoles(user.employeeId, selectedRoleCodes.value)
+    savedRoleCodes.value = [...selectedRoleCodes.value]
+    if (!savedRoleCodes.value.includes(grantForm.roleCode)) {
+      grantForm.roleCode = savedRoleCodes.value[0] || ''
+    }
+    const row = users.value.find((item) => item.employeeId === user.employeeId)
+    if (row) row.existingRoles = [...savedRoleCodes.value]
+    user.existingRoles = [...savedRoleCodes.value]
+    message.success('人员角色已保存')
+  } catch (error) {
+    message.error(errorMessage(error, '角色保存失败'))
   } finally {
-    saveLoading.value = false
+    roleSaveLoading.value = false
   }
 }
+
+function handleNodeChange() {
+  grantForm.permissionCode = ''
+}
+
+function handleScopeChange() {
+  grantForm.scopeOrgId = ''
+  grantForm.companyElevationConfirmed = false
+  if (grantForm.scopeType === 'GROUP') {
+    grantForm.grantReason = ''
+    grantForm.effectiveTo = ''
+  }
+}
+
+function validateGrantForm() {
+  if (rolesDirty.value) return '人员角色有未保存变更，请先保存角色'
+  if (!grantForm.roleCode) return '请选择操作角色'
+  if (!grantForm.businessType) return '请选择业务'
+  if (!grantForm.nodeCode) return '请选择节点'
+  if (!grantForm.permissionCode) return '请选择操作'
+  if (!grantForm.scopeOrgId) return '请选择授权组织'
+  if (isElevation.value && !grantForm.grantReason.trim()) return '部门/公司提权必须填写原因'
+  if (isElevation.value && !grantForm.effectiveTo) return '部门/公司提权必须设置失效时间'
+  if (grantForm.scopeType === 'COMPANY' && !grantForm.companyElevationConfirmed) {
+    return '公司提权必须明确确认风险'
+  }
+  return ''
+}
+
+function buildGrantRequest(): NodeScopeGrantRequest {
+  return {
+    roleCode: grantForm.roleCode,
+    permissionCode: grantForm.permissionCode,
+    scopeType: grantForm.scopeType,
+    scopeOrgId: grantForm.scopeOrgId,
+    effect: grantForm.effect,
+    grantSource: grantSource.value,
+    effectiveFrom: grantForm.effectiveFrom || undefined,
+    effectiveTo: grantForm.effectiveTo || undefined,
+    grantReason: grantForm.grantReason.trim() || undefined,
+    companyElevationConfirmed: grantForm.scopeType === 'COMPANY'
+      ? grantForm.companyElevationConfirmed
+      : undefined
+  }
+}
+
+async function handlePreviewGrant() {
+  const user = selectedUser.value
+  if (!user || externalAccount.value) return
+  const validationError = validateGrantForm()
+  if (validationError) {
+    message.warning(validationError)
+    return
+  }
+  const requestId = ++previewRequestSerial
+  const payload = buildGrantRequest()
+  previewLoading.value = true
+  try {
+    const result = await previewUserNodeGrant(user.employeeId, payload)
+    if (requestId !== previewRequestSerial || selectedUser.value?.employeeId !== user.employeeId) return
+    previewResult.value = result
+    previewedPayload.value = payload
+  } catch (error) {
+    if (requestId === previewRequestSerial) message.error(errorMessage(error, '授权预览失败'))
+  } finally {
+    if (requestId === previewRequestSerial) previewLoading.value = false
+  }
+}
+
+async function handleSaveGrant() {
+  const user = selectedUser.value
+  if (!user || !previewResult.value || !previewedPayload.value) {
+    message.warning('请先预览并确认后端返回的授权结果')
+    return
+  }
+  grantSaveLoading.value = true
+  try {
+    await saveUserNodeGrant(user.employeeId, previewedPayload.value)
+    message.success('节点授权已保存')
+    invalidatePreview()
+    await loadNodeGrants(user.employeeId)
+  } catch (error) {
+    message.error(errorMessage(error, '节点授权保存失败'))
+  } finally {
+    grantSaveLoading.value = false
+  }
+}
+
+function openDeleteGrant(grant: NodeGrantVO) {
+  const grantId = grant.grantId || grant.id
+  if (!selectedUser.value || !grantId || grant.rowVersion === undefined) {
+    message.error('授权记录缺少删除所需的编号或版本')
+    return
+  }
+  deleteTarget.value = { grant, userId: selectedUser.value.employeeId }
+  deleteReason.value = ''
+  deleteModalOpen.value = true
+}
+
+async function handleDeleteGrant() {
+  const target = deleteTarget.value
+  const grantId = target?.grant.grantId || target?.grant.id
+  if (!target || !grantId || target.grant.rowVersion === undefined) return
+  if (!deleteReason.value.trim()) {
+    message.warning('请输入删除原因')
+    return
+  }
+  deleteLoading.value = true
+  try {
+    await deleteUserNodeGrant(target.userId, grantId, target.grant.rowVersion, deleteReason.value.trim())
+    message.success('节点授权已删除')
+    deleteModalOpen.value = false
+    if (selectedUser.value?.employeeId === target.userId) await loadNodeGrants(target.userId)
+  } catch (error) {
+    message.error(errorMessage(error, '节点授权删除失败'))
+  } finally {
+    deleteLoading.value = false
+  }
+}
+
+function grantNodeOperationText(grant: NodeGrantVO) {
+  const node = grant.nodeName || grant.nodeCode || '-'
+  const operation = grant.operationName || grant.operationCode || grant.permissionCode || '-'
+  return `${node} / ${operation}`
+}
+
+function grantScopeText(grant: NodeGrantVO) {
+  return `${grant.scopeType} · ${grant.scopeOrgName || grant.scopeOrgId}`
+}
+
+function grantValidityText(grant: NodeGrantVO) {
+  return `${grant.effectiveFrom || '立即'} 至 ${grant.effectiveTo || '长期'}`
+}
+
+function grantRowKey(grant: NodeGrantVO) {
+  return grant.grantId || grant.id || `${grant.roleCode}-${grant.permissionCode}-${grant.scopeOrgId}`
+}
+
+watch(orgSearchKeyword, (keyword) => {
+  orgExpandedKeys.value = keyword.trim()
+    ? collectKeys(orgTreeData.value)
+    : defaultExpandedOrgKeys.value
+})
+
+watch(() => grantForm.businessType, (businessType) => {
+  grantForm.nodeCode = ''
+  grantForm.permissionCode = ''
+  loadOperations(businessType)
+})
+
+watch(() => grantForm.nodeCode, () => {
+  grantForm.permissionCode = ''
+})
+
+watch(
+  () => [
+    grantForm.roleCode,
+    grantForm.businessType,
+    grantForm.nodeCode,
+    grantForm.permissionCode,
+    grantForm.effect,
+    grantForm.scopeType,
+    grantForm.scopeOrgId,
+    grantForm.effectiveFrom,
+    grantForm.effectiveTo,
+    grantForm.grantReason,
+    grantForm.companyElevationConfirmed
+  ],
+  invalidatePreview
+)
 
 onMounted(async () => {
   await Promise.all([loadOrgs(), loadRoles()])
@@ -320,79 +899,82 @@ onMounted(async () => {
 
 <template>
   <div class="permission-page">
-    <section class="stats-strip">
-      <a-card size="small">
-        <span>当前部门</span>
-        <strong>{{ selectedDeptName }}</strong>
-      </a-card>
-      <a-card size="small">
-        <span>人员数量</span>
-        <strong>{{ pager.total }}</strong>
-      </a-card>
-      <a-card size="small">
-        <span>可分配角色</span>
-        <strong>{{ roles.length }}</strong>
-      </a-card>
-    </section>
+    <header class="page-heading">
+      <div>
+        <h1>超级管理员权限配置</h1>
+        <p>人员角色与节点范围授权由后端校验，最终生效权限以后端预览和保存结果为准。</p>
+      </div>
+      <div class="page-metrics" aria-label="权限配置概览">
+        <span>当前组织 <strong>{{ selectedDeptName }}</strong></span>
+        <span>人员 <strong>{{ pager.total }}</strong></span>
+        <span>角色 <strong>{{ roles.length }}</strong></span>
+      </div>
+    </header>
 
     <section class="permission-layout">
-      <aside class="dept-panel">
+      <aside class="org-panel">
         <div class="panel-title">
-          <h2>部门人员</h2>
-          <span>点击选择组织</span>
+          <div>
+            <h2>组织筛选</h2>
+            <span>公司 / 部门 / 真实班组</span>
+          </div>
         </div>
         <a-spin :spinning="orgLoading">
-          <div class="dept-picker">
-            <button class="dept-selector-button" type="button" @click="openOrgPicker">
-              <span>{{ selectedDeptName }}</span>
-              <small>点击展开组织树选择</small>
-            </button>
-            <div class="dept-current">
-              <span>当前选择</span>
-              <strong>{{ selectedDeptName }}</strong>
-              <small>{{ selectedDeptDescription }}</small>
-            </div>
+          <button class="org-selector-button" type="button" @click="openOrgPicker">
+            <span>{{ selectedDeptName }}</span>
+            <small>按名称、编码或完整路径查找</small>
+          </button>
+          <div class="org-current">
+            <span>当前选择</span>
+            <strong>{{ selectedDeptName }}</strong>
+            <small>{{ selectedDeptDescription }}</small>
           </div>
         </a-spin>
       </aside>
 
       <main class="user-panel">
-        <div class="filter-card">
-          <a-form layout="inline" :model="filters">
-            <a-form-item label="工号">
-              <a-input v-model:value="filters.employeeId" placeholder="输入工号模糊查询" allow-clear />
-            </a-form-item>
-            <a-form-item label="姓名">
-              <a-input v-model:value="filters.employeeName" placeholder="输入姓名模糊查询" allow-clear />
-            </a-form-item>
-            <a-form-item>
-              <a-space>
-                <a-button type="primary" @click="handleSearch">查询</a-button>
-                <a-button @click="handleReset">重置</a-button>
-              </a-space>
-            </a-form-item>
-          </a-form>
-        </div>
+        <a-form class="filter-form" layout="inline" :model="filters" @submit.prevent="handleSearch">
+          <a-form-item label="工号">
+            <a-input v-model:value="filters.employeeId" placeholder="输入工号模糊查询" allow-clear />
+          </a-form-item>
+          <a-form-item label="姓名">
+            <a-input v-model:value="filters.employeeName" placeholder="输入姓名模糊查询" allow-clear />
+          </a-form-item>
+          <a-form-item>
+            <a-space>
+              <a-button type="primary" html-type="submit">查询</a-button>
+              <a-button @click="handleReset">重置</a-button>
+            </a-space>
+          </a-form-item>
+        </a-form>
 
         <a-table
           row-key="employeeId"
-          :columns="columns"
+          :columns="userColumns"
           :data-source="users"
           :loading="loading"
-          :scroll="{ x: 980 }"
+          :scroll="{ x: 1320 }"
           :pagination="{ current: pager.current, pageSize: pager.size, total: pager.total, showSizeChanger: true }"
           size="middle"
           @change="handleTableChange"
-          @row="(record: SysUserVO) => ({ onClick: () => openRoleModal(record) })"
+          @row="tableRow"
         >
           <template #bodyCell="{ column, record }">
-            <template v-if="column.dataIndex === 'status'">
-              <a-tag :color="record.status === 'enabled' ? 'green' : 'red'">
-                {{ record.status === 'enabled' ? '启用' : '停用' }}
+            <template v-if="column.dataIndex === 'existingRoles'">
+              <a-space v-if="record.existingRoles?.length" :size="[4, 4]" wrap>
+                <a-tag v-for="roleCode in record.existingRoles" :key="roleCode" color="blue">
+                  {{ roleLabel(roleCode) }}
+                </a-tag>
+              </a-space>
+              <span v-else>-</span>
+            </template>
+            <template v-else-if="column.dataIndex === 'status'">
+              <a-tag :color="record.status === 'enabled' ? 'green' : 'default'">
+                {{ record.status === 'enabled' ? '启用' : record.status || '未知' }}
               </a-tag>
             </template>
-            <template v-if="column.dataIndex === 'action'">
-              <a-button type="link" size="small" @click.stop="openRoleModal(record)">分配角色</a-button>
+            <template v-else-if="column.dataIndex === 'action'">
+              <a-button type="link" size="small" @click.stop="openPermissionModal(record)">配置权限</a-button>
             </template>
           </template>
         </a-table>
@@ -410,10 +992,20 @@ onMounted(async () => {
       <div class="org-picker-modal">
         <div class="org-picker-actions">
           <a-button :type="!tempSelectedDeptId ? 'primary' : 'default'" @click="handleSelectAllDept">
-            全部部门
+            全部组织
           </a-button>
-          <span>点击组织名称可选中并展开下级</span>
+          <a-input-search
+            v-model:value="orgSearchKeyword"
+            class="org-search"
+            placeholder="搜索名称、编码、完整路径"
+            allow-clear
+          />
         </div>
+        <a-alert
+          type="info"
+          show-icon
+          message="仅启用且非虚拟的公司、部门和真实班组可选择。"
+        />
         <a-spin :spinning="orgLoading">
           <a-tree
             v-if="orgTreeData.length"
@@ -424,6 +1016,7 @@ onMounted(async () => {
             :field-names="{ key: 'value', title: 'title', children: 'children' }"
             :selected-keys="tempSelectedDeptKeys"
             :expanded-keys="orgExpandedKeys"
+            :filter-tree-node="filterTreeNode"
             @select="handleOrgTreeSelect"
             @expand="handleOrgTreeExpand"
           />
@@ -433,16 +1026,14 @@ onMounted(async () => {
     </a-modal>
 
     <a-modal
-      v-model:open="modalOpen"
-      title="分配人员角色"
-      width="720px"
-      :confirm-loading="saveLoading"
-      ok-text="保存"
-      cancel-text="取消"
-      @ok="handleSaveRoles"
+      v-model:open="permissionModalOpen"
+      title="人员权限配置"
+      width="1120px"
+      :footer="null"
+      destroy-on-close
     >
-      <a-spin :spinning="roleLoading">
-        <div v-if="selectedUser" class="role-modal">
+      <a-spin :spinning="permissionDetailLoading">
+        <div v-if="selectedUser" class="permission-editor">
           <div class="user-summary">
             <div>
               <span>工号</span>
@@ -453,25 +1044,277 @@ onMounted(async () => {
               <strong>{{ selectedUser.employeeName || '-' }}</strong>
             </div>
             <div>
-              <span>部门</span>
-              <strong>{{ selectedUser.deptName || selectedUser.deptId || '-' }}</strong>
+              <span>主组织</span>
+              <strong>{{ personFromDetails(selectedUser, selectedUserRelations, savedRoleCodes).primaryOrgName }}</strong>
             </div>
           </div>
 
+          <section class="editor-section">
+            <div class="step-heading"><b>1</b><span>操作角色</span></div>
+            <div class="role-assignment-row">
+              <a-form-item label="人员角色（可多选）" class="grow-field">
+                <a-select
+                  v-model:value="selectedRoleCodes"
+                  mode="multiple"
+                  :options="roleOptions"
+                  :loading="roleLoading"
+                  placeholder="选择一个或多个角色"
+                  allow-clear
+                />
+              </a-form-item>
+              <a-button
+                type="primary"
+                :loading="roleSaveLoading"
+                :disabled="!rolesDirty"
+                @click="handleSaveRoles"
+              >
+                保存角色
+              </a-button>
+            </div>
+            <a-alert
+              v-if="rolesDirty"
+              type="warning"
+              show-icon
+              message="角色变更尚未保存；节点授权只能使用已保存角色。"
+            />
+            <a-form-item v-if="!externalAccount" label="本次操作角色" class="compact-field">
+              <a-select
+                v-model:value="grantForm.roleCode"
+                :options="grantRoleOptions"
+                placeholder="选择本次授权使用的角色"
+              />
+            </a-form-item>
+          </section>
+
           <a-alert
-            type="warning"
+            v-if="externalAccount"
+            type="info"
             show-icon
-            message="保存会覆盖该人员原有角色，请确认后提交。"
+            message="外部账号的工作流任务采用 PERSON 账号级精确指派，组织授权不适用。"
+            description="供应商和外扩人员可继续维护人员角色；任务由 ASSIGNEE_ID、角色、模板和 DENY 规则在后端确定，本页不会创建不受支持的 PERSON 范围授权。"
           />
 
-          <a-checkbox-group v-model:value="selectedRoleCodes" class="role-grid">
-            <a-checkbox v-for="role in roleOptions" :key="role.value" :value="role.value">
-              <span class="role-name">{{ role.label }}</span>
-              <small>{{ role.value }}</small>
-            </a-checkbox>
-          </a-checkbox-group>
+          <template v-else>
+            <section class="editor-section">
+              <div class="step-heading"><b>2</b><span>业务</span></div>
+              <a-select
+                v-model:value="grantForm.businessType"
+                class="full-field"
+                :options="businessOptions"
+                placeholder="选择业务类型"
+              />
+            </section>
+
+            <section class="editor-section">
+              <div class="step-heading"><b>3</b><span>节点</span></div>
+              <a-select
+                v-model:value="grantForm.nodeCode"
+                class="full-field"
+                :options="nodeOptions"
+                :loading="nodeOperationLoading"
+                :disabled="!grantForm.businessType"
+                placeholder="先选择业务，再选择后端返回的节点"
+                @change="handleNodeChange"
+              />
+            </section>
+
+            <section class="editor-section">
+              <div class="step-heading"><b>4</b><span>操作</span></div>
+              <div class="two-column-grid">
+                <a-form-item label="节点操作">
+                  <a-select
+                    v-model:value="grantForm.permissionCode"
+                    :options="operationOptions"
+                    :disabled="!grantForm.nodeCode"
+                    placeholder="选择后端定义的操作"
+                  />
+                </a-form-item>
+                <a-form-item label="授权效果">
+                  <a-radio-group v-model:value="grantForm.effect" button-style="solid">
+                    <a-radio-button value="ALLOW">ALLOW 允许</a-radio-button>
+                    <a-radio-button value="DENY">DENY 拒绝</a-radio-button>
+                  </a-radio-group>
+                </a-form-item>
+              </div>
+            </section>
+
+            <section class="editor-section">
+              <div class="step-heading"><b>5</b><span>范围</span></div>
+              <a-radio-group v-model:value="grantForm.scopeType" @change="handleScopeChange">
+                <a-radio v-for="option in scopeOptions" :key="option.value" :value="option.value">
+                  {{ option.label }}
+                </a-radio>
+              </a-radio-group>
+              <div class="scope-meta">
+                <a-tag :color="isElevation ? 'orange' : 'blue'">{{ grantSource }}</a-tag>
+                <span v-if="!isElevation">普通配置仅允许 GROUP 班组范围。</span>
+                <span v-else>DEPARTMENT / COMPANY 属于人工提权，必须填写原因和失效时间。</span>
+              </div>
+              <div class="two-column-grid scope-fields">
+                <a-form-item label="生效时间（可选）">
+                  <a-date-picker
+                    v-model:value="grantForm.effectiveFrom"
+                    value-format="YYYY-MM-DDTHH:mm:ss"
+                    show-time
+                    class="full-field"
+                    placeholder="立即生效"
+                  />
+                </a-form-item>
+                <a-form-item :label="isElevation ? '失效时间（必填）' : '失效时间（可选）'">
+                  <a-date-picker
+                    v-model:value="grantForm.effectiveTo"
+                    value-format="YYYY-MM-DDTHH:mm:ss"
+                    show-time
+                    class="full-field"
+                    :placeholder="isElevation ? '选择提权失效时间' : '长期有效'"
+                  />
+                </a-form-item>
+              </div>
+              <a-form-item :label="isElevation ? '授权原因（必填）' : '授权原因（可选）'">
+                <a-textarea
+                  v-model:value="grantForm.grantReason"
+                  :rows="2"
+                  :maxlength="300"
+                  show-count
+                  placeholder="说明授权用途或提权依据"
+                />
+              </a-form-item>
+            </section>
+
+            <section class="editor-section">
+              <div class="step-heading"><b>6</b><span>组织</span></div>
+              <a-tree-select
+                v-model:value="grantForm.scopeOrgId"
+                class="full-field"
+                :tree-data="grantOrgTreeData"
+                :field-names="{ value: 'value', label: 'title', children: 'children' }"
+                :filter-tree-node="filterScopeOrgTreeNode"
+                tree-node-filter-prop="searchText"
+                tree-default-expand-all
+                show-search
+                allow-clear
+                placeholder="按名称、编码或完整路径选择匹配范围的组织"
+              />
+              <a-checkbox
+                v-if="grantForm.scopeType === 'COMPANY'"
+                v-model:checked="grantForm.companyElevationConfirmed"
+                class="company-confirmation"
+              >
+                我已确认公司级提权影响范围，并确认该授权有明确业务依据和到期时间。
+              </a-checkbox>
+            </section>
+
+            <div class="preview-actions">
+              <div>
+                <strong>后端预览是唯一事实来源</strong>
+                <span>先预览，再保存；表单变化后必须重新预览。</span>
+              </div>
+              <a-space>
+                <a-button :loading="previewLoading" @click="handlePreviewGrant">预览授权</a-button>
+                <a-button
+                  type="primary"
+                  :loading="grantSaveLoading"
+                  :disabled="!previewResult"
+                  @click="handleSaveGrant"
+                >
+                  保存已预览授权
+                </a-button>
+              </a-space>
+            </div>
+
+            <section v-if="previewResult" class="backend-preview" aria-live="polite">
+              <div class="section-title-row">
+                <h3>后端预览结果</h3>
+                <a-tag color="green">待确认</a-tag>
+              </div>
+              <a-descriptions bordered size="small" :column="2">
+                <a-descriptions-item v-for="item in previewRows" :key="item.label" :label="item.label">
+                  {{ item.value }}
+                </a-descriptions-item>
+              </a-descriptions>
+              <a-alert
+                v-for="warning in previewResult.warnings || []"
+                :key="warning"
+                type="warning"
+                show-icon
+                :message="warning"
+              />
+              <div v-if="previewExistingGrant" class="existing-snapshot">
+                <strong>现有授权快照</strong>
+                <span>
+                  {{ previewExistingGrant.roleCode }} · {{ previewExistingGrant.permissionCode }} ·
+                  {{ previewExistingGrant.scopeType }} / {{ previewExistingGrant.scopeOrgName || previewExistingGrant.scopeOrgId }} ·
+                  {{ previewExistingGrant.effect }}
+                </span>
+              </div>
+            </section>
+          </template>
+
+          <section v-if="!externalAccount" class="grant-list-section">
+            <div class="section-title-row">
+              <div>
+                <h3>现有节点授权</h3>
+                <span>列表内容由后端返回，不代表前端推导的最终生效权限。</span>
+              </div>
+            </div>
+            <a-table
+              :row-key="grantRowKey"
+              :columns="grantColumns"
+              :data-source="nodeGrants"
+              :loading="grantLoading"
+              :pagination="false"
+              :scroll="{ x: 1060 }"
+              size="small"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.dataIndex === 'roleCode'">
+                  {{ roleLabel(record.roleCode) }}
+                </template>
+                <template v-else-if="column.dataIndex === 'nodeOperation'">
+                  {{ grantNodeOperationText(record) }}
+                </template>
+                <template v-else-if="column.dataIndex === 'scope'">
+                  {{ grantScopeText(record) }}
+                </template>
+                <template v-else-if="column.dataIndex === 'effect'">
+                  <a-tag :color="record.effect === 'ALLOW' ? 'green' : 'red'">{{ record.effect }}</a-tag>
+                </template>
+                <template v-else-if="column.dataIndex === 'grantSource'">
+                  {{ record.grantSource }}
+                </template>
+                <template v-else-if="column.dataIndex === 'validity'">
+                  {{ grantValidityText(record) }}
+                </template>
+                <template v-else-if="column.dataIndex === 'action'">
+                  <a-button type="link" danger size="small" @click="openDeleteGrant(record)">删除</a-button>
+                </template>
+              </template>
+              <template #emptyText>
+                <a-empty image="simple" description="暂无节点授权" />
+              </template>
+            </a-table>
+          </section>
         </div>
       </a-spin>
+    </a-modal>
+
+    <a-modal
+      v-model:open="deleteModalOpen"
+      title="删除节点授权"
+      ok-text="确认删除"
+      cancel-text="取消"
+      :confirm-loading="deleteLoading"
+      @ok="handleDeleteGrant"
+    >
+      <a-alert type="warning" show-icon message="删除授权会立即影响后续权限判定，请填写原因。" />
+      <a-textarea
+        v-model:value="deleteReason"
+        class="delete-reason"
+        :rows="3"
+        :maxlength="300"
+        show-count
+        placeholder="请输入删除原因"
+      />
     </a-modal>
   </div>
 </template>
@@ -482,57 +1325,75 @@ onMounted(async () => {
   gap: 16px;
 }
 
-.stats-strip {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+.page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e5eaf1;
 }
 
-.stats-strip :deep(.ant-card-body) {
-  display: grid;
-  gap: 6px;
+.page-heading h1,
+.panel-title h2,
+.section-title-row h3 {
+  margin: 0;
+  color: #172033;
 }
 
-.stats-strip span {
+.page-heading h1 {
+  font-size: 20px;
+}
+
+.page-heading p,
+.section-title-row span {
+  margin: 5px 0 0;
   color: #667085;
   font-size: 13px;
 }
 
-.stats-strip strong {
+.page-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 16px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.page-metrics strong {
+  margin-left: 5px;
   color: #172033;
-  font-size: 20px;
 }
 
 .permission-layout {
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
+  grid-template-columns: 280px minmax(0, 1fr);
   gap: 16px;
 }
 
-.dept-panel,
-.user-panel,
-.filter-card {
+.org-panel,
+.user-panel {
   border: 1px solid #e5eaf1;
   border-radius: 8px;
   background: #ffffff;
 }
 
-.dept-panel {
+.org-panel {
   min-height: calc(100vh - 190px);
   padding: 16px;
 }
 
+.user-panel {
+  min-width: 0;
+  padding: 16px;
+}
+
 .panel-title {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
   margin-bottom: 14px;
 }
 
 .panel-title h2 {
-  margin: 0;
-  color: #172033;
   font-size: 16px;
 }
 
@@ -541,16 +1402,10 @@ onMounted(async () => {
   font-size: 12px;
 }
 
-.dept-picker {
-  display: grid;
-  gap: 12px;
-  margin-top: 14px;
-}
-
-.dept-selector-button {
+.org-selector-button {
   display: grid;
   width: 100%;
-  min-height: 76px;
+  min-height: 72px;
   gap: 6px;
   padding: 12px 14px;
   border: 1px solid #d3dae6;
@@ -559,16 +1414,16 @@ onMounted(async () => {
   color: #172033;
   text-align: left;
   cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
-.dept-selector-button:hover {
+.org-selector-button:hover,
+.org-selector-button:focus-visible {
   border-color: #1769e0;
-  background: #f8fbff;
+  outline: none;
   box-shadow: 0 0 0 3px rgba(23, 105, 224, 0.1);
 }
 
-.dept-selector-button span {
+.org-selector-button span {
   overflow: hidden;
   font-size: 15px;
   font-weight: 600;
@@ -576,74 +1431,54 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.dept-selector-button small {
+.org-selector-button small,
+.org-current span,
+.org-current small {
   color: #667085;
   font-size: 12px;
 }
 
-.dept-selector {
-  width: 100%;
-}
-
-.dept-current {
+.org-current {
   display: grid;
   gap: 5px;
+  margin-top: 12px;
   padding: 12px;
   border: 1px solid #e5eaf1;
   border-radius: 6px;
   background: #f8fafc;
 }
 
-.dept-current span {
-  color: #667085;
-  font-size: 12px;
-}
-
-.dept-current strong {
+.org-current strong,
+.org-current small {
   overflow: hidden;
-  color: #172033;
-  font-size: 15px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.dept-current small {
-  overflow: hidden;
-  color: #667085;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.user-panel {
-  min-width: 0;
-  padding: 16px;
-}
-
-.filter-card {
+.filter-form {
   margin-bottom: 14px;
-  padding: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #eef1f5;
 }
 
-.org-picker-modal {
+.org-picker-modal,
+.permission-editor {
   display: grid;
   gap: 14px;
 }
 
-.org-picker-actions {
+.org-picker-actions,
+.role-assignment-row,
+.preview-actions,
+.section-title-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
-  border: 1px solid #e5eaf1;
-  border-radius: 8px;
-  background: #f8fafc;
 }
 
-.org-picker-actions span {
-  color: #667085;
-  font-size: 13px;
+.org-search {
+  max-width: 420px;
 }
 
 .org-picker-tree {
@@ -652,7 +1487,6 @@ onMounted(async () => {
   padding: 8px;
   border: 1px solid #e5eaf1;
   border-radius: 8px;
-  background: #ffffff;
 }
 
 .org-picker-tree :deep(.ant-tree-node-content-wrapper) {
@@ -661,34 +1495,18 @@ onMounted(async () => {
   border-radius: 6px;
 }
 
-.org-picker-tree :deep(.ant-tree-node-content-wrapper:hover) {
-  background: #eef5ff;
-}
-
-.org-picker-tree :deep(.ant-tree-node-selected) {
-  background: #dbeafe !important;
-  color: #1769e0;
-  font-weight: 600;
-}
-
-.role-modal {
-  display: grid;
-  gap: 16px;
-}
-
 .user-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #e5eaf1;
 }
 
 .user-summary div {
   display: grid;
   gap: 4px;
-  padding: 10px 12px;
-  border: 1px solid #e5eaf1;
-  border-radius: 6px;
-  background: #f8fafc;
+  min-width: 0;
 }
 
 .user-summary span {
@@ -703,46 +1521,149 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.role-grid {
+.editor-section,
+.backend-preview,
+.grant-list-section {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid #e5eaf1;
 }
 
-.role-grid :deep(.ant-checkbox-wrapper) {
-  min-height: 54px;
+.step-heading {
+  display: flex;
   align-items: center;
-  margin-inline-start: 0;
-  padding: 10px 12px;
-  border: 1px solid #e5eaf1;
-  border-radius: 6px;
-}
-
-.role-name {
-  display: block;
+  gap: 8px;
   color: #172033;
   font-weight: 600;
 }
 
-.role-grid small {
-  display: block;
+.step-heading b {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: #1769e0;
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.role-assignment-row {
+  align-items: flex-end;
+}
+
+.grow-field {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.compact-field {
+  max-width: 520px;
+  margin-bottom: 0;
+}
+
+.full-field {
+  width: 100%;
+}
+
+.two-column-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.two-column-grid :deep(.ant-form-item) {
+  margin-bottom: 0;
+}
+
+.scope-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   color: #667085;
+  font-size: 13px;
+}
+
+.scope-fields {
+  margin-top: 2px;
+}
+
+.company-confirmation {
+  color: #7a4b00;
+}
+
+.preview-actions {
+  flex-wrap: wrap;
+  padding: 14px;
+  border: 1px solid #d6e4ff;
+  border-radius: 8px;
+  background: #f5f9ff;
+}
+
+.preview-actions div {
+  display: grid;
+  gap: 3px;
+}
+
+.preview-actions span {
+  color: #667085;
+  font-size: 12px;
+}
+
+.backend-preview {
+  border-bottom-color: #b7eb8f;
+}
+
+.section-title-row h3 {
+  font-size: 15px;
+}
+
+.existing-snapshot {
+  display: grid;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid #e5eaf1;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.existing-snapshot span {
+  color: #475467;
+  font-size: 13px;
+}
+
+.delete-reason {
+  margin-top: 14px;
 }
 
 @media (max-width: 980px) {
-  .stats-strip,
+  .page-heading,
+  .org-picker-actions,
+  .role-assignment-row,
+  .preview-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .page-metrics {
+    justify-content: flex-start;
+  }
+
   .permission-layout,
   .user-summary,
-  .role-grid {
+  .two-column-grid {
     grid-template-columns: 1fr;
   }
 
-  .dept-panel {
+  .org-panel {
     min-height: auto;
   }
 
-  .dept-picker {
-    margin-bottom: 4px;
+  .org-search,
+  .compact-field {
+    max-width: none;
+    width: 100%;
   }
 }
 </style>

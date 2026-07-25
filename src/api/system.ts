@@ -11,6 +11,7 @@ export interface SysUserVO {
   deptId?: string
   deptName?: string
   role?: string
+  roles?: string[]
   status?: string
   lastLoginAt?: string
 }
@@ -24,8 +25,25 @@ export interface SysOrgVO {
   orgLevel?: string
   orgFullPath?: string
   orgCate?: string
+  orgType?: string
+  enabled?: boolean | number | string
+  isVirtual?: boolean | number | string
+  virtual?: boolean | number | string
   status?: string
   children?: SysOrgVO[]
+}
+
+export interface SysUserOrgRelationVO {
+  orgId: string
+  orgName?: string
+  orgFullName?: string
+  orgFullPath?: string
+  orgPath?: string
+  orgType?: string
+  orgCate?: string
+  primary?: boolean
+  isPrimary?: boolean | number | string
+  status?: string
 }
 
 export interface SysRoleVO {
@@ -86,6 +104,13 @@ export function listSystemRoles() {
 export function getUserRoles(employeeId: string) {
   return request<string[]>({
     url: `/system/users/${encodeURIComponent(employeeId)}/roles`,
+    method: 'GET'
+  })
+}
+
+export function getUserOrgRelations(employeeId: string) {
+  return request<SysUserOrgRelationVO[]>({
+    url: `/system/users/${encodeURIComponent(employeeId)}/org-relations`,
     method: 'GET'
   })
 }
