@@ -12,10 +12,33 @@ export interface OrganizationSelectionInput {
   orgFictitious?: boolean | number | string
 }
 
+export interface OrganizationTreeInput extends OrganizationSelectionInput {
+  orgFullCName?: string
+  orgSimpleCName?: string
+  orgFullPath?: string
+  children?: OrganizationTreeInput[]
+}
+
+export interface ScopeOrganizationTreeNode {
+  value: string
+  title: string
+  searchText: string
+  orgType: NodeScopeType
+  disabled: boolean
+  children?: ScopeOrganizationTreeNode[]
+}
+
+export interface UserOrgRelationSelectionInput {
+  orgId?: string
+  relationType?: string
+  status?: string
+}
+
 export interface NodeOperationItemVO {
   operationCode: string
   operationName?: string
   permissionCode: string
+  defaultRoleCodes?: string[]
 }
 
 export interface NodeOperationVO {
@@ -26,6 +49,7 @@ export interface NodeOperationVO {
   operationCode?: string
   operationName?: string
   permissionCode?: string
+  defaultRoleCodes?: string[]
   operations?: NodeOperationItemVO[]
 }
 
@@ -123,6 +147,21 @@ export interface NodeGrantPreviewDisplay {
   } | null
 }
 
+export interface PermissionDetailLoadState<Relation, Grant> {
+  detailReady: boolean
+  roleCodes: string[]
+  relations: Relation[]
+  grants: Grant[]
+  failedSections: string[]
+}
+
+export interface NodeGrantRevokeCommand {
+  userId: string
+  grantId: string
+  rowVersion: number
+  reason: string
+}
+
 export function normalizeOrganizationType(value?: string): NodeScopeType | null {
   const normalized = String(value || '').trim().toUpperCase()
   if (['COMPANY', 'CORPORATION', '公司', '单位'].includes(normalized)) return 'COMPANY'
@@ -148,6 +187,153 @@ export function isSelectableOrganization(org: OrganizationSelectionInput) {
   if (['disabled', 'inactive', '0', '停用', '禁用'].includes(status)) return false
 
   return !backendFlagIsTrue(org.orgFictitious)
+}
+
+export function resolvePermissionDetailLoad<Relation, Grant>(
+  roleResult: PromiseSettledResult<string[]>,
+  relationResult: PromiseSettledResult<Relation[]>,
+  grantResult: PromiseSettledResult<Grant[]>
+): PermissionDetailLoadState<Relation, Grant> {
+  const failedSections: string[] = []
+  const rolesReady = roleResult.status === 'fulfilled' && Array.isArray(roleResult.value)
+  const relationsReady = relationResult.status === 'fulfilled' && Array.isArray(relationResult.value)
+  const grantsReady = grantResult.status === 'fulfilled' && Array.isArray(grantResult.value)
+  if (!rolesReady) failedSections.push('人员角色')
+  if (!relationsReady) failedSections.push('组织关系')
+  if (!grantsReady) failedSections.push('历史授权')
+  const detailReady = failedSections.length === 0
+
+  return {
+    detailReady,
+    roleCodes: detailReady && rolesReady ? [...roleResult.value] : [],
+    relations: detailReady && relationsReady
+      ? [...relationResult.value]
+      : [],
+    grants: grantsReady ? [...grantResult.value] : [],
+    failedSections
+  }
+}
+
+export function filterOperationsForRole<T extends { defaultRoleCodes?: string[] }>(
+  operations: T[],
+  roleCode: string
+) {
+  const normalizedRole = roleCode.trim().toUpperCase()
+  if (!normalizedRole) return []
+  return operations.filter((operation) => (operation.defaultRoleCodes || [])
+    .some((code) => code.trim().toUpperCase() === normalizedRole))
+}
+
+export function getActiveGroupOrgIds(relations: UserOrgRelationSelectionInput[]) {
+  const groupIds = new Set<string>()
+  for (const relation of relations || []) {
+    const relationType = String(relation.relationType || '').trim().toUpperCase()
+    const status = String(relation.status || '').trim().toLowerCase()
+    if (!relation.orgId || relationType !== 'GROUP') continue
+    if (['disabled', 'inactive', '0', '停用', '禁用'].includes(status)) continue
+    groupIds.add(relation.orgId)
+  }
+  return groupIds
+}
+
+export function buildScopeOrganizationTree(
+  organizations: OrganizationTreeInput[],
+  targetType: NodeScopeType,
+  allowedGroupIds: Set<string> = new Set()
+): ScopeOrganizationTreeNode[] {
+  const nodes: ScopeOrganizationTreeNode[] = []
+  for (const org of organizations || []) {
+    const children = buildScopeOrganizationTree(org.children || [], targetType, allowedGroupIds)
+    const orgType = normalizeOrganizationType(org.orgType || org.orgCate)
+    if (!org.orgId || !orgType) {
+      nodes.push(...children)
+      continue
+    }
+
+    const targetSelectable = orgType === targetType && isSelectableOrganization(org)
+    const selectable = targetType === 'GROUP'
+      ? targetSelectable && allowedGroupIds.has(org.orgId)
+      : targetSelectable
+    if (targetType === 'GROUP' && !selectable && children.length === 0) continue
+
+    const name = org.orgSimpleCName || org.orgFullCName || org.orgId
+    nodes.push({
+      value: org.orgId,
+      title: `${name} · ${orgType}`,
+      searchText: [org.orgId, name, org.orgFullCName, org.orgFullPath]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase(),
+      orgType,
+      disabled: !selectable,
+      children: children.length ? children : undefined
+    })
+  }
+  return nodes
+}
+
+export function isCurrentPermissionResponse(
+  requestSerial: number,
+  currentSerial: number,
+  requestedUserId: string,
+  currentUserId?: string,
+  requestedPayload?: NodeScopeGrantRequest | null,
+  currentPayload?: NodeScopeGrantRequest | null
+) {
+  return requestSerial === currentSerial
+    && requestedUserId === currentUserId
+    && (requestedPayload === undefined || currentPayload === undefined
+      || sameNodeScopeGrantRequest(requestedPayload, currentPayload))
+}
+
+function sameNodeScopeGrantRequest(
+  left: NodeScopeGrantRequest | null,
+  right: NodeScopeGrantRequest | null
+) {
+  if (!left || !right) return false
+  const fields: Array<keyof NodeScopeGrantRequest> = [
+    'roleCode',
+    'permissionCode',
+    'scopeType',
+    'scopeOrgId',
+    'effect',
+    'grantSource',
+    'effectiveFrom',
+    'effectiveTo',
+    'grantReason',
+    'companyElevationConfirmed'
+  ]
+  return fields.every((field) => left[field] === right[field])
+}
+
+export function canSaveNodeGrantPreview(input: {
+  detailReady: boolean
+  externalAccount: boolean
+  preview: unknown
+  previewedPayload: NodeScopeGrantRequest | null
+  currentPayload: NodeScopeGrantRequest
+}) {
+  return input.detailReady
+    && !input.externalAccount
+    && Boolean(input.preview)
+    && sameNodeScopeGrantRequest(input.previewedPayload, input.currentPayload)
+}
+
+export function buildNodeGrantRevokeCommand(
+  userId: string,
+  grant: Pick<NodeGrantVO, 'id' | 'grantId' | 'rowVersion'>,
+  reason: string
+): NodeGrantRevokeCommand | null {
+  const grantId = grant.grantId ?? grant.id
+  const normalizedReason = reason.trim()
+  if (!userId || grantId == null || !String(grantId).trim()) return null
+  if (!Number.isInteger(grant.rowVersion) || Number(grant.rowVersion) < 0 || !normalizedReason) return null
+  return {
+    userId,
+    grantId: String(grantId),
+    rowVersion: Number(grant.rowVersion),
+    reason: normalizedReason
+  }
 }
 
 function namedCode(name: string | null | undefined, code: string | null | undefined) {

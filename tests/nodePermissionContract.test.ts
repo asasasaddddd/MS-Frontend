@@ -24,6 +24,17 @@ assert.equal(
   'function',
   '缺少节点授权请求构造'
 )
+for (const helper of [
+  'resolvePermissionDetailLoad',
+  'filterOperationsForRole',
+  'getActiveGroupOrgIds',
+  'buildScopeOrganizationTree',
+  'isCurrentPermissionResponse',
+  'canSaveNodeGrantPreview',
+  'buildNodeGrantRevokeCommand'
+]) {
+  assert.equal(typeof runtime[helper], 'function', `缺少可执行的权限状态规则：${helper}`)
+}
 
 const isSelectableOrganization = runtime.isSelectableOrganization as (
   org: Record<string, unknown>
@@ -56,6 +67,49 @@ const validateNodeScopeGrantDraft = runtime.validateNodeScopeGrantDraft as (
 const buildNodeScopeGrantRequest = runtime.buildNodeScopeGrantRequest as (
   draft: Record<string, unknown>
 ) => Record<string, unknown>
+const resolvePermissionDetailLoad = runtime.resolvePermissionDetailLoad as (
+  roles: PromiseSettledResult<string[]>,
+  relations: PromiseSettledResult<Array<Record<string, unknown>>>,
+  grants: PromiseSettledResult<Array<Record<string, unknown>>>
+) => {
+  detailReady: boolean
+  roleCodes: string[]
+  relations: Array<Record<string, unknown>>
+  grants: Array<Record<string, unknown>>
+  failedSections: string[]
+}
+const filterOperationsForRole = runtime.filterOperationsForRole as (
+  operations: Array<Record<string, unknown>>,
+  roleCode: string
+) => Array<Record<string, unknown>>
+const getActiveGroupOrgIds = runtime.getActiveGroupOrgIds as (
+  relations: Array<Record<string, unknown>>
+) => Set<string>
+const buildScopeOrganizationTree = runtime.buildScopeOrganizationTree as (
+  organizations: Array<Record<string, unknown>>,
+  scopeType: string,
+  allowedGroupIds: Set<string>
+) => Array<{ value: string; disabled: boolean; children?: Array<{ value: string; disabled: boolean }> }>
+const isCurrentPermissionResponse = runtime.isCurrentPermissionResponse as (
+  requestSerial: number,
+  currentSerial: number,
+  requestedUserId: string,
+  currentUserId?: string,
+  requestedPayload?: Record<string, unknown> | null,
+  currentPayload?: Record<string, unknown> | null
+) => boolean
+const canSaveNodeGrantPreview = runtime.canSaveNodeGrantPreview as (input: {
+  detailReady: boolean
+  externalAccount: boolean
+  preview: unknown
+  previewedPayload: Record<string, unknown> | null
+  currentPayload: Record<string, unknown>
+}) => boolean
+const buildNodeGrantRevokeCommand = runtime.buildNodeGrantRevokeCommand as (
+  userId: string,
+  grant: Record<string, unknown>,
+  reason: string
+) => { userId: string; grantId: string; rowVersion: number; reason: string } | null
 
 const selectableGroup = {
   orgId: 'G100305001',
@@ -166,6 +220,129 @@ assert.equal(companyRequest.grantSource, 'MANUAL_ELEVATION')
 assert.equal(companyRequest.grantReason, '临时公司级授权')
 assert.equal(companyRequest.companyElevationConfirmed, true)
 
+const fulfilledRoles = { status: 'fulfilled', value: ['MEASURE_ADMIN'] } as const
+const fulfilledRelations = {
+  status: 'fulfilled',
+  value: [{ orgId: 'G-OWNED', relationType: 'GROUP', status: 'enabled' }]
+} as const
+const fulfilledGrants = {
+  status: 'fulfilled',
+  value: [{ id: 'GRANT-1', rowVersion: 4 }]
+} as const
+const readyDetails = resolvePermissionDetailLoad(
+  fulfilledRoles,
+  fulfilledRelations,
+  fulfilledGrants
+)
+assert.equal(readyDetails.detailReady, true)
+assert.deepEqual(readyDetails.roleCodes, ['MEASURE_ADMIN'])
+assert.deepEqual(readyDetails.grants, fulfilledGrants.value)
+
+const failedDetails = resolvePermissionDetailLoad(
+  fulfilledRoles,
+  { status: 'rejected', reason: new Error('relations unavailable') },
+  fulfilledGrants
+)
+assert.equal(failedDetails.detailReady, false)
+assert.deepEqual(failedDetails.roleCodes, [], '任一详情失败后不得保留可用于新增授权的角色')
+assert.deepEqual(failedDetails.relations, [], '任一详情失败后不得保留可用于新增授权的组织关系')
+assert.deepEqual(failedDetails.grants, fulfilledGrants.value, '成功加载的历史授权仍应允许查看和撤销')
+assert.deepEqual(failedDetails.failedSections, ['组织关系'])
+const missingRoleDetails = resolvePermissionDetailLoad(
+  { status: 'fulfilled', value: null } as unknown as PromiseSettledResult<string[]>,
+  fulfilledRelations,
+  fulfilledGrants
+)
+assert.equal(missingRoleDetails.detailReady, false, '详情接口返回 null 也必须 fail-closed')
+assert.deepEqual(missingRoleDetails.roleCodes, [])
+
+const roleFilteredOperations = filterOperationsForRole([
+  { permissionCode: 'A', defaultRoleCodes: ['MEASURE_ADMIN'] },
+  { permissionCode: 'B', defaultRoleCodes: ['VERIFIER'] },
+  { permissionCode: 'C' }
+], 'MEASURE_ADMIN')
+assert.deepEqual(roleFilteredOperations.map((item) => item.permissionCode), ['A'])
+
+const activeGroupIds = getActiveGroupOrgIds([
+  { orgId: 'G-OWNED', relationType: 'GROUP', status: 'enabled' },
+  { orgId: 'G-DISABLED', relationType: 'GROUP', status: 'disabled' },
+  { orgId: 'G-UNTRUSTED', orgType: 'GROUP', status: 'enabled' },
+  { orgId: 'D-1', relationType: 'DEPARTMENT', status: 'enabled' }
+])
+assert.deepEqual([...activeGroupIds], ['G-OWNED'])
+
+const groupScopeTree = buildScopeOrganizationTree([
+  {
+    orgId: 'C-1',
+    orgType: 'COMPANY',
+    status: 'enabled',
+    children: [{
+      orgId: 'D-1',
+      orgType: 'DEPARTMENT',
+      status: 'enabled',
+      children: [
+        { orgId: 'G-OWNED', orgType: 'GROUP', status: 'enabled' },
+        { orgId: 'G-FOREIGN', orgType: 'GROUP', status: 'enabled' }
+      ]
+    }]
+  }
+], 'GROUP', activeGroupIds)
+assert.equal(groupScopeTree.length, 1)
+assert.equal(groupScopeTree[0]?.disabled, true, '公司祖先只能导航')
+assert.equal(groupScopeTree[0]?.children?.[0]?.disabled, true, '部门祖先只能导航')
+assert.deepEqual(
+  groupScopeTree[0]?.children?.[0]?.children?.map((node) => [node.value, node.disabled]),
+  [['G-OWNED', false]],
+  'GROUP 范围只能暴露人员真实有效班组'
+)
+
+assert.equal(isCurrentPermissionResponse(2, 2, 'U-2', 'U-2'), true)
+assert.equal(isCurrentPermissionResponse(1, 2, 'U-1', 'U-2'), false)
+assert.equal(isCurrentPermissionResponse(
+  2,
+  2,
+  'U-2',
+  'U-2',
+  groupRequest,
+  { ...groupRequest, permissionCode: 'CHANGED' }
+), false, '旧表单的预览响应不得覆盖当前表单')
+
+assert.equal(canSaveNodeGrantPreview({
+  detailReady: true,
+  externalAccount: false,
+  preview: { permissionCode: 'A' },
+  previewedPayload: groupRequest,
+  currentPayload: groupRequest
+}), true)
+assert.equal(canSaveNodeGrantPreview({
+  detailReady: true,
+  externalAccount: false,
+  preview: null,
+  previewedPayload: null,
+  currentPayload: groupRequest
+}), false, '未预览不得保存')
+assert.equal(canSaveNodeGrantPreview({
+  detailReady: true,
+  externalAccount: false,
+  preview: { permissionCode: 'A' },
+  previewedPayload: groupRequest,
+  currentPayload: { ...groupRequest, permissionCode: 'CHANGED' }
+}), false, '表单变化后的过期预览不得保存')
+
+assert.deepEqual(
+  buildNodeGrantRevokeCommand(
+    'U00109024',
+    { id: '2090000000000000001', rowVersion: 7 },
+    ' 岗位调整 '
+  ),
+  {
+    userId: 'U00109024',
+    grantId: '2090000000000000001',
+    rowVersion: 7,
+    reason: '岗位调整'
+  }
+)
+
 function source(path: string) {
   const url = new URL(path, import.meta.url)
   assert.ok(existsSync(url), `缺少节点权限实现文件：${path}`)
@@ -195,6 +372,7 @@ assert.match(viewSource, /输入工号模糊查询/)
 assert.match(viewSource, /输入姓名模糊查询/)
 assert.match(systemApiSource, /getUserOrgRelations/)
 assert.match(systemApiSource, /\/system\/users\/\$\{encodeURIComponent\(employeeId\)\}\/org-relations/)
+assert.match(systemApiSource, /relationType\?:\s*string/)
 assert.match(viewSource, /getUserOrgRelations/)
 assert.match(viewSource, /getUserRoles/)
 assert.match(viewSource, /selectedRoleCodes/)
@@ -215,6 +393,7 @@ for (const label of orderedLabels) {
 // 节点、操作及 ALLOW/DENY 必须来自明确的后端协议。
 assert.match(nodePermissionApiSource, /\/system\/node-operations/)
 assert.match(nodePermissionApiSource, /businessType/)
+assert.match(nodePermissionTypeSource, /defaultRoleCodes\?:\s*string\[\]/)
 assert.match(nodePermissionTypeSource, /'ALLOW'\s*\|\s*'DENY'/)
 assert.ok(viewSource.includes('ALLOW'))
 assert.ok(viewSource.includes('DENY'))
@@ -305,7 +484,9 @@ assert.match(viewSource, /SUPPLIER/)
 assert.match(viewSource, /EXTERNAL_OPERATOR/)
 assert.match(viewSource, /PERSON/)
 assert.match(viewSource, /组织授权不适用/)
-assert.match(viewSource, /v-if="!externalAccount"\s+class="grant-list-section"/)
+assert.doesNotMatch(viewSource, /v-if="!externalAccount"\s+class="grant-list-section"/)
+assert.match(viewSource, /detailReady/)
+assert.match(viewSource, /重试/)
 assert.doesNotMatch(nodePermissionTypeSource, /scopeType[^\n]*PERSON/)
 assert.doesNotMatch(nodePermissionApiSource, /scopeType[^\n]*PERSON/)
 

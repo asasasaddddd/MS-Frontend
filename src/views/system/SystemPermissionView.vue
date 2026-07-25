@@ -31,8 +31,15 @@ import type {
 import {
   buildNodeGrantPreviewDisplay,
   buildNodeScopeGrantRequest,
+  buildNodeGrantRevokeCommand,
+  buildScopeOrganizationTree,
+  canSaveNodeGrantPreview,
+  filterOperationsForRole,
+  getActiveGroupOrgIds,
   isSelectableOrganization,
+  isCurrentPermissionResponse,
   normalizeOrganizationType,
+  resolvePermissionDetailLoad,
   validateNodeScopeGrantDraft
 } from '@/types/nodePermission'
 import { roleNameMap } from '@/types/common'
@@ -70,6 +77,7 @@ interface NormalizedNodeOperation {
   operationCode: string
   operationName: string
   permissionCode: string
+  defaultRoleCodes: string[]
 }
 
 interface GrantForm {
@@ -122,6 +130,8 @@ const selectedUser = ref<PermissionPerson | null>(null)
 const selectedUserRelations = ref<SysUserOrgRelationVO[]>([])
 const selectedRoleCodes = ref<string[]>([])
 const savedRoleCodes = ref<string[]>([])
+const detailReady = ref(false)
+const permissionDetailError = ref('')
 const nodeOperations = ref<NormalizedNodeOperation[]>([])
 const nodeGrants = ref<NodeGrantVO[]>([])
 const previewResult = ref<NodeScopeGrantPreviewVO | null>(null)
@@ -200,7 +210,11 @@ const selectedDeptIds = computed(() => {
 
 const orgTreeData = computed(() => toOrgTreeNodes(orgTree.value))
 
-const grantOrgTreeData = computed(() => toScopeOrgTreeNodes(orgTree.value, grantForm.scopeType))
+const grantOrgTreeData = computed(() => buildScopeOrganizationTree(
+  orgTree.value,
+  grantForm.scopeType,
+  getActiveGroupOrgIds(selectedUserRelations.value)
+))
 
 const selectedDeptName = computed(() => {
   if (!selectedDeptId.value) return '全部组织'
@@ -231,11 +245,16 @@ const grantRoleOptions = computed(() =>
 
 const rolesDirty = computed(() => !sameCodeSet(selectedRoleCodes.value, savedRoleCodes.value))
 
-const externalAccount = computed(() => savedRoleCodes.value.some((roleCode) => externalRoleCodes.has(roleCode)))
+const externalAccount = computed(() => savedRoleCodes.value.some((roleCode) =>
+  externalRoleCodes.has(roleCode.trim().toUpperCase())))
+
+const roleScopedNodeOperations = computed(() =>
+  filterOperationsForRole(nodeOperations.value, grantForm.roleCode)
+)
 
 const nodeOptions = computed(() => {
   const seen = new Set<string>()
-  return nodeOperations.value.reduce<Array<{ label: string; value: string }>>((options, item) => {
+  return roleScopedNodeOperations.value.reduce<Array<{ label: string; value: string }>>((options, item) => {
     if (seen.has(item.nodeCode)) return options
     seen.add(item.nodeCode)
     options.push({ label: `${item.nodeName}（${item.nodeCode}）`, value: item.nodeCode })
@@ -244,7 +263,7 @@ const nodeOptions = computed(() => {
 })
 
 const operationOptions = computed(() =>
-  nodeOperations.value
+  roleScopedNodeOperations.value
     .filter((item) => item.nodeCode === grantForm.nodeCode)
     .map((item) => ({
       label: `${item.operationName}（${item.operationCode}）`,
@@ -349,22 +368,6 @@ function toOrgTreeNodes(input: SysOrgVO[]): OrgTreeNode[] {
   return nodes
 }
 
-function toScopeOrgTreeNodes(input: SysOrgVO[], targetType: NodeScopeType): OrgTreeNode[] {
-  return toOrgTreeNodes(input).map((node) => ({
-    ...node,
-    disabled: node.disabled || node.orgType !== targetType,
-    children: node.children ? mapScopeChildren(node.children, targetType) : undefined
-  }))
-}
-
-function mapScopeChildren(input: OrgTreeNode[], targetType: NodeScopeType): OrgTreeNode[] {
-  return input.map((node) => ({
-    ...node,
-    disabled: node.disabled || node.orgType !== targetType,
-    children: node.children ? mapScopeChildren(node.children, targetType) : undefined
-  }))
-}
-
 function findOrgNode(nodes: OrgTreeNode[], value: string): OrgTreeNode | null {
   for (const node of nodes) {
     if (node.value === value) return node
@@ -393,7 +396,7 @@ function filterScopeOrgTreeNode(input: string, node: { searchText?: string }) {
 }
 
 function relationTypeOf(relation: SysUserOrgRelationVO) {
-  return normalizeOrganizationType(relation.orgType || relation.orgCate)
+  return normalizeOrganizationType(relation.relationType)
 }
 
 function relationName(relation: SysUserOrgRelationVO) {
@@ -460,7 +463,8 @@ function flattenNodeOperations(input: NodeOperationVO[]) {
           nodeName: node.nodeName || node.nodeCode,
           operationCode: operation.operationCode,
           operationName: operation.operationName || operation.operationCode,
-          permissionCode: operation.permissionCode
+          permissionCode: operation.permissionCode,
+          defaultRoleCodes: [...(operation.defaultRoleCodes || node.defaultRoleCodes || [])]
         })
       }
       continue
@@ -472,7 +476,8 @@ function flattenNodeOperations(input: NodeOperationVO[]) {
       nodeName: node.nodeName || node.nodeCode,
       operationCode: node.operationCode,
       operationName: node.operationName || node.operationCode,
-      permissionCode: node.permissionCode
+      permissionCode: node.permissionCode,
+      defaultRoleCodes: [...(node.defaultRoleCodes || [])]
     })
   }
   return flattened
@@ -649,37 +654,57 @@ function tableRow(record: PermissionPerson) {
 }
 
 async function openPermissionModal(user: PermissionPerson) {
-  const requestId = ++permissionRequestSerial
   selectedUser.value = user
   selectedUserRelations.value = user.relations
   selectedRoleCodes.value = [...user.existingRoles]
   savedRoleCodes.value = [...user.existingRoles]
   nodeGrants.value = []
+  detailReady.value = false
+  permissionDetailError.value = ''
   resetGrantEditor()
   permissionModalOpen.value = true
+  await loadPermissionDetails(user)
+}
+
+async function loadPermissionDetails(user: PermissionPerson) {
+  const requestId = ++permissionRequestSerial
   permissionDetailLoading.value = true
   const [roleResult, relationResult, grantResult] = await Promise.allSettled([
     getUserRoles(user.employeeId),
     getUserOrgRelations(user.employeeId),
     getUserNodeGrants(user.employeeId)
   ])
-  if (requestId !== permissionRequestSerial || selectedUser.value?.employeeId !== user.employeeId) return
-  if (roleResult.status === 'fulfilled') {
-    selectedRoleCodes.value = [...(roleResult.value || [])]
-    savedRoleCodes.value = [...(roleResult.value || [])]
-  }
-  if (relationResult.status === 'fulfilled') selectedUserRelations.value = relationResult.value || []
-  if (grantResult.status === 'fulfilled') nodeGrants.value = grantResult.value || []
-  if ([roleResult, relationResult, grantResult].some((result) => result.status === 'rejected')) {
-    message.warning('部分人员权限详情加载失败，请稍后重试')
-  }
+  if (!isCurrentPermissionResponse(
+    requestId,
+    permissionRequestSerial,
+    user.employeeId,
+    selectedUser.value?.employeeId
+  )) return
+
+  const detail = resolvePermissionDetailLoad(roleResult, relationResult, grantResult)
+  detailReady.value = detail.detailReady
+  permissionDetailError.value = detail.detailReady
+    ? ''
+    : `人员权限详情加载失败：${detail.failedSections.join('、')}`
+  selectedRoleCodes.value = [...detail.roleCodes]
+  savedRoleCodes.value = [...detail.roleCodes]
+  selectedUserRelations.value = [...detail.relations]
+  nodeGrants.value = [...detail.grants]
   grantForm.roleCode = savedRoleCodes.value[0] || ''
   permissionDetailLoading.value = false
 }
 
-async function handleSaveRoles() {
+async function retryPermissionDetails() {
   const user = selectedUser.value
   if (!user) return
+  detailReady.value = false
+  permissionDetailError.value = ''
+  await loadPermissionDetails(user)
+}
+
+async function handleSaveRoles() {
+  const user = selectedUser.value
+  if (!user || !detailReady.value) return
   roleSaveLoading.value = true
   try {
     await assignUserRoles(user.employeeId, selectedRoleCodes.value)
@@ -724,7 +749,7 @@ function buildGrantRequest(): NodeScopeGrantRequest {
 
 async function handlePreviewGrant() {
   const user = selectedUser.value
-  if (!user || externalAccount.value) return
+  if (!user || !detailReady.value || externalAccount.value) return
   const validationError = validateGrantForm()
   if (validationError) {
     message.warning(validationError)
@@ -735,7 +760,14 @@ async function handlePreviewGrant() {
   previewLoading.value = true
   try {
     const result = await previewUserNodeGrant(user.employeeId, payload)
-    if (requestId !== previewRequestSerial || selectedUser.value?.employeeId !== user.employeeId) return
+    if (!isCurrentPermissionResponse(
+      requestId,
+      previewRequestSerial,
+      user.employeeId,
+      selectedUser.value?.employeeId,
+      payload,
+      buildGrantRequest()
+    )) return
     previewResult.value = result
     previewedPayload.value = payload
   } catch (error) {
@@ -747,13 +779,21 @@ async function handlePreviewGrant() {
 
 async function handleSaveGrant() {
   const user = selectedUser.value
-  if (!user || !previewResult.value || !previewedPayload.value) {
+  const payload = previewedPayload.value
+  const currentPayload = buildGrantRequest()
+  if (!user || !payload || !canSaveNodeGrantPreview({
+    detailReady: detailReady.value,
+    externalAccount: externalAccount.value,
+    preview: previewResult.value,
+    previewedPayload: payload,
+    currentPayload
+  })) {
     message.warning('请先预览并确认后端返回的授权结果')
     return
   }
   grantSaveLoading.value = true
   try {
-    await saveUserNodeGrant(user.employeeId, previewedPayload.value)
+    await saveUserNodeGrant(user.employeeId, payload)
     message.success('节点授权已保存')
     invalidatePreview()
     await loadNodeGrants(user.employeeId)
@@ -785,7 +825,12 @@ async function handleDeleteGrant() {
   }
   deleteLoading.value = true
   try {
-    await deleteUserNodeGrant(target.userId, grantId, target.grant.rowVersion, deleteReason.value.trim())
+    const command = buildNodeGrantRevokeCommand(target.userId, target.grant, deleteReason.value)
+    if (!command) {
+      message.error('授权记录缺少删除所需的编号、版本或原因')
+      return
+    }
+    await deleteUserNodeGrant(command.userId, command.grantId, command.rowVersion, command.reason)
     message.success('节点授权已删除')
     deleteModalOpen.value = false
     if (selectedUser.value?.employeeId === target.userId) await loadNodeGrants(target.userId)
@@ -1005,6 +1050,20 @@ onMounted(async () => {
             </div>
           </div>
 
+          <a-alert
+            v-if="permissionDetailError"
+            type="error"
+            show-icon
+            :message="permissionDetailError"
+            description="新增授权已停用；成功加载的历史授权仍可在下方查看和撤销。"
+          >
+            <template #action>
+              <a-button size="small" :loading="permissionDetailLoading" @click="retryPermissionDetails">
+                重试
+              </a-button>
+            </template>
+          </a-alert>
+
           <section class="editor-section">
             <div class="step-heading"><b>1</b><span>操作角色</span></div>
             <div class="role-assignment-row">
@@ -1014,6 +1073,7 @@ onMounted(async () => {
                   mode="multiple"
                   :options="roleOptions"
                   :loading="roleLoading"
+                  :disabled="!detailReady"
                   placeholder="选择一个或多个角色"
                   allow-clear
                 />
@@ -1021,7 +1081,7 @@ onMounted(async () => {
               <a-button
                 type="primary"
                 :loading="roleSaveLoading"
-                :disabled="!rolesDirty"
+                :disabled="!detailReady || !rolesDirty"
                 @click="handleSaveRoles"
               >
                 保存角色
@@ -1033,7 +1093,7 @@ onMounted(async () => {
               show-icon
               message="角色变更尚未保存；节点授权只能使用已保存角色。"
             />
-            <a-form-item v-if="!externalAccount" label="本次操作角色" class="compact-field">
+            <a-form-item v-if="detailReady && !externalAccount" label="本次操作角色" class="compact-field">
               <a-select
                 v-model:value="grantForm.roleCode"
                 :options="grantRoleOptions"
@@ -1043,14 +1103,14 @@ onMounted(async () => {
           </section>
 
           <a-alert
-            v-if="externalAccount"
+            v-if="detailReady && externalAccount"
             type="info"
             show-icon
             message="外部账号的工作流任务采用 PERSON 账号级精确指派，组织授权不适用。"
             description="供应商和外扩人员可继续维护人员角色；任务由 ASSIGNEE_ID、角色、模板和 DENY 规则在后端确定，本页不会创建不受支持的 PERSON 范围授权。"
           />
 
-          <template v-else>
+          <template v-else-if="detailReady">
             <section class="editor-section">
               <div class="step-heading"><b>2</b><span>业务</span></div>
               <a-select
@@ -1166,11 +1226,13 @@ onMounted(async () => {
                 <span>先预览，再保存；表单变化后必须重新预览。</span>
               </div>
               <a-space>
-                <a-button :loading="previewLoading" @click="handlePreviewGrant">预览授权</a-button>
+                <a-button :loading="previewLoading" :disabled="!detailReady" @click="handlePreviewGrant">
+                  预览授权
+                </a-button>
                 <a-button
                   type="primary"
                   :loading="grantSaveLoading"
-                  :disabled="!previewResult"
+                  :disabled="!detailReady || !previewResult"
                   @click="handleSaveGrant"
                 >
                   保存已预览授权
@@ -1205,7 +1267,7 @@ onMounted(async () => {
             </section>
           </template>
 
-          <section v-if="!externalAccount" class="grant-list-section">
+          <section class="grant-list-section">
             <div class="section-title-row">
               <div>
                 <h3>现有节点授权</h3>

@@ -33,6 +33,7 @@ export interface SysOrgVO {
 
 export interface SysUserOrgRelationVO {
   orgId: string
+  relationType?: string
   orgName?: string
   orgFullName?: string
   orgFullPath?: string
