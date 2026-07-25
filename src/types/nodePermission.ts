@@ -238,19 +238,19 @@ export function getActiveGroupOrgIds(relations: UserOrgRelationSelectionInput[])
 
 export function buildScopeOrganizationTree(
   organizations: OrganizationTreeInput[],
-  targetType: NodeScopeType,
+  targetType?: NodeScopeType,
   allowedGroupIds: Set<string> = new Set()
 ): ScopeOrganizationTreeNode[] {
   const nodes: ScopeOrganizationTreeNode[] = []
   for (const org of organizations || []) {
     const children = buildScopeOrganizationTree(org.children || [], targetType, allowedGroupIds)
     const orgType = normalizeOrganizationType(org.orgType || org.orgCate)
-    if (!org.orgId || !orgType) {
+    if (!org.orgId || !orgType || !isSelectableOrganization(org)) {
       nodes.push(...children)
       continue
     }
 
-    const targetSelectable = orgType === targetType && isSelectableOrganization(org)
+    const targetSelectable = targetType == null || orgType === targetType
     const selectable = targetType === 'GROUP'
       ? targetSelectable && allowedGroupIds.has(org.orgId)
       : targetSelectable

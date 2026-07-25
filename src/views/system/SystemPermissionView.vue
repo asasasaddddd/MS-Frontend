@@ -347,25 +347,7 @@ function flattenOrgs(input: SysOrgVO[], bucket: OrgOption[] = []): string[] {
 }
 
 function toOrgTreeNodes(input: SysOrgVO[]): OrgTreeNode[] {
-  const nodes: OrgTreeNode[] = []
-  for (const org of input) {
-    const children = toOrgTreeNodes(org.children || [])
-    const orgType = orgTypeOf(org)
-    if (!org.orgId || !orgType) {
-      nodes.push(...children)
-      continue
-    }
-    const name = formatOrgName(org)
-    nodes.push({
-      value: org.orgId,
-      title: `${name} · ${orgType}`,
-      searchText: [org.orgId, name, org.orgFullCName, org.orgFullPath].filter(Boolean).join(' ').toLowerCase(),
-      orgType,
-      disabled: !isSelectableOrg(org),
-      children: children.length ? children : undefined
-    })
-  }
-  return nodes
+  return buildScopeOrganizationTree(input)
 }
 
 function findOrgNode(nodes: OrgTreeNode[], value: string): OrgTreeNode | null {

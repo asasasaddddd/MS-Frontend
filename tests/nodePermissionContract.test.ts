@@ -87,8 +87,8 @@ const getActiveGroupOrgIds = runtime.getActiveGroupOrgIds as (
 ) => Set<string>
 const buildScopeOrganizationTree = runtime.buildScopeOrganizationTree as (
   organizations: Array<Record<string, unknown>>,
-  scopeType: string,
-  allowedGroupIds: Set<string>
+  scopeType?: string,
+  allowedGroupIds?: Set<string>
 ) => Array<{ value: string; disabled: boolean; children?: Array<{ value: string; disabled: boolean }> }>
 const isCurrentPermissionResponse = runtime.isCurrentPermissionResponse as (
   requestSerial: number,
@@ -296,6 +296,50 @@ assert.deepEqual(
   'GROUP 范围只能暴露人员真实有效班组'
 )
 
+const visibleOrganizationTree = buildScopeOrganizationTree([
+  {
+    orgId: 'C-DISABLED',
+    orgType: 'COMPANY',
+    status: 'disabled',
+    children: [{
+      orgId: 'D-ACTIVE',
+      orgType: 'DEPARTMENT',
+      status: 'enabled',
+      children: [
+        { orgId: 'G-VIRTUAL', orgType: 'GROUP', status: 'enabled', orgFictitious: true },
+        { orgId: 'G-ACTIVE', orgType: 'GROUP', status: 'enabled' }
+      ]
+    }]
+  },
+  {
+    orgId: 'C-ACTIVE',
+    orgType: 'COMPANY',
+    status: 'enabled',
+    children: [
+      {
+        orgId: 'D-VIRTUAL',
+        orgType: 'DEPARTMENT',
+        status: 'enabled',
+        orgFictitious: '1',
+        children: [{ orgId: 'G-PROMOTED', orgType: 'GROUP', status: 'enabled' }]
+      },
+      { orgId: 'D-DISABLED-LEAF', orgType: 'DEPARTMENT', status: 'disabled' }
+    ]
+  }
+])
+assert.deepEqual(
+  visibleOrganizationTree.map((node) => [
+    node.value,
+    node.disabled,
+    node.children?.map((child) => [child.value, child.disabled]) || []
+  ]),
+  [
+    ['D-ACTIVE', false, [['G-ACTIVE', false]]],
+    ['C-ACTIVE', false, [['G-PROMOTED', false]]]
+  ],
+  '组织树必须隐藏停用/虚拟节点，并按真实层级保留其有效后代'
+)
+
 assert.equal(isCurrentPermissionResponse(2, 2, 'U-2', 'U-2'), true)
 assert.equal(isCurrentPermissionResponse(1, 2, 'U-1', 'U-2'), false)
 assert.equal(isCurrentPermissionResponse(
@@ -372,6 +416,11 @@ for (const orgType of ['COMPANY', 'DEPARTMENT', 'GROUP']) {
 }
 assert.match(viewSource, /isSelectableOrg/)
 assert.match(viewSource, /isSelectableOrganization/)
+assert.match(
+  viewSource,
+  /function toOrgTreeNodes[\s\S]*?return buildScopeOrganizationTree\(input\)/,
+  '人员导航树和授权树必须复用同一有效组织过滤 helper'
+)
 assert.match(systemApiSource, /orgFictitious\?:\s*boolean\s*\|\s*number\s*\|\s*string/)
 assert.doesNotMatch(systemApiSource, /isVirtual\?:|virtual\?:/)
 assert.match(viewSource, /orgFullPath/)
