@@ -20,7 +20,6 @@ export interface FirstCheckScanInboxItem {
   currentNodeName?: string
   scanStatus?: string
   scanAction: FirstCheckScanAction | string
-  allowedActions?: string[]
   scanCode?: string
   deviceCode?: string
   deviceName?: string

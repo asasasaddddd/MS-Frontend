@@ -6,7 +6,7 @@ import {
   verifierReceivePeriodic
 } from '@/api/periodic'
 import { queryWorkflowTasks } from '@/api/workflow'
-import type { WorkflowTaskView } from '@/types/workflow'
+import type { WorkflowTask, WorkflowTaskView } from '@/types/workflow'
 import type { PeriodicTaskVO } from '@/types/periodic'
 import type {
   BusinessScanRecordQuery,
@@ -20,6 +20,7 @@ import type {
 } from '@/types/scan'
 import {
   buildPeriodicScanRecordQuery,
+  firstCheckScanActionCodesFromCodes,
   firstCheckScanActionFromCodes,
   isUnifiedScanActionAllowed,
   normalizePeriodicPendingRows,
@@ -83,12 +84,13 @@ function buildScanRequest(input: FirstCheckScanRequest): FirstCheckScanRequest {
   }
 }
 
-function normalizeFirstCheckRow(row: FirstCheckScanInboxItem): UnifiedScanInboxItem {
-  const fallbackCode = String(row.scanAction || '')
-    .replace(/-/g, '_')
-    .toUpperCase()
-  const allowedActions = row.allowedActions?.length ? row.allowedActions : [fallbackCode]
+function normalizeFirstCheckRow(
+  row: FirstCheckScanInboxItem,
+  workflowActions: readonly string[]
+): UnifiedScanInboxItem | undefined {
+  const allowedActions = firstCheckScanActionCodesFromCodes(workflowActions)
   const action = firstCheckScanActionFromCodes(allowedActions) || ''
+  if (!action) return undefined
   const id = ['firstcheck', row.orderId, row.lineNo || 0, action, row.scanCode || row.deviceCode || row.orderNo || ''].join('-')
   const currentNodeName = row.currentNodeName && /[\u3400-\u9fff]/.test(row.currentNodeName)
     ? row.currentNodeName
@@ -105,6 +107,19 @@ function normalizeFirstCheckRow(row: FirstCheckScanInboxItem): UnifiedScanInboxI
     allowedActions: [...allowedActions],
     useDeptName: row.useDeptName
   }
+}
+
+function firstCheckActionsByOrder(tasks: WorkflowTask[]) {
+  const actionsByOrder = new Map<string, string[]>()
+  tasks.forEach((task) => {
+    const orderId = String(task.businessId)
+    const mergedActions = [
+      ...(actionsByOrder.get(orderId) || []),
+      ...firstCheckScanActionCodesFromCodes(task.allowedActions)
+    ]
+    actionsByOrder.set(orderId, Array.from(new Set(mergedActions)))
+  })
+  return actionsByOrder
 }
 
 export function listFirstCheckScanInbox(signal?: AbortSignal) {
@@ -160,15 +175,20 @@ async function listPeriodicWorkflowTasks(view: WorkflowTaskView, signal?: AbortS
 }
 
 export async function listUnifiedScanInbox(signal?: AbortSignal) {
-  const [firstCheckResult, periodicResult, periodicHistoryResult] = await Promise.allSettled([
+  const [firstCheckResult, firstCheckWorkflowResult, periodicResult, periodicHistoryResult] = await Promise.allSettled([
     listFirstCheckScanInbox(signal),
+    queryWorkflowTasks({ view: 'todo', businessType: 'FIRST_CHECK', current: 1, size: 200 }, signal),
     listPeriodicWorkflowTasks('todo', signal),
     listPeriodicWorkflowTasks('participated', signal)
   ])
   const rows: UnifiedScanInboxItem[] = []
 
-  if (firstCheckResult.status === 'fulfilled') {
-    rows.push(...firstCheckResult.value.map(normalizeFirstCheckRow))
+  if (firstCheckResult.status === 'fulfilled' && firstCheckWorkflowResult.status === 'fulfilled') {
+    const actionsByOrder = firstCheckActionsByOrder(firstCheckWorkflowResult.value.records)
+    rows.push(...firstCheckResult.value.flatMap((row) => {
+      const normalized = normalizeFirstCheckRow(row, actionsByOrder.get(String(row.orderId)) || [])
+      return normalized ? [normalized] : []
+    }))
   }
 
   if (periodicResult.status === 'fulfilled') {

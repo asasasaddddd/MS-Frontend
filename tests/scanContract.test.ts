@@ -5,9 +5,11 @@ import { register } from 'node:module'
 import {
   resetScanTestDoubles,
   scanRequestCalls,
+  setFirstCheckTasks,
   setPeriodicHistory,
   setPeriodicTasks,
-  setScanRequestHandler
+  setScanRequestHandler,
+  workflowQueryCalls
 } from './scanTestDoubles.ts'
 
 register('./scanLoader.mjs', import.meta.url)
@@ -179,25 +181,68 @@ setScanRequestHandler((config) => {
       {
         orderId: 1001,
         orderNo: 'FC2026070001',
-        scanAction: 'receive',
-        allowedActions: ['TAKE_BACK'],
+        scanAction: 'take-back',
         scanStatus: 'received',
-        scanned: true,
+        scanned: false,
         scanTime: '2026-07-13T09:00:00'
+      },
+      {
+        orderId: 1002,
+        orderNo: 'FC2026070002',
+        scanAction: 'receive',
+        scanStatus: 'wait_receive'
       }
     ]
   }
   return []
 })
 
-const firstCheckRows = await scan.listUnifiedScanInbox()
+const noWorkflowFirstCheckRows = await scan.listUnifiedScanInbox()
+assert.equal(noWorkflowFirstCheckRows.some((row) => row.businessType === 'firstcheck'), false)
+
+resetScanTestDoubles()
+setFirstCheckTasks([
+  { taskId: 'wf-firstcheck-1', businessId: '1001', allowedActions: ['VIEW', 'SEND_OUT'] },
+  { taskId: 'wf-firstcheck-2', businessId: 1001, allowedActions: ['SEND_OUT'] }
+])
+setScanRequestHandler((config) => {
+  if (config.url === '/scan/firstcheck/inbox') {
+    return [
+      {
+        orderId: 1001,
+        orderNo: 'FC2026070001',
+        scanAction: 'take-back',
+        scanStatus: 'received',
+        scanned: false,
+        scanTime: '2026-07-13T09:00:00'
+      },
+      {
+        orderId: 1002,
+        orderNo: 'FC2026070002',
+        scanAction: 'receive',
+        scanStatus: 'wait_receive'
+      }
+    ]
+  }
+  return []
+})
+const firstCheckAbortController = new AbortController()
+const firstCheckRows = await scan.listUnifiedScanInbox(firstCheckAbortController.signal)
 assert.equal(firstCheckRows.length, 1)
 assert.equal(firstCheckRows[0]?.businessType, 'firstcheck')
-assert.equal(firstCheckRows[0]?.scanned, true)
+assert.equal(firstCheckRows[0]?.scanned, false)
 assert.equal(firstCheckRows[0]?.currentNodeName, '已接收')
-assert.equal(firstCheckRows[0]?.scanAction, 'take-back')
-assert.deepEqual(firstCheckRows[0]?.allowedActions, ['TAKE_BACK'])
+assert.equal(firstCheckRows[0]?.scanAction, 'sendout')
+assert.deepEqual(firstCheckRows[0]?.allowedActions, ['SEND_OUT'])
 assert.equal(scanRequestCalls.some((call) => call.url === '/scan/business/records'), false)
+const firstCheckWorkflowCall = workflowQueryCalls.find((call) => call.query.businessType === 'FIRST_CHECK')
+assert.deepEqual(firstCheckWorkflowCall?.query, {
+  view: 'todo',
+  businessType: 'FIRST_CHECK',
+  current: 1,
+  size: 200
+})
+assert.equal(firstCheckWorkflowCall?.signal, firstCheckAbortController.signal)
 
 assert.equal(scan.firstCheckScanStatusName('unknown_status'), '未知状态')
 assert.equal(scan.scanActionName('unknown_action'), '未知操作')

@@ -42,8 +42,12 @@ function normalizedActionCodes(actions?: readonly string[]) {
   return Array.from(new Set((actions || []).map((action) => String(action).trim().toUpperCase()).filter(Boolean)))
 }
 
+export function firstCheckScanActionCodesFromCodes(actions?: readonly string[]) {
+  return normalizedActionCodes(actions).filter((code) => Boolean(firstCheckScanActionByCode[code]))
+}
+
 export function firstCheckScanActionFromCodes(actions?: readonly string[]) {
-  return normalizedActionCodes(actions).map((code) => firstCheckScanActionByCode[code]).find(Boolean)
+  return firstCheckScanActionCodesFromCodes(actions).map((code) => firstCheckScanActionByCode[code]).find(Boolean)
 }
 
 export function periodicScanActionsFromCodes(actions?: readonly string[]) {
