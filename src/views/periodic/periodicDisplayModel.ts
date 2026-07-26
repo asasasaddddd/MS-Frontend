@@ -4,10 +4,7 @@ export type PeriodicTableRole = 'admin' | 'verifier' | 'confirmer' | 'externalOp
 export type PeriodicTagColor = 'blue' | 'cyan' | 'orange' | 'green' | 'red'
 export type PeriodicTaskAction =
   | 'submit-exception'
-  | 'verifier-receive'
   | 'verify'
-  | 'external-send-out'
-  | 'send-out-return'
   | 'supplier-fill'
   | 'external-verify'
   | 'judgement'
@@ -80,10 +77,6 @@ const periodicNodeActionMap: Readonly<Record<string, { code: string; action: Per
 
 export function resolvePeriodicTaskAction(task: PeriodicActionTask): PeriodicTaskAction | undefined {
   const allowed = new Set((task.allowedActions || []).map((action) => String(action).toUpperCase()))
-  if (allowed.has('RECEIVE')) return 'verifier-receive'
-  if (allowed.has('SEND_OUT_RETURN')) return 'send-out-return'
-  if (allowed.has('SEND_OUT')) return 'external-send-out'
-
   const mapping = periodicNodeActionMap[String(task.currentNode || '')]
   return mapping && allowed.has(mapping.code) ? mapping.action : undefined
 }

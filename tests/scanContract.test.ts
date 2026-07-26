@@ -5,253 +5,224 @@ import { register } from 'node:module'
 import {
   resetScanTestDoubles,
   scanRequestCalls,
-  setFirstCheckTasks,
-  setPeriodicHistory,
-  setPeriodicTasks,
   setScanRequestHandler,
   workflowQueryCalls
 } from './scanTestDoubles.ts'
 
 register('./scanLoader.mjs', import.meta.url)
 const scan = await import('../src/api/scan.ts')
+const largeFirstCheckOrderId = '9007199254740993123'
 
-assert.equal(typeof scan.listBusinessScanRecords, 'function')
-assert.equal(typeof scan.buildPeriodicScanRecordQuery, 'function')
-assert.equal(typeof scan.resolvePeriodicScanAction, 'function')
-
-const waitReturnTask = {
-  id: '2073579908903317505',
-  planId: '2073579908903317500',
-  taskNo: 'ZJ2026070001',
-  deviceCode: 'JL20240000104',
-  deviceName: '压力变送器',
-  currentNode: 'send_out',
-  currentNodeName: '外委送出',
-  physicalStatus: 'wait_sendout_return_receive',
-  taskStatus: 'wait_scan',
-  taskType: 'periodic',
-  allowedActions: ['SEND_OUT_RETURN']
-}
-
-assert.equal(scan.resolvePeriodicScanAction(waitReturnTask), 'periodic-send-out-return')
-assert.equal(
-  scan.resolvePeriodicScanAction({ ...waitReturnTask, allowedActions: ['SEND_OUT'] }),
-  'periodic-external-send-out'
-)
-assert.equal(
-  scan.resolvePeriodicScanAction({
-    ...waitReturnTask,
-    currentNode: 'plan_confirm',
-    taskStatus: 'pending',
-    physicalStatus: 'wait_verifier_receive',
-    allowedActions: ['RECEIVE']
-  }),
-  'periodic-verifier-receive'
-)
-assert.equal(
-  scan.resolvePeriodicScanAction({
-    ...waitReturnTask,
-    currentNode: 'send_out_return',
-    allowedActions: ['VIEW']
-  }),
-  undefined
-)
-
-const dualEntryTask = {
-  ...waitReturnTask,
-  currentNode: 'plan_confirm',
-  currentNodeName: '待实物交接',
-  taskStatus: 'pending',
-  physicalStatus: 'wait_verifier_receive',
-  allowedActions: ['RECEIVE']
-}
-
-resetScanTestDoubles()
-setPeriodicTasks([dualEntryTask])
-setScanRequestHandler(() => [])
-const receiveRows = await scan.listUnifiedScanInbox()
-assert.equal(receiveRows.length, 1)
-assert.equal(receiveRows[0]?.currentNodeName, '待扫码接收')
-assert.deepEqual(receiveRows[0]?.allowedActions, ['RECEIVE'])
-
-assert.deepEqual(scan.buildPeriodicScanRecordQuery(waitReturnTask, 'periodic-send-out-return'), {
-  businessType: 'periodic',
-  businessId: '2073579908903317500',
-  businessItemId: '2073579908903317505',
-  scanScene: 'periodic_send_out_return'
-})
-assert.equal(
-  scan.buildPeriodicScanRecordQuery(waitReturnTask, 'periodic-verifier-receive')?.scanScene,
-  'periodic_receive'
-)
-assert.equal(
-  scan.buildPeriodicScanRecordQuery(waitReturnTask, 'periodic-external-send-out')?.scanScene,
-  'periodic_send_out'
-)
-assert.equal(
-  scan.buildPeriodicScanRecordQuery({ ...waitReturnTask, taskType: 'before_use' }, 'periodic-verifier-receive')
-    ?.businessType,
-  'before_use'
-)
-
-resetScanTestDoubles()
-setScanRequestHandler(() => [])
-await scan.listBusinessScanRecords({
-  businessType: 'periodic',
-  businessId: '2073579908903317500',
-  businessItemId: '2073579908903317505',
-  scanScene: 'periodic_send_out_return'
-})
-assert.deepEqual(scanRequestCalls[0], {
-  url: '/scan/business/records',
-  method: 'GET',
-  params: {
-    businessType: 'periodic',
-    businessId: '2073579908903317500',
-    businessItemId: '2073579908903317505',
-    scanScene: 'periodic_send_out_return'
+const firstCheckRows = [
+  {
+    orderId: largeFirstCheckOrderId,
+    orderNo: 'FC-1001',
+    scanAction: 'receive',
+    scanStatus: 'wait_receive',
+    allowedActions: ['RECEIVE'],
+    scanned: false
+  },
+  {
+    orderId: 1002,
+    orderNo: 'FC-1002',
+    scanAction: 'sendout',
+    scanStatus: 'wait_sendout',
+    allowedActions: ['SEND_OUT'],
+    scanned: false
+  },
+  {
+    orderId: 1003,
+    orderNo: 'FC-1003',
+    scanAction: 'sendout-return',
+    scanStatus: 'wait_sendout_return',
+    allowedActions: ['SEND_OUT_RETURN'],
+    scanned: false
+  },
+  {
+    orderId: 1004,
+    orderNo: 'FC-1004',
+    scanAction: 'take-back',
+    scanStatus: 'wait_take_back',
+    allowedActions: ['TAKE_BACK'],
+    scanned: false
+  },
+  {
+    orderId: 1005,
+    orderNo: 'FC-1005',
+    scanAction: 'receive',
+    scanStatus: 'wait_receive',
+    scanned: false
+  },
+  {
+    orderId: 1006,
+    orderNo: 'FC-1006',
+    scanAction: 'take-back',
+    scanStatus: 'taken_back',
+    allowedActions: [],
+    scanned: true,
+    scanTime: '2026-07-26T09:30:00'
+  },
+  {
+    orderId: 1007,
+    orderNo: 'FC-1007',
+    scanAction: 'receive',
+    scanStatus: 'wait_receive',
+    allowedActions: ['receive'],
+    scanned: false
+  },
+  {
+    orderId: 1008,
+    orderNo: 'FC-1008',
+    scanAction: 'receive',
+    scanStatus: 'wait_receive',
+    allowedActions: [' RECEIVE '],
+    scanned: false
+  },
+  {
+    orderId: 1009,
+    orderNo: 'FC-1009',
+    scanAction: 'receive',
+    scanStatus: 'received',
+    allowedActions: [' receive ', 'RECEIVE'],
+    scanned: true,
+    scanTime: '2026-07-26T09:45:00'
   }
-})
+]
 
-const scannedHistoryTask = {
-  ...waitReturnTask,
-  id: '2073579908903317506',
-  taskNo: 'ZJ2026070002',
-  deviceCode: 'JL20240000105',
-  currentNode: 'verifier_fill_info',
-  currentNodeName: '外委检定员填写检定信息',
-  physicalStatus: 'sendout_return_received',
-  taskStatus: 'wait_verify'
-}
-
-resetScanTestDoubles()
-setPeriodicTasks([waitReturnTask])
-setPeriodicHistory([waitReturnTask, scannedHistoryTask])
-setScanRequestHandler((config) => {
-  if (config.url === '/scan/firstcheck/inbox') return []
-  if (
-    config.url === '/scan/business/records' &&
-    config.params?.businessItemId === scannedHistoryTask.id &&
-    config.params?.scanScene === 'periodic_send_out_return'
-  ) {
-    return [
-      {
-        scanRecordId: '2073579908903317599',
-        businessType: 'periodic',
-        businessId: scannedHistoryTask.planId,
-        businessItemId: scannedHistoryTask.id,
-        scanCode: scannedHistoryTask.deviceCode,
-        deviceCode: scannedHistoryTask.deviceCode,
-        scanScene: 'periodic_send_out_return',
-        operatorId: 'U00108405',
-        operatorName: '外委检定员',
-        scanTime: '2026-07-13T10:30:00'
-      }
-    ]
+const periodicRows = [
+  {
+    taskId: '2001',
+    planId: '1000',
+    taskNo: 'ZJ-2001',
+    taskType: 'periodic',
+    scanAction: 'periodic-verifier-receive',
+    scanScene: 'periodic_receive',
+    scanStatus: 'wait_verifier_receive',
+    allowedActions: ['RECEIVE'],
+    scanned: false
+  },
+  {
+    taskId: '2002',
+    planId: '1000',
+    taskNo: 'ZJ-2002',
+    taskType: 'periodic',
+    scanAction: 'periodic-external-send-out',
+    scanScene: 'periodic_send_out',
+    scanStatus: 'wait_external_receive',
+    allowedActions: ['SEND_OUT'],
+    scanned: false
+  },
+  {
+    taskId: '2003',
+    planId: '1000',
+    taskNo: 'ZJ-2003',
+    taskType: 'periodic',
+    scanAction: 'periodic-send-out-return',
+    scanScene: 'periodic_send_out_return',
+    scanStatus: 'wait_sendout_return_receive',
+    allowedActions: ['SEND_OUT_RETURN'],
+    scanned: false
+  },
+  {
+    taskId: '2004',
+    planId: '1000',
+    taskNo: 'ZJ-2004',
+    taskType: 'periodic',
+    scanAction: 'periodic-send-out-return',
+    scanScene: 'periodic_send_out_return',
+    scanStatus: 'wait_sendout_return_receive',
+    allowedActions: [],
+    scanned: false
+  },
+  {
+    taskId: '2005',
+    planId: '1000',
+    taskNo: 'ZJ-2005',
+    taskType: 'periodic',
+    sourceType: 'periodic',
+    scanAction: 'periodic-verifier-receive',
+    scanScene: 'periodic_receive',
+    scanStatus: 'verifier_received',
+    allowedActions: [],
+    scanned: true,
+    scanTime: '2026-07-26T10:30:00'
   }
-  return []
-})
-
-const rows = await scan.listUnifiedScanInbox()
-const pendingReturn = rows.find((row) => row.taskId === waitReturnTask.id && !row.scanned)
-const restoredReturn = rows.find((row) => row.taskId === scannedHistoryTask.id && row.scanned)
-
-assert.equal(pendingReturn?.scanAction, 'periodic-send-out-return')
-assert.equal(pendingReturn?.currentNodeName, '外委送回')
-assert.equal(restoredReturn?.scanAction, 'periodic-send-out-return')
-assert.equal(restoredReturn?.currentNodeName, '已扫码')
-assert.equal(restoredReturn?.scanTime, '2026-07-13T10:30:00')
-
-const recordCalls = scanRequestCalls.filter((call) => call.url === '/scan/business/records')
-assert.equal(recordCalls.length, 2)
-assert.deepEqual(
-  recordCalls.map((call) => call.params),
-  [waitReturnTask, scannedHistoryTask].map((task) => ({
-    businessType: 'periodic',
-    businessId: task.planId,
-    businessItemId: task.id,
-    scanScene: 'periodic_send_out_return'
-  }))
-)
+]
 
 resetScanTestDoubles()
 setScanRequestHandler((config) => {
-  if (config.url === '/scan/firstcheck/inbox') {
-    return [
-      {
-        orderId: 1001,
-        orderNo: 'FC2026070001',
-        scanAction: 'take-back',
-        scanStatus: 'received',
-        scanned: false,
-        scanTime: '2026-07-13T09:00:00'
-      },
-      {
-        orderId: 1002,
-        orderNo: 'FC2026070002',
-        scanAction: 'receive',
-        scanStatus: 'wait_receive'
-      }
-    ]
-  }
-  return []
+  if (config.url === '/scan/firstcheck/inbox') return firstCheckRows
+  if (config.url === '/periodic/scan/inbox') return periodicRows
+  if (config.url === '/scan/firstcheck/receive' && config.method === 'POST') return {}
+  throw new Error(`unexpected request: ${String(config.url)}`)
 })
 
-const noWorkflowFirstCheckRows = await scan.listUnifiedScanInbox()
-assert.equal(noWorkflowFirstCheckRows.some((row) => row.businessType === 'firstcheck'), false)
+const controller = new AbortController()
+const rows = await scan.listUnifiedScanInbox(controller.signal)
 
-resetScanTestDoubles()
-setFirstCheckTasks([
-  { taskId: 'wf-firstcheck-1', businessId: '1001', allowedActions: ['VIEW', 'SEND_OUT'] },
-  { taskId: 'wf-firstcheck-2', businessId: 1001, allowedActions: ['SEND_OUT'] }
-])
-setScanRequestHandler((config) => {
-  if (config.url === '/scan/firstcheck/inbox') {
-    return [
-      {
-        orderId: 1001,
-        orderNo: 'FC2026070001',
-        scanAction: 'take-back',
-        scanStatus: 'received',
-        scanned: false,
-        scanTime: '2026-07-13T09:00:00'
-      },
-      {
-        orderId: 1002,
-        orderNo: 'FC2026070002',
-        scanAction: 'receive',
-        scanStatus: 'wait_receive'
-      }
-    ]
-  }
-  return []
-})
-const firstCheckAbortController = new AbortController()
-const firstCheckRows = await scan.listUnifiedScanInbox(firstCheckAbortController.signal)
-assert.equal(firstCheckRows.length, 1)
-assert.equal(firstCheckRows[0]?.businessType, 'firstcheck')
-assert.equal(firstCheckRows[0]?.scanned, false)
-assert.equal(firstCheckRows[0]?.currentNodeName, '已接收')
-assert.equal(firstCheckRows[0]?.scanAction, 'sendout')
-assert.deepEqual(firstCheckRows[0]?.allowedActions, ['SEND_OUT'])
+assert.equal(workflowQueryCalls.length, 0)
+assert.equal(scanRequestCalls.some((call) => call.url === '/workflow/tasks'), false)
 assert.equal(scanRequestCalls.some((call) => call.url === '/scan/business/records'), false)
-const firstCheckWorkflowCall = workflowQueryCalls.find((call) => call.query.businessType === 'FIRST_CHECK')
-assert.deepEqual(firstCheckWorkflowCall?.query, {
-  view: 'todo',
-  businessType: 'FIRST_CHECK',
-  current: 1,
-  size: 200
-})
-assert.equal(firstCheckWorkflowCall?.signal, firstCheckAbortController.signal)
+assert.deepEqual(
+  scanRequestCalls.map((call) => call.url).sort(),
+  ['/periodic/scan/inbox', '/scan/firstcheck/inbox']
+)
+assert.equal(scanRequestCalls.every((call) => call.signal === controller.signal), true)
 
-assert.equal(scan.firstCheckScanStatusName('unknown_status'), '未知状态')
-assert.equal(scan.scanActionName('unknown_action'), '未知操作')
+assert.deepEqual(
+  rows.filter((row) => !row.scanned).map((row) => row.scanAction),
+  [
+    'receive',
+    'sendout',
+    'sendout-return',
+    'take-back',
+    'periodic-verifier-receive',
+    'periodic-external-send-out',
+    'periodic-send-out-return'
+  ]
+)
+assert.equal(rows.some((row) => row.orderId === 1005), false)
+assert.equal(rows.some((row) => row.orderId === 1007), false)
+assert.equal(rows.some((row) => row.orderId === 1008), false)
+assert.equal(rows.some((row) => row.taskId === '2004'), false)
+
+const firstCheckHistory = rows.find((row) => row.orderId === 1006)
+assert.equal(firstCheckHistory?.scanned, true)
+assert.deepEqual(firstCheckHistory?.allowedActions, [])
+assert.equal(firstCheckHistory?.scanTime, '2026-07-26T09:30:00')
+
+const malformedActionHistory = rows.find((row) => row.orderId === 1009)
+assert.equal(malformedActionHistory?.scanned, true)
+assert.deepEqual(malformedActionHistory?.allowedActions, [' receive ', 'RECEIVE'])
+
+const periodicHistory = rows.find((row) => row.taskId === '2005')
+assert.equal(periodicHistory?.scanned, true)
+assert.deepEqual(periodicHistory?.allowedActions, [])
+assert.equal(periodicHistory?.scanTime, '2026-07-26T10:30:00')
+assert.equal(periodicHistory?.sourceType, 'PERIODIC')
+
+const unauthorizedRow = {
+  ...rows.find((row) => row.orderId === largeFirstCheckOrderId)!,
+  allowedActions: ['SEND_OUT']
+}
+await assert.rejects(
+  scan.submitUnifiedScan(unauthorizedRow, { scanCode: 'FC-1001' }),
+  /not authorized|unauthorized|无权|权限/i
+)
+
+const largeIdRow = rows.find((row) => row.orderId === largeFirstCheckOrderId)!
+await scan.submitUnifiedScan(largeIdRow, { scanCode: 'FC-1001' })
+const largeIdSubmit = scanRequestCalls.find((call) => call.url === '/scan/firstcheck/receive')
+assert.equal(largeIdSubmit?.data.orderId, largeFirstCheckOrderId)
+
+const scanSource = readFileSync(new URL('../src/api/scan.ts', import.meta.url), 'utf8')
+assert.doesNotMatch(scanSource, /queryWorkflowTasks|\/workflow\/tasks/)
+assert.doesNotMatch(scanSource, /getPeriodicTask|listBusinessScanRecords\(/)
+
+const scanTypesSource = readFileSync(new URL('../src/types/scan.ts', import.meta.url), 'utf8')
+assert.doesNotMatch(scanTypesSource, /orderId\??:\s*number/)
+assert.match(scanTypesSource, /orderId:\s*ScanEntityId/)
 
 const scanViewSource = readFileSync(new URL('../src/views/scan/DeviceScanView.vue', import.meta.url), 'utf8')
-assert.doesNotMatch(scanViewSource, /recentScannedRows/)
 assert.match(scanViewSource, /listUnifiedScanInbox\(controller\.signal\)/)
 assert.match(scanViewSource, /rowsController\?\.abort\(\)/)
-assert.match(scanViewSource, /loadId !== rowsLoadId \|\| controller\.signal\.aborted/)
-assert.doesNotMatch(scanViewSource, /const roleConfig|commonVerifierActions|actionSet|roleRows/)
-assert.match(scanViewSource, /matchesScanRouteList/)
-assert.match(scanViewSource, /shouldFocusScanRoute/)

@@ -13,13 +13,14 @@ export type UnifiedScanAction = FirstCheckScanAction | PeriodicScanAction | stri
 export type UnifiedScanBusinessType = 'firstcheck' | 'periodic' | 'change' | string
 
 export interface FirstCheckScanInboxItem {
-  orderId: number
+  orderId: ScanEntityId
   orderNo?: string
   lineNo?: number
   sourceType?: string
   currentNodeName?: string
   scanStatus?: string
   scanAction: FirstCheckScanAction | string
+  allowedActions?: string[]
   scanCode?: string
   deviceCode?: string
   deviceName?: string
@@ -30,13 +31,35 @@ export interface FirstCheckScanInboxItem {
   scanTime?: string
 }
 
+export interface PeriodicScanInboxItem {
+  taskId: ScanEntityId
+  planId?: ScanEntityId
+  taskNo?: string
+  taskType?: string
+  sourceType?: string
+  currentNodeName?: string
+  scanStatus?: string
+  scanAction: PeriodicScanAction | string
+  scanScene?: PeriodicScanScene | string
+  scanCode?: string
+  deviceId?: ScanEntityId
+  deviceCode?: string
+  deviceName?: string
+  materialCode?: string
+  useDeptName?: string
+  applyTime?: string
+  scanned?: boolean
+  scanTime?: string
+  allowedActions?: string[]
+}
+
 export interface UnifiedScanInboxItem {
   id: string
   businessType: UnifiedScanBusinessType
   sourceType: string
   sourceLabel: string
   businessId?: ScanEntityId
-  orderId?: number
+  orderId?: ScanEntityId
   taskId?: ScanEntityId
   orderNo?: string
   taskNo?: string
@@ -57,7 +80,7 @@ export interface UnifiedScanInboxItem {
 }
 
 export interface FirstCheckScanRequest {
-  orderId: number
+  orderId: ScanEntityId
   scanCode: string
   scanContent?: string
   scanLocation?: string

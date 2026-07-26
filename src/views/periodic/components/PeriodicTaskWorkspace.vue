@@ -244,18 +244,6 @@ function openException(tasks?: PeriodicTaskVO[]) {
   exceptionOpen.value = true
 }
 
-function openScan(action: string, task: PeriodicTaskVO) {
-  activeTask.value = task
-  router.push({
-    path: '/scan',
-    query: {
-      module: 'periodic',
-      taskId: String(task.id),
-      action
-    }
-  })
-}
-
 function confirmExceptionDispose(task: PeriodicTaskVO) {
   if (!canDisposePeriodicException(task)) {
     message.warning('状态变更流程尚未完成，暂不能关闭周检异常任务')
@@ -331,15 +319,10 @@ async function openProcess(task: PeriodicTaskVO) {
     forwardOpen.value = true
     return
   }
-  if (action === 'verifier-receive') {
-    return openScan('periodic-verifier-receive', task)
-  }
   if (action === 'verify') {
     verifyOpen.value = true
     return
   }
-  if (action === 'external-send-out') return openScan('periodic-external-send-out', task)
-  if (action === 'send-out-return') return openScan('periodic-send-out-return', task)
   if (action === 'supplier-fill') {
     supplierFillOpen.value = true
     return
