@@ -20,6 +20,7 @@ export interface FirstCheckScanInboxItem {
   currentNodeName?: string
   scanStatus?: string
   scanAction: FirstCheckScanAction | string
+  allowedActions?: string[]
   scanCode?: string
   deviceCode?: string
   deviceName?: string
@@ -45,6 +46,7 @@ export interface UnifiedScanInboxItem {
   currentNodeName?: string
   scanStatus?: string
   scanAction: UnifiedScanAction
+  allowedActions: string[]
   scanCode?: string
   deviceCode?: string
   deviceName?: string

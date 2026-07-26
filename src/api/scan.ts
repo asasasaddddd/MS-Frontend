@@ -20,10 +20,11 @@ import type {
 } from '@/types/scan'
 import {
   buildPeriodicScanRecordQuery,
-  isPeriodicScanAction,
-  normalizePeriodicPendingRow,
+  firstCheckScanActionFromCodes,
+  isUnifiedScanActionAllowed,
+  normalizePeriodicPendingRows,
   normalizePeriodicScannedRow,
-  periodicScanActions,
+  periodicScanActionsFromCodes,
   resolvePeriodicScanAction
 } from '@/views/scan/scanModel'
 
@@ -39,7 +40,7 @@ export type {
   UnifiedScanInboxItem,
   UnifiedScanSubmitRequest
 } from '@/types/scan'
-export { buildPeriodicScanRecordQuery, resolvePeriodicScanAction }
+export { buildPeriodicScanRecordQuery, isUnifiedScanActionAllowed, resolvePeriodicScanAction }
 
 export function firstCheckScanStatusName(value?: string) {
   const map: Record<string, string> = {
@@ -83,7 +84,11 @@ function buildScanRequest(input: FirstCheckScanRequest): FirstCheckScanRequest {
 }
 
 function normalizeFirstCheckRow(row: FirstCheckScanInboxItem): UnifiedScanInboxItem {
-  const action = row.scanAction || ''
+  const fallbackCode = String(row.scanAction || '')
+    .replace(/-/g, '_')
+    .toUpperCase()
+  const allowedActions = row.allowedActions?.length ? row.allowedActions : [fallbackCode]
+  const action = firstCheckScanActionFromCodes(allowedActions) || ''
   const id = ['firstcheck', row.orderId, row.lineNo || 0, action, row.scanCode || row.deviceCode || row.orderNo || ''].join('-')
   const currentNodeName = row.currentNodeName && /[\u3400-\u9fff]/.test(row.currentNodeName)
     ? row.currentNodeName
@@ -97,6 +102,7 @@ function normalizeFirstCheckRow(row: FirstCheckScanInboxItem): UnifiedScanInboxI
     businessId: row.orderId,
     currentNodeName,
     scanAction: action,
+    allowedActions: [...allowedActions],
     useDeptName: row.useDeptName
   }
 }
@@ -124,8 +130,8 @@ function uniquePeriodicTasks(...groups: PeriodicTaskVO[][]) {
   return Array.from(map.values())
 }
 
-async function listPeriodicScannedRows(tasks: PeriodicTaskVO[], actions: PeriodicScanAction[], signal?: AbortSignal) {
-  const queries = tasks.flatMap((task) => actions.map((action) => ({
+async function listPeriodicScannedRows(tasks: PeriodicTaskVO[], signal?: AbortSignal) {
+  const queries = tasks.flatMap((task) => periodicScanActionsFromCodes(task.allowedActions).map((action) => ({
     task,
     action,
     params: buildPeriodicScanRecordQuery(task, action)
@@ -142,22 +148,22 @@ async function listPeriodicScannedRows(tasks: PeriodicTaskVO[], actions: Periodi
 async function listPeriodicWorkflowTasks(view: WorkflowTaskView, signal?: AbortSignal) {
   const page = await queryWorkflowTasks({ view, businessType: 'PERIODIC', current: 1, size: 200 }, signal)
   const results = await Promise.allSettled(
-    page.records.map((task) => getPeriodicTask(task.businessId, signal))
+    page.records.map(async (task) => ({
+      ...await getPeriodicTask(task.businessId, signal),
+      workflowTaskId: task.taskId,
+      processInstanceId: task.processInstanceId,
+      rowVersion: task.rowVersion,
+      allowedActions: [...task.allowedActions]
+    }))
   )
   return results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
 }
 
-export async function listUnifiedScanInbox(actions?: UnifiedScanAction[], signal?: AbortSignal) {
-  const requestedPeriodicActions = actions === undefined
-    ? periodicScanActions
-    : actions.map(String).filter(isPeriodicScanAction)
-  const historyRequest = requestedPeriodicActions.length
-    ? listPeriodicWorkflowTasks('participated', signal)
-    : Promise.resolve([])
+export async function listUnifiedScanInbox(signal?: AbortSignal) {
   const [firstCheckResult, periodicResult, periodicHistoryResult] = await Promise.allSettled([
     listFirstCheckScanInbox(signal),
     listPeriodicWorkflowTasks('todo', signal),
-    historyRequest
+    listPeriodicWorkflowTasks('participated', signal)
   ])
   const rows: UnifiedScanInboxItem[] = []
 
@@ -166,15 +172,15 @@ export async function listUnifiedScanInbox(actions?: UnifiedScanAction[], signal
   }
 
   if (periodicResult.status === 'fulfilled') {
-    rows.push(...periodicResult.value.map(normalizePeriodicPendingRow).filter((row): row is UnifiedScanInboxItem => Boolean(row)))
+    rows.push(...periodicResult.value.flatMap(normalizePeriodicPendingRows))
   }
 
   const periodicTasks = uniquePeriodicTasks(
     periodicResult.status === 'fulfilled' ? periodicResult.value : [],
     periodicHistoryResult.status === 'fulfilled' ? periodicHistoryResult.value : []
   )
-  if (requestedPeriodicActions.length && periodicTasks.length) {
-    rows.push(...await listPeriodicScannedRows(periodicTasks, requestedPeriodicActions, signal))
+  if (periodicTasks.length) {
+    rows.push(...await listPeriodicScannedRows(periodicTasks, signal))
   }
 
   if (

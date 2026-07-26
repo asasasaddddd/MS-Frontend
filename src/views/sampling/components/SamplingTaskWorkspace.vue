@@ -10,7 +10,7 @@ import {
   getSamplingTask,
   verifierSubmitSampling
 } from '@/api/sampling'
-import { hasWorkflowAction, useWorkflowTask } from '@/composables/useWorkflowTask'
+import { useWorkflowTask } from '@/composables/useWorkflowTask'
 import { useSessionStore } from '@/stores/session'
 import type { FlowSummary } from '@/types/flowSummary'
 import type {
@@ -24,7 +24,7 @@ import SamplingDetailDialog from './SamplingDetailDialog.vue'
 import SamplingPlanSummary from './SamplingPlanSummary.vue'
 import SamplingResultDialog from './SamplingResultDialog.vue'
 import SamplingTaskTable from './SamplingTaskTable.vue'
-import type { SamplingTableRole } from '../samplingDisplayModel'
+import { resolveSamplingTaskAction, type SamplingTableRole } from '../samplingDisplayModel'
 
 type ActiveTab = 'todo' | 'history'
 
@@ -111,14 +111,18 @@ const visibleTasks = computed(() =>
 
 const canSelect = computed(() => activeTab.value === 'todo')
 const isAdminActionWorkspace = computed(() => currentTasks.value.some(
-  (task) => task.currentNode === 'admin_confirm' && hasWorkflowAction(task, 'SUBMIT')
+  (task) => resolveSamplingTaskAction(task) === 'admin-confirm'
 ))
 const canBatchAdmin = computed(() => selectedTasks.value.length > 0 && selectedTasks.value.every(
-  (task) => hasWorkflowAction(task, 'SUBMIT') && task.currentNode === 'admin_confirm'
+  (task) => resolveSamplingTaskAction(task) === 'admin-confirm'
 ))
-const canBatchResult = computed(() => selectedTasks.value.length > 0 && selectedTasks.value.every(
-  (task) => hasWorkflowAction(task, 'SUBMIT') || hasWorkflowAction(task, 'APPROVE_REJECT')
-))
+const selectedResultAction = computed(() => {
+  const actions = new Set(selectedTasks.value.map(resolveSamplingTaskAction))
+  if (actions.size !== 1) return undefined
+  const action = actions.values().next().value
+  return action === 'verifier-submit' || action === 'confirmer-submit' ? action : undefined
+})
+const canBatchResult = computed(() => selectedTasks.value.length > 0 && Boolean(selectedResultAction.value))
 
 function resetFilter() {
   statusFilter.value = 'all'
@@ -140,6 +144,14 @@ function openResult(mode: SamplingResult, tasks: SamplingTaskVO[]) {
     message.warning('请选择抽检任务')
     return
   }
+  const actions = new Set(tasks.map(resolveSamplingTaskAction))
+  if (
+    actions.size !== 1 ||
+    !['verifier-submit', 'confirmer-submit'].includes(String(actions.values().next().value || ''))
+  ) {
+    message.warning('所选抽检任务没有一致的检定或确认操作权限')
+    return
+  }
   resultMode.value = mode
   resultDialogTasks.value = tasks
   resultOpen.value = true
@@ -150,11 +162,17 @@ function openProcess(task: SamplingTaskVO) {
     openDetail(task)
     return
   }
-  if (!task.allowedActions?.length) {
+  const action = resolveSamplingTaskAction(task)
+  if (!action) {
     message.warning('当前任务没有可执行操作，请刷新待办')
     return
   }
-  openResult('unqualified', [task])
+  if (action === 'admin-confirm') {
+    selectedRowKeys.value = [task.id]
+    selectedTasks.value = [task]
+    return
+  }
+  openResult('qualified', [task])
 }
 
 function samePlanId(tasks: SamplingTaskVO[]) {
@@ -165,6 +183,10 @@ function samePlanId(tasks: SamplingTaskVO[]) {
 async function submitAdminConfirm() {
   if (selectedTasks.value.length === 0) {
     message.warning('请选择需要提交的抽检设备')
+    return
+  }
+  if (!selectedTasks.value.every((task) => resolveSamplingTaskAction(task) === 'admin-confirm')) {
+    message.warning('所选抽检任务没有管理员确认权限')
     return
   }
   if (!samePlanId(selectedTasks.value)) {
@@ -209,9 +231,10 @@ async function submitResult(payload: SamplingVerificationDraft) {
           taskId: taskWorkflowId(task),
           rowVersion: task.rowVersion!
         }
-        return hasWorkflowAction(task, 'APPROVE_REJECT')
-          ? confirmerSubmitSampling(request)
-          : verifierSubmitSampling(request)
+        const taskAction = resolveSamplingTaskAction(task)
+        if (taskAction === 'confirmer-submit') return confirmerSubmitSampling(request)
+        if (taskAction === 'verifier-submit') return verifierSubmitSampling(request)
+        return Promise.reject(new Error('当前抽检任务没有检定或确认提交权限'))
       }
       const result = await executeSamplingAction(task, action)
       if (result.status === 'already-handled') {
@@ -219,7 +242,7 @@ async function submitResult(payload: SamplingVerificationDraft) {
         return
       }
     }
-    message.success(resultDialogTasks.value.some((task) => hasWorkflowAction(task, 'APPROVE_REJECT'))
+    message.success(resultDialogTasks.value.some((task) => resolveSamplingTaskAction(task) === 'confirmer-submit')
       ? '确认员抽检判定已提交'
       : '检定员抽检结果已提交')
     resultOpen.value = false
@@ -359,7 +382,7 @@ watch(routePlanId, () => {
         :role="role"
         :loading="loading"
         :selectable="canSelect"
-        :selectable-task="(task: SamplingTaskVO) => Boolean(task.allowedActions?.length)"
+        :selectable-task="(task: SamplingTaskVO) => Boolean(resolveSamplingTaskAction(task))"
         :selected-row-keys="selectedRowKeys"
         @selection-change="updateSelection"
         @detail="openDetail"

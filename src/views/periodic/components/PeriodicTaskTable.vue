@@ -4,6 +4,7 @@ import type { EntityId, PeriodicTaskVO } from '../../../types/periodic'
 import {
   getPeriodicTableColumns,
   mapPeriodicTaskRow,
+  resolvePeriodicTaskAction,
   rowKeyOf,
   type PeriodicDisplayRowWithMeta,
   type PeriodicTableRole
@@ -72,7 +73,8 @@ function handleDetail(row: PeriodicDisplayRowWithMeta) {
 }
 
 function canProcess(row: PeriodicDisplayRowWithMeta) {
-  return Boolean(findTask(row)?.allowedActions?.length)
+  const task = findTask(row)
+  return Boolean(task && resolvePeriodicTaskAction(task))
 }
 
 function cellText(row: PeriodicDisplayRowWithMeta, key: unknown) {

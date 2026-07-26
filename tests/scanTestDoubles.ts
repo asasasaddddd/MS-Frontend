@@ -33,7 +33,7 @@ export async function request<T>(config: AxiosRequestConfig): Promise<T> {
   return requestHandler(config) as Promise<T>
 }
 
-export async function queryWorkflowTasks(query: { view: string }) {
+export async function queryWorkflowTasks(query: { view: string }, _signal?: AbortSignal) {
   const records = (query.view === 'todo' ? periodicTasks : periodicHistory).map((task) => ({
     taskId: task.id,
     processInstanceId: task.planId || task.id,
@@ -45,7 +45,7 @@ export async function queryWorkflowTasks(query: { view: string }) {
     permissionCode: 'periodic.test.submit',
     taskStatus: 'pending',
     rowVersion: 0,
-    allowedActions: ['SUBMIT']
+    allowedActions: task.allowedActions || []
   }))
   return { records, total: records.length, current: 1, size: 200 }
 }

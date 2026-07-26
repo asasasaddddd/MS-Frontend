@@ -2,6 +2,7 @@ import type { SamplingDisplayRow, SamplingEntityId, SamplingTaskVO } from '@/typ
 
 export type SamplingTableRole = 'admin' | 'verifier' | 'confirmer'
 export type SamplingTagColor = 'blue' | 'cyan' | 'orange' | 'green' | 'red'
+export type SamplingTaskAction = 'admin-confirm' | 'verifier-submit' | 'confirmer-submit'
 
 export interface SamplingTableColumn {
   title: string
@@ -81,6 +82,22 @@ export function samplingTagColor(nodeOrStatus?: string): SamplingTagColor {
   if (['completed'].includes(value)) return 'green'
   if (['admin_confirm', 'confirmer_confirm', 'pending', 'processing'].includes(value)) return 'orange'
   return 'blue'
+}
+
+type SamplingActionTask = Pick<SamplingTaskVO, 'currentNode' | 'allowedActions'>
+
+const samplingNodeActionMap: Readonly<Record<string, { code: string; action: SamplingTaskAction }>> = {
+  admin_confirm: { code: 'SUBMIT', action: 'admin-confirm' },
+  verifier_fill: { code: 'SUBMIT', action: 'verifier-submit' },
+  verifier_verify: { code: 'SUBMIT', action: 'verifier-submit' },
+  confirmer_confirm: { code: 'APPROVE_REJECT', action: 'confirmer-submit' }
+}
+
+export function resolveSamplingTaskAction(task: SamplingActionTask): SamplingTaskAction | undefined {
+  const mapping = samplingNodeActionMap[String(task.currentNode || '')]
+  if (!mapping) return undefined
+  const allowed = new Set((task.allowedActions || []).map((action) => String(action).toUpperCase()))
+  return allowed.has(mapping.code) ? mapping.action : undefined
 }
 
 export function mapSamplingTaskRow(task: SamplingTaskVO): SamplingDisplayRowWithMeta {

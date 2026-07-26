@@ -2,6 +2,19 @@ import type { EntityId, PeriodicDisplayRow, PeriodicTaskVO } from '../../types/p
 
 export type PeriodicTableRole = 'admin' | 'verifier' | 'confirmer' | 'externalOperator'
 export type PeriodicTagColor = 'blue' | 'cyan' | 'orange' | 'green' | 'red'
+export type PeriodicTaskAction =
+  | 'submit-exception'
+  | 'verifier-receive'
+  | 'verify'
+  | 'external-send-out'
+  | 'send-out-return'
+  | 'supplier-fill'
+  | 'external-verify'
+  | 'judgement'
+  | 'scrap-disposal'
+  | 'manager-forward'
+  | 'confirm'
+  | 'exception-dispose'
 
 export interface PeriodicTableColumn {
   title: string
@@ -44,6 +57,35 @@ const periodicJudgementDisplays: Readonly<Record<string, PeriodicJudgementDispla
  */
 export function getPeriodicJudgementDisplay(nodeCode?: string) {
   return nodeCode ? periodicJudgementDisplays[nodeCode] : undefined
+}
+
+type PeriodicActionTask = Pick<PeriodicTaskVO, 'currentNode' | 'allowedActions'>
+
+const periodicNodeActionMap: Readonly<Record<string, { code: string; action: PeriodicTaskAction }>> = {
+  plan_confirm: { code: 'SUBMIT_EXCEPTION', action: 'submit-exception' },
+  self_verify: { code: 'SUBMIT', action: 'verify' },
+  verification_record: { code: 'SUBMIT', action: 'verify' },
+  supplier_fill_info: { code: 'SUBMIT', action: 'supplier-fill' },
+  verifier_fill_info: { code: 'SUBMIT', action: 'external-verify' },
+  verifier_second_judge: { code: 'JUDGE', action: 'judgement' },
+  responsible_second_judge: { code: 'JUDGE', action: 'judgement' },
+  responsible_third_judge: { code: 'JUDGE', action: 'judgement' },
+  verifier_third_judge: { code: 'JUDGE', action: 'judgement' },
+  responsible_fourth_judge: { code: 'JUDGE', action: 'judgement' },
+  verifier_scrap_disposal: { code: 'SUBMIT', action: 'scrap-disposal' },
+  manager_forward_confirm: { code: 'SUBMIT', action: 'manager-forward' },
+  confirmer_confirm: { code: 'APPROVE_REJECT', action: 'confirm' },
+  exception_disposal: { code: 'SUBMIT', action: 'exception-dispose' }
+}
+
+export function resolvePeriodicTaskAction(task: PeriodicActionTask): PeriodicTaskAction | undefined {
+  const allowed = new Set((task.allowedActions || []).map((action) => String(action).toUpperCase()))
+  if (allowed.has('RECEIVE')) return 'verifier-receive'
+  if (allowed.has('SEND_OUT_RETURN')) return 'send-out-return'
+  if (allowed.has('SEND_OUT')) return 'external-send-out'
+
+  const mapping = periodicNodeActionMap[String(task.currentNode || '')]
+  return mapping && allowed.has(mapping.code) ? mapping.action : undefined
 }
 
 export function displayValue(value: unknown) {

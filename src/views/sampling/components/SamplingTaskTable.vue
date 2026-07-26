@@ -4,6 +4,7 @@ import type { SamplingEntityId, SamplingTaskVO } from '@/types/sampling'
 import {
   getSamplingTableColumns,
   mapSamplingTaskRow,
+  resolveSamplingTaskAction,
   rowKeyOf,
   samplingTagColor,
   type SamplingTableRole
@@ -68,7 +69,8 @@ function openProcess(taskId: SamplingEntityId) {
 }
 
 function canProcess(taskId: SamplingEntityId) {
-  return Boolean(findTask(taskId)?.allowedActions?.length)
+  const task = findTask(taskId)
+  return Boolean(task && resolveSamplingTaskAction(task))
 }
 </script>
 

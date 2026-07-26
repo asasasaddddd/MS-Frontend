@@ -16,7 +16,7 @@ import {
   verificationRecordPeriodic,
   verifierFillInfoPeriodic
 } from '../../../api/periodic'
-import { hasWorkflowAction, useWorkflowTask } from '../../../composables/useWorkflowTask'
+import { useWorkflowTask } from '../../../composables/useWorkflowTask'
 import { useSessionStore } from '../../../stores/session'
 import { listUsersByDeptAndRole, type SysUserVO } from '../../../api/system'
 import type {
@@ -33,7 +33,6 @@ import type {
 } from '../../../types/periodic'
 import type { ChangeSubmitRequest } from '../../../types/change'
 import type { FlowSummary } from '../../../types/flowSummary'
-import { isPeriodicDualHandoverTask } from '../../../api/periodicContract'
 import PeriodicConfirmDialog from './PeriodicConfirmDialog.vue'
 import PeriodicDetailDialog from './PeriodicDetailDialog.vue'
 import PeriodicExceptionDialog from './PeriodicExceptionDialog.vue'
@@ -50,7 +49,11 @@ import {
   canDisposePeriodicException,
   type PeriodicExceptionAction
 } from '../periodicExceptionModel'
-import { getPeriodicJudgementDisplay, type PeriodicTableRole } from '../periodicDisplayModel'
+import {
+  getPeriodicJudgementDisplay,
+  resolvePeriodicTaskAction,
+  type PeriodicTableRole
+} from '../periodicDisplayModel'
 
 type ActiveTab = 'todo' | 'history'
 
@@ -130,15 +133,6 @@ const statusOptions = computed(() => [
   { label: '报告待确认', value: 'confirmer_confirm' }
 ])
 
-/** 统一判定弹窗处理的节点集合。 */
-const judgementNodeCodes = new Set([
-  'verifier_second_judge',
-  'responsible_second_judge',
-  'responsible_third_judge',
-  'verifier_third_judge',
-  'responsible_fourth_judge'
-])
-
 const testPlanScenarioOptions: Array<{ label: string; value: PeriodicTestPlanScenario }> = [
   { label: '自检', value: 'self' },
   { label: '外委通用设备', value: 'external_common' },
@@ -195,16 +189,14 @@ const visibleTasks = computed(() =>
 )
 
 const canBatchException = computed(() => activeTab.value === 'todo' && currentTasks.value.some(
-  (task) => hasWorkflowAction(task, 'SUBMIT_EXCEPTION')
+  (task) => resolvePeriodicTaskAction(task) === 'submit-exception'
 ))
 const exceptionCandidates = computed(() => selectedTasks.value.filter(
-  (task) => hasWorkflowAction(task, 'SUBMIT_EXCEPTION')
+  (task) => resolvePeriodicTaskAction(task) === 'submit-exception'
 ))
-const canSelectAdminTask = (task: PeriodicTaskVO) => Boolean(task.allowedActions?.length)
+const canSelectAdminTask = (task: PeriodicTaskVO) => Boolean(resolvePeriodicTaskAction(task))
 const forwardCandidates = computed(() =>
-  selectedTasks.value.filter(
-    (task) => task.currentNode === 'manager_forward_confirm' && hasWorkflowAction(task, 'SUBMIT')
-  )
+  selectedTasks.value.filter((task) => resolvePeriodicTaskAction(task) === 'manager-forward')
 )
 const canSubmitForwardSelection = computed(
   () =>
@@ -298,8 +290,15 @@ function confirmExceptionDispose(task: PeriodicTaskVO) {
 async function loadAuthoritativeTask(task: PeriodicTaskVO) {
   try {
     const detail = await getPeriodicTask(task.id)
-    activeTask.value = detail
-    return detail
+    const boundDetail = {
+      ...detail,
+      workflowTaskId: task.workflowTaskId,
+      processInstanceId: task.processInstanceId,
+      rowVersion: task.rowVersion,
+      allowedActions: [...(task.allowedActions || [])]
+    }
+    activeTask.value = boundDetail
+    return boundDetail
   } catch (error) {
     message.error(error instanceof Error ? error.message : '读取周检任务详情失败')
     return null
@@ -317,54 +316,53 @@ async function openProcess(task: PeriodicTaskVO) {
     return
   }
 
-  if (!task.allowedActions?.length) {
+  const action = resolvePeriodicTaskAction(task)
+  if (!action) {
     message.warning('当前任务没有可执行操作，请刷新待办')
     return
   }
 
-  const node = String(task.currentNode || '')
   activeTask.value = task
-  if (node === 'manager_forward_confirm') {
+  if (action === 'submit-exception') {
+    openException([task])
+    return
+  }
+  if (action === 'manager-forward') {
     forwardOpen.value = true
     return
   }
-  if (props.role === 'verifier' && isPeriodicDualHandoverTask(task)) {
+  if (action === 'verifier-receive') {
     return openScan('periodic-verifier-receive', task)
   }
-  if (node === 'self_verify' || node === 'verification_record') {
+  if (action === 'verify') {
     verifyOpen.value = true
     return
   }
-  if (node === 'send_out') {
-    const action = task.physicalStatus === 'wait_sendout_return_receive'
-      ? 'periodic-send-out-return'
-      : 'periodic-external-send-out'
-    return openScan(action, task)
-  }
-  if (node === 'send_out_return') return openScan('periodic-send-out-return', task)
-  if (node === 'supplier_fill_info') {
+  if (action === 'external-send-out') return openScan('periodic-external-send-out', task)
+  if (action === 'send-out-return') return openScan('periodic-send-out-return', task)
+  if (action === 'supplier-fill') {
     supplierFillOpen.value = true
     return
   }
-  if (node === 'verifier_fill_info') {
+  if (action === 'external-verify') {
     externalVerifyOpen.value = true
     return
   }
-  if (judgementNodeCodes.has(node)) {
+  if (action === 'judgement') {
     if (!await loadAuthoritativeTask(task)) return
     judgementOpen.value = true
     return
   }
-  if (node === 'verifier_scrap_disposal') {
+  if (action === 'scrap-disposal') {
     if (!await loadAuthoritativeTask(task)) return
     scrapDisposalOpen.value = true
     return
   }
-  if (node === 'confirmer_confirm') {
+  if (action === 'confirm') {
     confirmOpen.value = true
     return
   }
-  if (node === 'exception_disposal') {
+  if (action === 'exception-dispose') {
     confirmExceptionDispose(task)
     return
   }
@@ -392,7 +390,7 @@ async function loadPlanFlowSummary() {
 }
 
 async function loadConfirmers(tasks: PeriodicTaskVO[]) {
-  if (props.role !== 'admin') {
+  if (!tasks.some((task) => resolvePeriodicTaskAction(task) === 'manager-forward')) {
     confirmers.value = []
     confirmerId.value = undefined
     return

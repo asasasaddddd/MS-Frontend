@@ -27,12 +27,13 @@ const waitReturnTask = {
   currentNodeName: '外委送出',
   physicalStatus: 'wait_sendout_return_receive',
   taskStatus: 'wait_scan',
-  taskType: 'periodic'
+  taskType: 'periodic',
+  allowedActions: ['SEND_OUT_RETURN']
 }
 
 assert.equal(scan.resolvePeriodicScanAction(waitReturnTask), 'periodic-send-out-return')
 assert.equal(
-  scan.resolvePeriodicScanAction({ ...waitReturnTask, physicalStatus: 'wait_external_receive' }),
+  scan.resolvePeriodicScanAction({ ...waitReturnTask, allowedActions: ['SEND_OUT'] }),
   'periodic-external-send-out'
 )
 assert.equal(
@@ -40,25 +41,16 @@ assert.equal(
     ...waitReturnTask,
     currentNode: 'plan_confirm',
     taskStatus: 'pending',
-    physicalStatus: 'wait_verifier_receive'
+    physicalStatus: 'wait_verifier_receive',
+    allowedActions: ['RECEIVE']
   }),
   'periodic-verifier-receive'
 )
 assert.equal(
   scan.resolvePeriodicScanAction({
     ...waitReturnTask,
-    currentNode: 'plan_confirm',
-    taskStatus: 'wait_scan',
-    physicalStatus: 'wait_verifier_receive'
-  }),
-  undefined
-)
-assert.equal(
-  scan.resolvePeriodicScanAction({
-    ...waitReturnTask,
-    currentNode: 'transfer_verifier',
-    taskStatus: 'pending',
-    physicalStatus: 'wait_verifier_receive'
+    currentNode: 'send_out_return',
+    allowedActions: ['VIEW']
   }),
   undefined
 )
@@ -68,15 +60,17 @@ const dualEntryTask = {
   currentNode: 'plan_confirm',
   currentNodeName: '待实物交接',
   taskStatus: 'pending',
-  physicalStatus: 'wait_verifier_receive'
+  physicalStatus: 'wait_verifier_receive',
+  allowedActions: ['RECEIVE']
 }
 
 resetScanTestDoubles()
 setPeriodicTasks([dualEntryTask])
 setScanRequestHandler(() => [])
-const receiveRows = await scan.listUnifiedScanInbox(['periodic-verifier-receive'])
+const receiveRows = await scan.listUnifiedScanInbox()
 assert.equal(receiveRows.length, 1)
 assert.equal(receiveRows[0]?.currentNodeName, '待扫码接收')
+assert.deepEqual(receiveRows[0]?.allowedActions, ['RECEIVE'])
 
 assert.deepEqual(scan.buildPeriodicScanRecordQuery(waitReturnTask, 'periodic-send-out-return'), {
   businessType: 'periodic',
@@ -156,7 +150,7 @@ setScanRequestHandler((config) => {
   return []
 })
 
-const rows = await scan.listUnifiedScanInbox(['periodic-send-out-return'])
+const rows = await scan.listUnifiedScanInbox()
 const pendingReturn = rows.find((row) => row.taskId === waitReturnTask.id && !row.scanned)
 const restoredReturn = rows.find((row) => row.taskId === scannedHistoryTask.id && row.scanned)
 
@@ -186,6 +180,7 @@ setScanRequestHandler((config) => {
         orderId: 1001,
         orderNo: 'FC2026070001',
         scanAction: 'receive',
+        allowedActions: ['TAKE_BACK'],
         scanStatus: 'received',
         scanned: true,
         scanTime: '2026-07-13T09:00:00'
@@ -195,11 +190,13 @@ setScanRequestHandler((config) => {
   return []
 })
 
-const firstCheckRows = await scan.listUnifiedScanInbox(['receive'])
+const firstCheckRows = await scan.listUnifiedScanInbox()
 assert.equal(firstCheckRows.length, 1)
 assert.equal(firstCheckRows[0]?.businessType, 'firstcheck')
 assert.equal(firstCheckRows[0]?.scanned, true)
 assert.equal(firstCheckRows[0]?.currentNodeName, '已接收')
+assert.equal(firstCheckRows[0]?.scanAction, 'take-back')
+assert.deepEqual(firstCheckRows[0]?.allowedActions, ['TAKE_BACK'])
 assert.equal(scanRequestCalls.some((call) => call.url === '/scan/business/records'), false)
 
 assert.equal(scan.firstCheckScanStatusName('unknown_status'), '未知状态')
@@ -207,8 +204,9 @@ assert.equal(scan.scanActionName('unknown_action'), '未知操作')
 
 const scanViewSource = readFileSync(new URL('../src/views/scan/DeviceScanView.vue', import.meta.url), 'utf8')
 assert.doesNotMatch(scanViewSource, /recentScannedRows/)
-assert.match(scanViewSource, /listUnifiedScanInbox\(roleConfig\.value\.actions, controller\.signal\)/)
+assert.match(scanViewSource, /listUnifiedScanInbox\(controller\.signal\)/)
 assert.match(scanViewSource, /rowsController\?\.abort\(\)/)
 assert.match(scanViewSource, /loadId !== rowsLoadId \|\| controller\.signal\.aborted/)
+assert.doesNotMatch(scanViewSource, /const roleConfig|commonVerifierActions|actionSet|roleRows/)
 assert.match(scanViewSource, /matchesScanRouteList/)
 assert.match(scanViewSource, /shouldFocusScanRoute/)

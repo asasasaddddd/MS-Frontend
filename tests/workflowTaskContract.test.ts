@@ -209,7 +209,11 @@ for (const path of [
 ]) {
   const source = readFileSync(new URL(path, import.meta.url), 'utf8')
   assert.match(source, /useWorkflowTask/, `${path} 必须复用统一工作流 composable`)
-  assert.match(source, /allowedActions|hasWorkflowAction/, `${path} 必须消费后端 allowedActions`)
+  assert.match(
+    source,
+    /allowedActions|hasWorkflowAction|resolve(?:Periodic|Sampling)TaskAction/,
+    `${path} 必须消费后端 allowedActions`
+  )
 }
 
 const periodicWorkspace = readFileSync(
@@ -222,8 +226,8 @@ assert.doesNotMatch(
   periodicWorkspace,
   /hasWorkflowAction\(task, 'SUBMIT_EXCEPTION'\) \|\| hasWorkflowAction\(task, 'SUBMIT'\)/
 )
-const periodicPermissionGuard = periodicWorkspace.indexOf("if (!task.allowedActions?.length)")
-const periodicFirstActionBranch = periodicWorkspace.indexOf("if (node === 'manager_forward_confirm')")
+const periodicPermissionGuard = periodicWorkspace.indexOf('const action = resolvePeriodicTaskAction(task)')
+const periodicFirstActionBranch = periodicWorkspace.indexOf("if (action === 'submit-exception')")
 assert.ok(periodicPermissionGuard > 0 && periodicPermissionGuard < periodicFirstActionBranch)
 
 const workspaceSource = readFileSync(new URL('../src/views/WorkspaceTodoView.vue', import.meta.url), 'utf8')

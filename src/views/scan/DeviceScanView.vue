@@ -3,11 +3,12 @@ import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
+  isUnifiedScanActionAllowed,
   listUnifiedScanInbox,
   scanActionName,
   submitUnifiedScan
 } from '@/api/scan'
-import type { UnifiedScanAction, UnifiedScanInboxItem } from '@/types/scan'
+import type { UnifiedScanInboxItem } from '@/types/scan'
 import { roleNameMap } from '@/types/common'
 import { useSessionStore } from '@/stores/session'
 import {
@@ -49,60 +50,9 @@ const workflowIdentity = computed(() => {
   return user ? `${user.employeeId}|${user.roleCode}` : ''
 })
 const roleLabel = computed(() => {
-  if (roleCode.value === 'EXTERNAL_OPERATOR') return `外扩人员 · ${session.user?.employeeName || session.user?.employeeId || '-'}`
   const name = roleNameMap[roleCode.value] || session.user?.roleName || roleCode.value || '-'
   return `${name} · ${session.user?.employeeName || session.user?.employeeId || '-'}`
 })
-
-const roleConfig = computed(() => {
-  const commonVerifierActions: UnifiedScanAction[] = ['receive', 'sendout-return', 'periodic-verifier-receive']
-
-  if (roleCode.value === 'MEASURE_ADMIN') {
-    return {
-      actions: ['take-back'],
-      codeLabel: '计量编号',
-      placeholder: '请扫描或输入计量编号',
-      opinion: '扫码处理完成'
-    }
-  }
-
-  if (roleCode.value === 'EXTERNAL_OPERATOR') {
-    return {
-      actions: ['sendout', 'periodic-external-send-out'],
-      codeLabel: '扫码编号',
-      placeholder: '请扫描或输入设备计量编号/首检临时码',
-      opinion: '外扩人员扫码接收'
-    }
-  }
-
-  if (roleCode.value === 'VERIFIER_EXTERNAL') {
-    return {
-      actions: [...commonVerifierActions, 'periodic-send-out-return'],
-      codeLabel: '扫码编号',
-      placeholder: '请扫描或输入计量编号/首检临时码',
-      opinion: '外委检定员扫码处理'
-    }
-  }
-
-  if (roleCode.value === 'VERIFIER_SELF' || roleCode.value === 'VERIFIER') {
-    return {
-      actions: commonVerifierActions,
-      codeLabel: '扫码编号',
-      placeholder: '请扫描或输入计量编号/首检临时码',
-      opinion: '检定员扫码处理'
-    }
-  }
-
-  return {
-    actions: [] as UnifiedScanAction[],
-    codeLabel: '扫码编号',
-    placeholder: '当前角色暂无可扫码节点',
-    opinion: ''
-  }
-})
-
-const actionSet = computed(() => new Set(roleConfig.value.actions.map(String)))
-const roleRows = computed(() => rows.value.filter((row) => actionSet.value.has(String(row.scanAction))))
 const routeQuery = computed<ScanRouteQuery>(() => ({
   module: queryValue('module'),
   businessType: queryValue('businessType'),
@@ -111,7 +61,7 @@ const routeQuery = computed<ScanRouteQuery>(() => ({
   orderId: queryValue('orderId'),
   view: queryValue('view')
 }))
-const routeRows = computed(() => roleRows.value.filter((row) => matchesScanRouteList(row, routeQuery.value)))
+const routeRows = computed(() => rows.value.filter((row) => matchesScanRouteList(row, routeQuery.value)))
 
 const filteredAllRows = computed(() => {
   const code = keywordCode.value.trim()
@@ -212,9 +162,13 @@ function openScan(row?: UnifiedScanInboxItem) {
     message.info('该设备已扫码')
     return
   }
+  if (!isUnifiedScanActionAllowed(target)) {
+    message.warning(`当前任务未授权 ${scanActionName(target.scanAction)} 操作`)
+    return
+  }
   activeRow.value = target
   scanForm.scanCode = target.scanCode || target.deviceCode || target.taskNo || target.orderNo || ''
-  scanForm.opinion = roleConfig.value.opinion
+  scanForm.opinion = `${scanActionName(target.scanAction)}扫码处理`
   scanOpen.value = true
 }
 
@@ -250,7 +204,7 @@ async function loadRows() {
   rowsController = controller
   loading.value = true
   try {
-    const nextRows = await listUnifiedScanInbox(roleConfig.value.actions, controller.signal)
+    const nextRows = await listUnifiedScanInbox(controller.signal)
     if (loadId !== rowsLoadId || controller.signal.aborted) return
     rows.value = nextRows
     await focusRouteTarget()
@@ -270,8 +224,8 @@ async function submitScan() {
     message.warning('请输入扫码内容')
     return
   }
-  if (!actionSet.value.has(String(row.scanAction))) {
-    message.warning(`当前身份不能处理 ${scanActionName(row.scanAction)} 节点`)
+  if (!isUnifiedScanActionAllowed(row)) {
+    message.warning(`当前任务未授权 ${scanActionName(row.scanAction)} 操作`)
     return
   }
 
@@ -325,7 +279,7 @@ onBeforeUnmount(() => rowsController?.abort())
       <template #title><h2>筛选方案</h2></template>
       <div class="filter-section">
         <label>
-          <span>{{ roleConfig.codeLabel }}</span>
+          <span>扫码编号</span>
           <a-input v-model:value="keywordCode" placeholder="请输入编号" allow-clear />
         </label>
         <label>
@@ -383,7 +337,7 @@ onBeforeUnmount(() => rowsController?.abort())
           <template v-else-if="column.key === 'deviceName'">{{ display(record.deviceName) }}</template>
           <template v-else-if="column.key === 'useDeptName'">{{ display(record.useDeptName) }}</template>
           <template v-else-if="column.key === 'action'">
-            <a-button v-if="!record.scanned" type="link" class="code-link" @click="openScan(record)">扫码</a-button>
+            <a-button v-if="!record.scanned && isUnifiedScanActionAllowed(record)" type="link" class="code-link" @click="openScan(record)">扫码</a-button>
             <span v-else class="muted">已扫码</span>
           </template>
         </template>
@@ -404,7 +358,7 @@ onBeforeUnmount(() => rowsController?.abort())
         </div>
         <label class="scan-input">
           <span>扫码内容</span>
-          <a-input v-model:value="scanForm.scanCode" :placeholder="roleConfig.placeholder" />
+          <a-input v-model:value="scanForm.scanCode" placeholder="请扫描或输入设备计量编号/首检临时码" />
         </label>
         <label class="scan-input">
           <span>操作意见</span>
