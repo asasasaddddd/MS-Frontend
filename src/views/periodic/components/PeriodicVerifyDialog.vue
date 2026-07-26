@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { message } from 'ant-design-vue'
 import { listUsersByDeptAndRole, type SysUserVO } from '../../../api/system'
 import AttachmentListButton from '../../../components/AttachmentListButton.vue'
 import AttachmentUploadButton from '../../../components/AttachmentUploadButton.vue'
@@ -136,11 +137,17 @@ async function loadResponsibleEngineers() {
 
 function submit() {
   if (!props.task || !canSubmit.value) return
+  if (props.task.workflowTaskId === undefined || props.task.rowVersion === undefined) {
+    message.warning('工作流任务上下文已失效，请刷新待办')
+    return
+  }
   const unqualified = form.result === 'unqualified'
   const disposal = unqualified ? form.nonconformingDisposal : undefined
   const engineer = unqualified ? selectedEngineer.value : undefined
   emit('submit', {
-    taskId: props.task.id,
+    periodicTaskId: props.task.id,
+    taskId: props.task.workflowTaskId,
+    rowVersion: props.task.rowVersion,
     verificationTime: form.verificationTime,
     newValidUntil: form.newValidUntil || undefined,
     result: form.result,

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
+import { message } from 'ant-design-vue'
 import { displayValue, getPeriodicJudgementDisplay } from '../periodicDisplayModel'
 import PeriodicJudgementHistory from './PeriodicJudgementHistory.vue'
 import type {
@@ -59,8 +60,14 @@ function close() {
 /** 提交当前任务的判定结果，不携带角色、轮次或下一节点。 */
 function submit() {
   if (!props.task || !judgementDisplay.value) return
+  if (props.task.workflowTaskId === undefined || props.task.rowVersion === undefined) {
+    message.warning('工作流任务上下文已失效，请刷新待办')
+    return
+  }
   emit('submit', {
-    taskId: props.task.id,
+    periodicTaskId: props.task.id,
+    taskId: props.task.workflowTaskId,
+    rowVersion: props.task.rowVersion,
     judgeResult: form.judgeResult,
     opinion: form.opinion
   })

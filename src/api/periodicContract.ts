@@ -15,8 +15,6 @@ const periodicEndpoints = {
   generateBeforeUsePlan: '/periodic/pre-use/plans/generate',
   planDetail: '/periodic/plans',
   planTasks: '/periodic/plans',
-  myTasks: '/periodic/my-tasks',
-  myHistory: '/periodic/my-history',
   taskDetail: '/periodic/tasks',
   verifierReceive: '/periodic/verifier-receive',
   externalSendOut: '/periodic/external-send-out',

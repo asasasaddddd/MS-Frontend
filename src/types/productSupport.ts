@@ -46,6 +46,8 @@ export interface ProductSupportRatioResultRequest {
 
 export interface ProductSupportVerifyRequest {
   orderId: ProductSupportEntityId
+  taskId: ProductSupportEntityId
+  rowVersion: ProductSupportEntityId
   verificationDate: string
   attachmentGroupId?: ProductSupportEntityId
   ratioResults: ProductSupportRatioResultRequest[]
@@ -78,6 +80,10 @@ export interface ProductSupportItemVO {
 
 export interface ProductSupportOrderVO {
   id: ProductSupportEntityId
+  workflowTaskId?: ProductSupportEntityId
+  processInstanceId?: ProductSupportEntityId
+  rowVersion?: ProductSupportEntityId
+  allowedActions?: string[]
   orderNo?: string
   contractNo?: string
   projectNo?: string

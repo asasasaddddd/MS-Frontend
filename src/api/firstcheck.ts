@@ -21,11 +21,12 @@ export function startFirstCheck(data: StartFirstCheckRequest) {
   })
 }
 
-export function getFirstCheckDetail(orderId: string | number, taskId: string | number) {
+export function getFirstCheckDetail(orderId: string | number, taskId: string | number, signal?: AbortSignal) {
   return request<FirstCheckOrder>({
     url: `/firstcheck/detail/${orderId}`,
     method: 'GET',
-    params: { taskId }
+    params: { taskId },
+    signal
   })
 }
 

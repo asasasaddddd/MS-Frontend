@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { reactive, watch } from 'vue'
+import { message } from 'ant-design-vue'
 import { displayValue } from '../periodicDisplayModel'
 import type { PeriodicConfirmerConfirmRequest, PeriodicConfirmResult, PeriodicTaskVO } from '../../../types/periodic'
 
@@ -30,8 +31,14 @@ function close() {
 
 function submit() {
   if (!props.task) return
+  if (props.task.workflowTaskId === undefined || props.task.rowVersion === undefined) {
+    message.warning('工作流任务上下文已失效，请刷新待办')
+    return
+  }
   emit('submit', {
-    taskId: props.task.id,
+    periodicTaskId: props.task.id,
+    taskId: props.task.workflowTaskId,
+    rowVersion: props.task.rowVersion,
     confirmResult: form.confirmResult,
     opinion: form.opinion
   })

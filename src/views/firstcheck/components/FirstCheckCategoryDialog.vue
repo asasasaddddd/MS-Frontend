@@ -12,7 +12,7 @@ const props = defineProps<{
   open: boolean
   order?: FirstCheckOrder
   taskId?: string | number
-  taskRowVersion?: number
+  taskRowVersion?: string | number
   allowedActions: string[]
 }>()
 

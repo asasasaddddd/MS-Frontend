@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
@@ -44,6 +44,10 @@ const failInfo = reactive({
 })
 
 const roleCode = computed(() => session.user?.roleCode || '')
+const workflowIdentity = computed(() => {
+  const user = session.user
+  return user ? `${user.employeeId}|${user.roleCode}` : ''
+})
 const roleLabel = computed(() => {
   if (roleCode.value === 'EXTERNAL_OPERATOR') return `外扩人员 · ${session.user?.employeeName || session.user?.employeeId || '-'}`
   const name = roleNameMap[roleCode.value] || session.user?.roleName || roleCode.value || '-'
@@ -236,16 +240,26 @@ async function focusRouteTarget() {
   openScan(target)
 }
 
+let rowsLoadId = 0
+let rowsController: AbortController | undefined
+
 async function loadRows() {
+  const loadId = ++rowsLoadId
+  rowsController?.abort()
+  const controller = new AbortController()
+  rowsController = controller
   loading.value = true
   try {
-    rows.value = await listUnifiedScanInbox(roleConfig.value.actions)
+    const nextRows = await listUnifiedScanInbox(roleConfig.value.actions, controller.signal)
+    if (loadId !== rowsLoadId || controller.signal.aborted) return
+    rows.value = nextRows
     await focusRouteTarget()
   } catch (error) {
+    if (loadId !== rowsLoadId || controller.signal.aborted) return
     rows.value = []
     message.error(error instanceof Error ? error.message : '扫码待办加载失败')
   } finally {
-    loading.value = false
+    if (loadId === rowsLoadId) loading.value = false
   }
 }
 
@@ -286,7 +300,12 @@ async function submitScan() {
   }
 }
 
-onMounted(loadRows)
+watch(workflowIdentity, () => {
+  rows.value = []
+  void loadRows()
+}, { immediate: true })
+
+onBeforeUnmount(() => rowsController?.abort())
 </script>
 
 <template>

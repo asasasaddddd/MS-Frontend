@@ -37,12 +37,18 @@ function close() {
 /** 校验报废原因并提交当前任务的报废处置。 */
 function submit() {
   if (!props.task) return
+  if (props.task.workflowTaskId === undefined || props.task.rowVersion === undefined) {
+    message.warning('工作流任务上下文已失效，请刷新待办')
+    return
+  }
   if (!form.scrapReason.trim()) {
     message.warning('请填写报废原因')
     return
   }
   emit('submit', {
-    taskId: props.task.id,
+    periodicTaskId: props.task.id,
+    taskId: props.task.workflowTaskId,
+    rowVersion: props.task.rowVersion,
     scrapReason: form.scrapReason,
     opinion: form.opinion
   })

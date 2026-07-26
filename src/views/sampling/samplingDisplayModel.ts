@@ -29,7 +29,7 @@ export function formatDate(value: unknown, length = 10) {
 export function samplingNodeName(value?: string) {
   const map: Record<string, string> = {
     admin_confirm: '管理员清点',
-    verifier_verify: '检定员检定',
+    verifier_fill: '检定员检定',
     confirmer_confirm: '确认员判定',
     completed: '已完成'
   }

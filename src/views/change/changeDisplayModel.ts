@@ -14,7 +14,7 @@ export interface ChangeTypeMeta {
 export interface ChangeTaskRow {
   key: string
   taskId: EntityId
-  rowVersion: number
+  rowVersion: string | number
   allowedActions: string[]
   nodeCode?: string
   nodeName?: string

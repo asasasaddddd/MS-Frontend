@@ -71,26 +71,11 @@ export function listPeriodicPlanTasks(planId: EntityId) {
   })
 }
 
-export function listPeriodicMyTasks(status?: string) {
-  return request<PeriodicTaskVO[]>({
-    url: periodicEndpoint('myTasks'),
-    method: 'GET',
-    params: status ? { status } : undefined
-  })
-}
-
-export function listPeriodicMyHistory(status?: string) {
-  return request<PeriodicTaskVO[]>({
-    url: periodicEndpoint('myHistory'),
-    method: 'GET',
-    params: status ? { status } : undefined
-  })
-}
-
-export function getPeriodicTask(taskId: EntityId) {
+export function getPeriodicTask(taskId: EntityId, signal?: AbortSignal) {
   return request<PeriodicTaskVO>({
     url: periodicEndpoint('taskDetail', taskId),
-    method: 'GET'
+    method: 'GET',
+    signal
   })
 }
 

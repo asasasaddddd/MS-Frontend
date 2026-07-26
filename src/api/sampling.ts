@@ -30,19 +30,11 @@ export function listSamplingPlanTasks(planId: SamplingEntityId) {
   })
 }
 
-export function listSamplingMyTasks(status?: string) {
-  return request<SamplingTaskVO[]>({
-    url: '/sampling/my-tasks',
+export function getSamplingTask(taskId: SamplingEntityId, signal?: AbortSignal) {
+  return request<SamplingTaskVO>({
+    url: `/sampling/tasks/${taskId}`,
     method: 'GET',
-    params: status ? { status } : undefined
-  })
-}
-
-export function listSamplingMyHistory(status?: string) {
-  return request<SamplingTaskVO[]>({
-    url: '/sampling/my-history',
-    method: 'GET',
-    params: status ? { status } : undefined
+    signal
   })
 }
 

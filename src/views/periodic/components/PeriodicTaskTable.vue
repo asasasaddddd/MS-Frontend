@@ -71,6 +71,10 @@ function handleDetail(row: PeriodicDisplayRowWithMeta) {
   if (task) emit('detail', task)
 }
 
+function canProcess(row: PeriodicDisplayRowWithMeta) {
+  return Boolean(findTask(row)?.allowedActions?.length)
+}
+
 function cellText(row: PeriodicDisplayRowWithMeta, key: unknown) {
   if (typeof key !== 'string' || !(key in row)) return ''
   return String(row[key as keyof PeriodicDisplayRowWithMeta] ?? '-')
@@ -100,7 +104,7 @@ function isDisplayColumn(key: unknown) {
       <template v-else-if="column.key === 'action'">
         <a-space :size="4">
           <a-button type="link" class="button-link" @click="handleDetail(record)">查看</a-button>
-          <a-button type="link" class="button-link" @click="handleProcess(record)">处理</a-button>
+          <a-button v-if="canProcess(record)" type="link" class="button-link" @click="handleProcess(record)">处理</a-button>
         </a-space>
       </template>
       <template v-else-if="isDisplayColumn(column.key)">

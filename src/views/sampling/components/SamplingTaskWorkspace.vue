@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getSamplingPlanFlowSummary } from '@/api/flowSummary'
@@ -7,20 +7,18 @@ import {
   adminConfirmSampling,
   confirmerSubmitSampling,
   getSamplingPlan,
-  listSamplingMyHistory,
-  listSamplingMyTasks,
+  getSamplingTask,
   verifierSubmitSampling
 } from '@/api/sampling'
-import { listUsersByDeptAndRole, type SysUserVO } from '@/api/system'
+import { hasWorkflowAction, useWorkflowTask } from '@/composables/useWorkflowTask'
 import { useSessionStore } from '@/stores/session'
 import type { FlowSummary } from '@/types/flowSummary'
 import type {
-  SamplingAdminResult,
   SamplingEntityId,
   SamplingPlanVO,
   SamplingResult,
   SamplingTaskVO,
-  SamplingVerificationSubmitRequest
+  SamplingVerificationDraft
 } from '@/types/sampling'
 import SamplingDetailDialog from './SamplingDetailDialog.vue'
 import SamplingPlanSummary from './SamplingPlanSummary.vue'
@@ -33,12 +31,27 @@ type ActiveTab = 'todo' | 'history'
 const props = defineProps<{
   title: string
   role: SamplingTableRole
-  nodeCodes: string[]
 }>()
 
 const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
+const workflowIdentity = computed(() => {
+  const user = session.user
+  return user ? `${user.employeeId}|${user.roleCode}` : ''
+})
+const {
+  todoTasks: workflowTodoTasks,
+  participatedTasks: workflowParticipatedTasks,
+  refresh: refreshWorkflowTasks,
+  loadDetails: loadWorkflowDetails,
+  executeTaskAction
+} = useWorkflowTask({
+  identityKey: workflowIdentity,
+  businessType: 'SAMPLING',
+  views: ['todo', 'participated'],
+  immediate: false
+})
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -57,9 +70,6 @@ const detailOpen = ref(false)
 const resultOpen = ref(false)
 const resultMode = ref<SamplingResult>('qualified')
 const resultDialogTasks = ref<SamplingTaskVO[]>([])
-const confirmers = ref<SysUserVO[]>([])
-const confirmerId = ref<string>()
-const adminResult = ref<SamplingAdminResult>('normal')
 const adminOpinion = ref('实物清点无误，同意进入抽检流程')
 
 const routePlanId = computed(() => {
@@ -71,27 +81,10 @@ const routePlanId = computed(() => {
 const statusOptions = [
   { label: '当前状态筛选', value: 'all' },
   { label: '管理员清点', value: 'admin_confirm' },
-  { label: '检定员检定', value: 'verifier_verify' },
+  { label: '检定员检定', value: 'verifier_fill' },
   { label: '确认员判定', value: 'confirmer_confirm' },
   { label: '已完成', value: 'completed' }
 ]
-
-const adminResultOptions = [
-  { label: '正常送检', value: 'normal' },
-  { label: '封存', value: 'seal' },
-  { label: '非正常报废', value: 'abnormal_scrap' },
-  { label: '正常报废', value: 'scrap' },
-  { label: '实物未找到', value: 'missing' }
-]
-
-const confirmerOptions = computed(() =>
-  confirmers.value.map((user) => ({
-    label: `${user.employeeName || user.employeeId} / ${user.employeeId}`,
-    value: user.employeeId
-  }))
-)
-
-const selectedConfirmer = computed(() => confirmers.value.find((user) => user.employeeId === confirmerId.value))
 
 function filterByRoutePlan(tasks: SamplingTaskVO[]) {
   const planId = routePlanId.value
@@ -105,10 +98,6 @@ const sourceTasks = computed(() => (activeTab.value === 'todo' ? scopedCurrentTa
 
 const visibleTasks = computed(() =>
   sourceTasks.value.filter((task) => {
-    const nodeMatched =
-      activeTab.value === 'history' ||
-      props.nodeCodes.length === 0 ||
-      props.nodeCodes.includes(String(task.currentNode || ''))
     const statusMatched = statusFilter.value === 'all' || task.currentNode === statusFilter.value
     const text = keyword.value.trim()
     const keywordMatched =
@@ -116,13 +105,20 @@ const visibleTasks = computed(() =>
       [task.taskNo, task.planNo, task.deviceCode, task.deviceName, task.factoryCode, task.deptName]
         .filter(Boolean)
         .some((value) => String(value).includes(text))
-    return nodeMatched && statusMatched && keywordMatched
+    return statusMatched && keywordMatched
   })
 )
 
 const canSelect = computed(() => activeTab.value === 'todo')
-const canBatchAdmin = computed(() => props.role === 'admin' && selectedTasks.value.length > 0)
-const canBatchResult = computed(() => props.role !== 'admin' && selectedTasks.value.length > 0)
+const isAdminActionWorkspace = computed(() => currentTasks.value.some(
+  (task) => task.currentNode === 'admin_confirm' && hasWorkflowAction(task, 'SUBMIT')
+))
+const canBatchAdmin = computed(() => selectedTasks.value.length > 0 && selectedTasks.value.every(
+  (task) => hasWorkflowAction(task, 'SUBMIT') && task.currentNode === 'admin_confirm'
+))
+const canBatchResult = computed(() => selectedTasks.value.length > 0 && selectedTasks.value.every(
+  (task) => hasWorkflowAction(task, 'SUBMIT') || hasWorkflowAction(task, 'APPROVE_REJECT')
+))
 
 function resetFilter() {
   statusFilter.value = 'all'
@@ -154,6 +150,10 @@ function openProcess(task: SamplingTaskVO) {
     openDetail(task)
     return
   }
+  if (!task.allowedActions?.length) {
+    message.warning('当前任务没有可执行操作，请刷新待办')
+    return
+  }
   openResult('unqualified', [task])
 }
 
@@ -171,25 +171,25 @@ async function submitAdminConfirm() {
     message.warning('一次只能提交同一张抽检计划内的设备')
     return
   }
-  const needsConfirmer = adminResult.value === 'normal' && selectedTasks.value.some((task) => task.isCommon === 0)
-  if (needsConfirmer && !confirmerId.value) {
-    message.warning('否通用设备正常送检时必须选择确认员')
-    return
-  }
-
   submitting.value = true
+  let refreshedByConflict = false
   try {
-    await adminConfirmSampling({
-      taskIds: selectedTasks.value.map((task) => task.id),
-      result: adminResult.value,
-      confirmerId: needsConfirmer ? confirmerId.value : undefined,
-      confirmerName: needsConfirmer ? selectedConfirmer.value?.employeeName || confirmerId.value : undefined,
-      opinion: adminOpinion.value
-    })
+    for (const task of selectedTasks.value) {
+      const result = await executeSamplingAction(task, () => adminConfirmSampling({
+        samplingTaskId: task.id,
+        taskId: taskWorkflowId(task),
+        rowVersion: task.rowVersion!,
+        opinion: adminOpinion.value
+      }))
+      if (result.status === 'already-handled') {
+        refreshedByConflict = true
+        return
+      }
+    }
     message.success('抽检清点结果已提交')
     selectedRowKeys.value = []
     selectedTasks.value = []
-    await loadData()
+    if (!refreshedByConflict) await loadData()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '抽检清点提交失败')
   } finally {
@@ -197,21 +197,36 @@ async function submitAdminConfirm() {
   }
 }
 
-async function submitResult(payload: SamplingVerificationSubmitRequest) {
+async function submitResult(payload: SamplingVerificationDraft) {
   submitting.value = true
+  let refreshedByConflict = false
   try {
-    if (props.role === 'confirmer') {
-      await confirmerSubmitSampling(payload)
-      message.success('确认员抽检判定已提交')
-    } else {
-      await verifierSubmitSampling(payload)
-      message.success('检定员抽检结果已提交')
+    for (const task of resultDialogTasks.value) {
+      const action = () => {
+        const request = {
+          ...payload,
+          samplingTaskId: task.id,
+          taskId: taskWorkflowId(task),
+          rowVersion: task.rowVersion!
+        }
+        return hasWorkflowAction(task, 'APPROVE_REJECT')
+          ? confirmerSubmitSampling(request)
+          : verifierSubmitSampling(request)
+      }
+      const result = await executeSamplingAction(task, action)
+      if (result.status === 'already-handled') {
+        refreshedByConflict = true
+        return
+      }
     }
+    message.success(resultDialogTasks.value.some((task) => hasWorkflowAction(task, 'APPROVE_REJECT'))
+      ? '确认员抽检判定已提交'
+      : '检定员抽检结果已提交')
     resultOpen.value = false
     resultDialogTasks.value = []
     selectedRowKeys.value = []
     selectedTasks.value = []
-    await loadData()
+    if (!refreshedByConflict) await loadData()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '抽检结果提交失败')
   } finally {
@@ -243,51 +258,61 @@ async function loadPlanContext() {
   }
 }
 
-async function loadConfirmers(tasks: SamplingTaskVO[]) {
-  const deptId = tasks.find((task) => task.deptId)?.deptId || session.user?.deptId || ''
-  if (!deptId || props.role !== 'admin') {
-    confirmers.value = []
-    return
-  }
-  try {
-    confirmers.value = await listUsersByDeptAndRole(deptId, 'CONFIRMER')
-  } catch {
-    confirmers.value = []
-  }
-}
-
+let dataLoadId = 0
 async function loadData() {
+  const loadId = ++dataLoadId
   loading.value = true
   selectedRowKeys.value = []
   selectedTasks.value = []
   try {
-    /** 当前待办与参与记录的独立请求结果，不因单路失败互相清空。 */
-    const taskResultsPromise = Promise.allSettled([listSamplingMyTasks(), listSamplingMyHistory()])
     /** 路由计划基础信息和权威汇总与任务列表并行读取。 */
     const planContextPromise = loadPlanContext()
-    const [todoResult, historyResult] = await taskResultsPromise
-
-    currentTasks.value = todoResult.status === 'fulfilled' ? todoResult.value : []
-    historyTasks.value = historyResult.status === 'fulfilled' ? historyResult.value : []
-
-    if (todoResult.status === 'rejected') {
-      message.error(todoResult.reason instanceof Error ? todoResult.reason.message : '抽检待办加载失败')
+    await refreshWorkflowTasks()
+    const details = await loadWorkflowDetails(
+      [...workflowTodoTasks.value, ...workflowParticipatedTasks.value],
+      (task, signal) => getSamplingTask(task.businessId, signal)
+    )
+    if (!details || loadId !== dataLoadId) return
+    const detailByWorkflowTaskId = new Map(details.map((task) => [String(task.workflowTaskId), task]))
+    currentTasks.value = workflowTodoTasks.value.flatMap((task) => {
+      const detail = detailByWorkflowTaskId.get(String(task.taskId))
+      return detail ? [detail as SamplingTaskVO] : []
+    })
+    historyTasks.value = workflowParticipatedTasks.value.flatMap((task) => {
+      const detail = detailByWorkflowTaskId.get(String(task.taskId))
+      return detail ? [detail as SamplingTaskVO] : []
+    })
+    await planContextPromise
+  } catch (error) {
+    if (loadId === dataLoadId) {
+      message.error(error instanceof Error ? error.message : '抽检任务加载失败')
     }
-    if (historyResult.status === 'rejected') {
-      message.error(historyResult.reason instanceof Error ? historyResult.reason.message : '抽检参与记录加载失败')
-    }
-
-    await Promise.all([planContextPromise, loadConfirmers([...currentTasks.value, ...historyTasks.value])])
   } finally {
-    loading.value = false
+    if (loadId === dataLoadId) loading.value = false
   }
+}
+
+function taskWorkflowId(task: SamplingTaskVO) {
+  if (task.workflowTaskId === undefined || task.rowVersion === undefined) {
+    throw new Error('工作流任务上下文已失效，请刷新待办')
+  }
+  return task.workflowTaskId
+}
+
+async function executeSamplingAction<T>(task: SamplingTaskVO, action: () => Promise<T>) {
+  return executeTaskAction(taskWorkflowId(task), action, {
+    notifyAlreadyHandled: (notice) => message.warning(notice),
+    refresh: loadData
+  })
 }
 
 function backToTodo() {
   router.push('/todo')
 }
 
-onMounted(loadData)
+watch(workflowIdentity, () => {
+  void loadData()
+}, { immediate: true })
 
 watch(routePlanId, () => {
   selectedRowKeys.value = []
@@ -316,21 +341,12 @@ watch(routePlanId, () => {
         <a-button @click="resetFilter">重置</a-button>
         <div class="filter-spacer"></div>
 
-        <template v-if="role === 'admin' && activeTab === 'todo'">
-          <a-select v-model:value="adminResult" class="result-select" :options="adminResultOptions" />
-          <a-select
-            v-model:value="confirmerId"
-            class="confirmer-select"
-            :options="confirmerOptions"
-            show-search
-            option-filter-prop="label"
-            placeholder="转发确认员"
-          />
+        <template v-if="isAdminActionWorkspace && activeTab === 'todo'">
           <a-input v-model:value="adminOpinion" class="opinion-input" placeholder="处理意见" />
           <a-button type="primary" :loading="submitting" :disabled="!canBatchAdmin" @click="submitAdminConfirm">提交</a-button>
         </template>
 
-        <template v-if="role !== 'admin' && activeTab === 'todo'">
+        <template v-if="activeTab === 'todo' && !isAdminActionWorkspace">
           <a-button class="success-button" :disabled="!canBatchResult" @click="openResult('qualified', selectedTasks)">合格</a-button>
           <a-button danger :disabled="!canBatchResult" @click="openResult('unqualified', selectedTasks)">不合格处理</a-button>
         </template>
@@ -343,6 +359,7 @@ watch(routePlanId, () => {
         :role="role"
         :loading="loading"
         :selectable="canSelect"
+        :selectable-task="(task: SamplingTaskVO) => Boolean(task.allowedActions?.length)"
         :selected-row-keys="selectedRowKeys"
         @selection-change="updateSelection"
         @detail="openDetail"

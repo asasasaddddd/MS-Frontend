@@ -62,7 +62,7 @@ export interface ChangeApproveRequest {
   /** 统一工作流任务主键。 */
   taskId: EntityId
   /** 统一工作流任务乐观并发版本。 */
-  rowVersion: number
+  rowVersion: EntityId
   opinion?: string
 }
 
@@ -71,7 +71,7 @@ export interface ChangeRejectRequest {
   /** 统一工作流任务主键。 */
   taskId: EntityId
   /** 统一工作流任务乐观并发版本。 */
-  rowVersion: number
+  rowVersion: EntityId
   reason?: string
 }
 
@@ -80,7 +80,7 @@ export interface ChangeVerifierHandleRequest {
   /** 统一工作流任务主键。 */
   taskId: EntityId
   /** 统一工作流任务乐观并发版本。 */
-  rowVersion: number
+  rowVersion: EntityId
   verificationResult: 'qualified' | 'unqualified' | 'scrap' | 'repair' | string
   verificationDate?: string
   validUntil?: string
@@ -161,7 +161,7 @@ export interface ChangeOrderVO {
   attachmentGroupId?: EntityId
   processInstanceId?: EntityId
   taskId?: EntityId
-  rowVersion?: number
+  rowVersion?: EntityId
   currentNodeCode?: string
   currentNodeName?: string
   allowedActions?: string[]

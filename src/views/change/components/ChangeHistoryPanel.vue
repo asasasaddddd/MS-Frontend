@@ -2,17 +2,17 @@
 import { onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { getChangeOrderDetail } from '@/api/change'
-import { getWorkflowProcessByBusiness, listWorkflowHistory } from '@/api/workflow'
+import { getWorkflowTimeline, listWorkflowHistory } from '@/api/workflow'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import type { ChangeOrderVO } from '@/types/change'
-import type { WorkflowProcess, WorkflowTask } from '@/types/workflow'
+import type { WorkflowTask, WorkflowTimelineEntry } from '@/types/workflow'
 import { changeTypeName, display, formatDateTime } from '@/views/change/changeDisplayModel'
 
 interface HistoryRow {
   key: string
   task: WorkflowTask
   order: ChangeOrderVO
-  process?: WorkflowProcess | null
+  timeline: WorkflowTimelineEntry[]
 }
 
 const props = defineProps<{
@@ -65,20 +65,20 @@ async function loadRows() {
 
     const details = await Promise.allSettled(
       Array.from(taskByOrder.values()).map(async (task) => {
-        const [order, process] = await Promise.all([
+        const [order, timeline] = await Promise.all([
           getChangeOrderDetail(task.businessId),
-          getWorkflowProcessByBusiness('change', task.businessId)
+          getWorkflowTimeline(task.processInstanceId)
         ])
-        return { task, order, process }
+        return { task, order, timeline }
       })
     )
     rows.value = details
-      .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: ChangeOrderVO; process: WorkflowProcess | null }> => item.status === 'fulfilled')
+      .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: ChangeOrderVO; timeline: WorkflowTimelineEntry[] }> => item.status === 'fulfilled')
       .map((item) => ({
         key: String(item.value.task.businessId),
         task: item.value.task,
         order: item.value.order,
-        process: item.value.process
+        timeline: item.value.timeline
       }))
   } catch (error) {
     rows.value = []
@@ -104,7 +104,7 @@ onMounted(loadRows)
           <template v-else-if="column.key === 'nodeName'">{{ display(record.task.nodeName) }}</template>
           <template v-else-if="column.key === 'action'"><a-tag color="green">{{ actionName(record.task.outcomeCode) }}</a-tag></template>
           <template v-else-if="column.key === 'completedAt'">{{ formatDateTime(record.task.completedAt) }}</template>
-          <template v-else-if="column.key === 'currentNodeName'"><a-tag color="blue">{{ display(record.process?.currentNodeName || record.order.workflowStatus || record.order.statusName) }}</a-tag></template>
+          <template v-else-if="column.key === 'currentNodeName'"><a-tag color="blue">{{ display(record.task.currentNodeName || record.task.currentNodeCode || record.order.workflowStatus || record.order.statusName) }}</a-tag></template>
           <template v-else-if="column.key === 'operation'"><a-button type="link" @click="openDetail(record)">查看</a-button></template>
         </template>
       </a-table>
@@ -113,7 +113,7 @@ onMounted(loadRows)
     <a-modal v-model:open="detailOpen" title="状态变更已办详情" width="960px" :footer="null">
       <div v-if="activeRow" class="history-detail-grid">
         <div><span>变更单号</span><strong>{{ display(activeRow.order.orderNo) }}</strong></div>
-        <div><span>当前流转节点</span><strong>{{ display(activeRow.process?.currentNodeName || activeRow.order.workflowStatus || activeRow.order.statusName) }}</strong></div>
+        <div><span>当前流转节点</span><strong>{{ display(activeRow.task.currentNodeName || activeRow.task.currentNodeCode || activeRow.order.workflowStatus || activeRow.order.statusName) }}</strong></div>
         <div><span>本人已办节点</span><strong>{{ display(activeRow.task.nodeName) }}</strong></div>
         <div><span>本人处理结果</span><strong>{{ actionName(activeRow.task.outcomeCode) }}</strong></div>
         <div class="full"><span>本人处理意见</span><strong>{{ display(activeRow.task.opinion) }}</strong></div>
@@ -124,6 +124,18 @@ onMounted(loadRows)
         <div>
           <span>申请附件</span>
           <AttachmentListButton :group-id="activeRow.order.attachmentGroupId" title="状态变更申请附件" size="small" />
+        </div>
+        <div class="full timeline-section">
+          <span>流程轨迹</span>
+          <a-empty v-if="activeRow.timeline.length === 0" description="暂无流程轨迹" />
+          <a-timeline v-else>
+            <a-timeline-item v-for="entry in activeRow.timeline" :key="String(entry.id)">
+              <strong>{{ display(entry.eventKindName || entry.actionName || entry.nodeName) }}</strong>
+              <p>{{ display(entry.nodeName) }}<template v-if="entry.nextNodeName"> → {{ entry.nextNodeName }}</template></p>
+              <p>{{ display(entry.operatorName || entry.operatorId) }} · {{ formatDateTime(entry.operatedAt) }}</p>
+              <p v-if="entry.opinion || entry.resultName">{{ display(entry.opinion || entry.resultName) }}</p>
+            </a-timeline-item>
+          </a-timeline>
         </div>
       </div>
     </a-modal>
@@ -140,5 +152,6 @@ onMounted(loadRows)
 .history-detail-grid .full { grid-column: 1 / -1; }
 .history-detail-grid span { display: block; margin-bottom: 8px; color: #667085; font-size: 12px; }
 .history-detail-grid strong { color: #172033; font-size: 15px; }
+.timeline-section p { margin: 4px 0 0; color: #667085; }
 @media (max-width: 760px) { .history-detail-grid { grid-template-columns: 1fr; } .history-detail-grid .full { grid-column: auto; } }
 </style>

@@ -48,10 +48,11 @@ export function verifierHandleChange(data: ChangeVerifierHandleRequest) {
   })
 }
 
-export function getChangeOrderDetail(orderId: string | number) {
+export function getChangeOrderDetail(orderId: string | number, signal?: AbortSignal) {
   return request<ChangeOrderVO>({
     url: changeEndpoint('detail', orderId),
-    method: 'GET'
+    method: 'GET',
+    signal
   })
 }
 

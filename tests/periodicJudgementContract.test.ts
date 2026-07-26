@@ -146,16 +146,23 @@ const responsibleViewSource = readFileSync(
   new URL('../src/views/periodic/PeriodicResponsibleEngineerView.vue', import.meta.url),
   'utf8'
 )
-for (const nodeCode of ['responsible_second_judge', 'responsible_third_judge', 'responsible_fourth_judge']) {
-  assert.match(responsibleViewSource, new RegExp(nodeCode))
-}
+assert.doesNotMatch(responsibleViewSource, /node-codes/)
 
 const verifierViewSource = readFileSync(
   new URL('../src/views/periodic/PeriodicVerifierExternalView.vue', import.meta.url),
   'utf8'
 )
-for (const nodeCode of ['verifier_second_judge', 'verifier_third_judge', 'verifier_scrap_disposal']) {
-  assert.match(verifierViewSource, new RegExp(nodeCode))
+assert.doesNotMatch(verifierViewSource, /node-codes/)
+
+for (const nodeCode of [
+  'responsible_second_judge',
+  'responsible_third_judge',
+  'responsible_fourth_judge',
+  'verifier_second_judge',
+  'verifier_third_judge',
+  'verifier_scrap_disposal'
+]) {
+  assert.match(workspaceSource, new RegExp(nodeCode))
 }
 
 const navigationSource = readFileSync(new URL('../src/composables/useNavSections.ts', import.meta.url), 'utf8')

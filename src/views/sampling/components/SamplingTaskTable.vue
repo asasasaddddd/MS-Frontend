@@ -15,11 +15,13 @@ const props = withDefaults(
     role: SamplingTableRole
     loading?: boolean
     selectable?: boolean
+    selectableTask?: (task: SamplingTaskVO) => boolean
     selectedRowKeys?: SamplingEntityId[]
   }>(),
   {
     loading: false,
     selectable: true,
+    selectableTask: () => true,
     selectedRowKeys: () => []
   }
 )
@@ -38,6 +40,10 @@ const rowSelection = computed(() => {
   if (!props.selectable) return undefined
   return {
     selectedRowKeys: props.selectedRowKeys,
+    getCheckboxProps: (row: { taskId: SamplingEntityId }) => {
+      const task = taskById.value.get(String(row.taskId))
+      return { disabled: !task || !props.selectableTask(task) }
+    },
     onChange: (keys: SamplingEntityId[]) => {
       const selectedTasks = keys
         .map((key) => taskById.value.get(String(key)))
@@ -61,9 +67,8 @@ function openProcess(taskId: SamplingEntityId) {
   if (task) emit('process', task)
 }
 
-function actionText(row: { currentNode: string }) {
-  if (row.currentNode === 'completed') return '查看'
-  return '处理'
+function canProcess(taskId: SamplingEntityId) {
+  return Boolean(findTask(taskId)?.allowedActions?.length)
 }
 </script>
 
@@ -84,7 +89,7 @@ function actionText(row: { currentNode: string }) {
       </template>
       <template v-else-if="column.key === 'action'">
         <a-space>
-          <a-button type="link" class="table-link" @click="openProcess(record.taskId)">{{ actionText(record) }}</a-button>
+          <a-button v-if="canProcess(record.taskId)" type="link" class="table-link" @click="openProcess(record.taskId)">处理</a-button>
           <a-button type="link" class="table-link muted" @click="openDetail(record.taskId)">详情</a-button>
         </a-space>
       </template>

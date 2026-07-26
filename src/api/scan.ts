@@ -1,11 +1,12 @@
 import { request } from '@/api/request'
 import {
   externalSendOutPeriodic,
-  listPeriodicMyHistory,
-  listPeriodicMyTasks,
+  getPeriodicTask,
   sendOutReturnPeriodic,
   verifierReceivePeriodic
 } from '@/api/periodic'
+import { queryWorkflowTasks } from '@/api/workflow'
+import type { WorkflowTaskView } from '@/types/workflow'
 import type { PeriodicTaskVO } from '@/types/periodic'
 import type {
   BusinessScanRecordQuery,
@@ -100,18 +101,20 @@ function normalizeFirstCheckRow(row: FirstCheckScanInboxItem): UnifiedScanInboxI
   }
 }
 
-export function listFirstCheckScanInbox() {
+export function listFirstCheckScanInbox(signal?: AbortSignal) {
   return request<FirstCheckScanInboxItem[]>({
     url: '/scan/firstcheck/inbox',
-    method: 'GET'
+    method: 'GET',
+    ...(signal ? { signal } : {})
   })
 }
 
-export function listBusinessScanRecords(params: BusinessScanRecordQuery) {
+export function listBusinessScanRecords(params: BusinessScanRecordQuery, signal?: AbortSignal) {
   return request<ScanRecord[]>({
     url: '/scan/business/records',
     method: 'GET',
-    params
+    params,
+    ...(signal ? { signal } : {})
   })
 }
 
@@ -121,7 +124,7 @@ function uniquePeriodicTasks(...groups: PeriodicTaskVO[][]) {
   return Array.from(map.values())
 }
 
-async function listPeriodicScannedRows(tasks: PeriodicTaskVO[], actions: PeriodicScanAction[]) {
+async function listPeriodicScannedRows(tasks: PeriodicTaskVO[], actions: PeriodicScanAction[], signal?: AbortSignal) {
   const queries = tasks.flatMap((task) => actions.map((action) => ({
     task,
     action,
@@ -129,21 +132,31 @@ async function listPeriodicScannedRows(tasks: PeriodicTaskVO[], actions: Periodi
   }))).filter((item): item is { task: PeriodicTaskVO; action: PeriodicScanAction; params: BusinessScanRecordQuery } => Boolean(item.params))
 
   const results = await Promise.allSettled(queries.map(async ({ task, action, params }) => {
-    const records = await listBusinessScanRecords(params)
+    const records = await listBusinessScanRecords(params, signal)
     return records[0] ? normalizePeriodicScannedRow(task, action, records[0]) : null
   }))
 
   return results.flatMap((result) => result.status === 'fulfilled' && result.value ? [result.value] : [])
 }
 
-export async function listUnifiedScanInbox(actions?: UnifiedScanAction[]) {
+async function listPeriodicWorkflowTasks(view: WorkflowTaskView, signal?: AbortSignal) {
+  const page = await queryWorkflowTasks({ view, businessType: 'PERIODIC', current: 1, size: 200 }, signal)
+  const results = await Promise.allSettled(
+    page.records.map((task) => getPeriodicTask(task.businessId, signal))
+  )
+  return results.flatMap((result) => result.status === 'fulfilled' ? [result.value] : [])
+}
+
+export async function listUnifiedScanInbox(actions?: UnifiedScanAction[], signal?: AbortSignal) {
   const requestedPeriodicActions = actions === undefined
     ? periodicScanActions
     : actions.map(String).filter(isPeriodicScanAction)
-  const historyRequest = requestedPeriodicActions.length ? listPeriodicMyHistory() : Promise.resolve([])
+  const historyRequest = requestedPeriodicActions.length
+    ? listPeriodicWorkflowTasks('participated', signal)
+    : Promise.resolve([])
   const [firstCheckResult, periodicResult, periodicHistoryResult] = await Promise.allSettled([
-    listFirstCheckScanInbox(),
-    listPeriodicMyTasks(),
+    listFirstCheckScanInbox(signal),
+    listPeriodicWorkflowTasks('todo', signal),
     historyRequest
   ])
   const rows: UnifiedScanInboxItem[] = []
@@ -161,7 +174,7 @@ export async function listUnifiedScanInbox(actions?: UnifiedScanAction[]) {
     periodicHistoryResult.status === 'fulfilled' ? periodicHistoryResult.value : []
   )
   if (requestedPeriodicActions.length && periodicTasks.length) {
-    rows.push(...await listPeriodicScannedRows(periodicTasks, requestedPeriodicActions))
+    rows.push(...await listPeriodicScannedRows(periodicTasks, requestedPeriodicActions, signal))
   }
 
   if (

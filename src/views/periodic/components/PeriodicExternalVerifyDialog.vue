@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
+import { message } from 'ant-design-vue'
 import AttachmentListButton from '../../../components/AttachmentListButton.vue'
 import AttachmentUploadButton from '../../../components/AttachmentUploadButton.vue'
 import { displayValue } from '../periodicDisplayModel'
@@ -50,8 +51,14 @@ function close() {
 
 function submit() {
   if (!props.task || !canSubmit.value) return
+  if (props.task.workflowTaskId === undefined || props.task.rowVersion === undefined) {
+    message.warning('工作流任务上下文已失效，请刷新待办')
+    return
+  }
   emit('submit', {
-    taskId: props.task.id,
+    periodicTaskId: props.task.id,
+    taskId: props.task.workflowTaskId,
+    rowVersion: props.task.rowVersion,
     verificationDate: form.verificationDate,
     certificateAttachmentGroupId: certificateAttachmentGroupId.value,
     opinion: form.opinion

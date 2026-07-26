@@ -26,15 +26,16 @@ export interface SamplingCreatePlanRequest {
 }
 
 export interface SamplingAdminConfirmRequest {
-  taskIds: SamplingEntityId[]
-  result?: SamplingAdminResult
-  confirmerId?: string
-  confirmerName?: string
+  samplingTaskId: SamplingEntityId
+  taskId: SamplingEntityId
+  rowVersion: SamplingEntityId
   opinion?: string
 }
 
 export interface SamplingVerificationSubmitRequest {
-  taskIds: SamplingEntityId[]
+  samplingTaskId: SamplingEntityId
+  taskId: SamplingEntityId
+  rowVersion: SamplingEntityId
   result?: SamplingResult
   verificationDate?: string
   validUntil?: string
@@ -43,6 +44,11 @@ export interface SamplingVerificationSubmitRequest {
   disposalType?: SamplingDisposalType
   opinion?: string
 }
+
+export type SamplingVerificationDraft = Omit<
+  SamplingVerificationSubmitRequest,
+  'samplingTaskId' | 'taskId' | 'rowVersion'
+>
 
 export interface SamplingPlanVO {
   id: SamplingEntityId
@@ -67,6 +73,10 @@ export interface SamplingPlanVO {
 
 export interface SamplingTaskVO {
   id: SamplingEntityId
+  workflowTaskId?: SamplingEntityId
+  processInstanceId?: SamplingEntityId
+  rowVersion?: SamplingEntityId
+  allowedActions?: string[]
   planId?: SamplingEntityId
   planNo?: string
   planName?: string

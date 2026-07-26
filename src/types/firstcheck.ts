@@ -109,7 +109,7 @@ export interface FirstCheckOrder {
 export interface ApproveRequest {
   orderId: string | number
   taskId: string | number
-  taskRowVersion: number
+  taskRowVersion: string | number
   approve?: boolean
   responsibleEngineerId?: string
   responsibleEngineerName?: string
@@ -167,7 +167,7 @@ export interface BatchDeptLeaderApproveRequest {
 export interface BatchWorkflowTaskItem {
   orderId: string | number
   taskId: string | number
-  taskRowVersion: number
+  taskRowVersion: string | number
 }
 
 export interface BatchOperationResult {
@@ -181,7 +181,7 @@ export interface BatchOperationResult {
 export interface ConfirmCategoryRequest {
   orderId: string | number
   taskId: string | number
-  taskRowVersion: number
+  taskRowVersion: string | number
   isWithReport: number
   reportFileId?: number
   usageScenario?: string
@@ -196,7 +196,7 @@ export interface ConfirmCategoryRequest {
 export interface ConfirmVerificationTypeRequest {
   orderId: string | number
   taskId: string | number
-  taskRowVersion: number
+  taskRowVersion: string | number
   verificationType: VerificationType
   selfVerifierId?: string
   selfVerifierName?: string
@@ -211,7 +211,7 @@ export interface ConfirmVerificationTypeRequest {
 export interface DeviceCodeReservationRequest {
   orderId: string | number
   taskId: string | number
-  taskRowVersion: number
+  taskRowVersion: string | number
   subjectSubcategory: string
   identifierCode?: string
   qualifiedQuantity: number
@@ -234,7 +234,7 @@ export interface QualifiedFirstCheckDeviceRequest {
 export interface VerifierVerifyAndAssignRequest {
   orderId: string | number
   taskId: string | number
-  taskRowVersion: number
+  taskRowVersion: string | number
   reservationId?: string
   verificationResult: VerificationResult
   qualifiedQuantity: number
@@ -273,7 +273,7 @@ export interface AssignedFirstCheckDevice {
 export interface FirstCheckAdminRow {
   key: string
   taskId: string | number
-  taskRowVersion: number
+  taskRowVersion: string | number
   allowedActions: string[]
   nodeCode: string
   nodeName: string

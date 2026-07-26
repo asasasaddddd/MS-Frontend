@@ -16,7 +16,7 @@ import FirstCheckHistoryPanel from '@/views/firstcheck/components/FirstCheckHist
 interface EngineerRow {
   key: string
   taskId: string | number
-  taskRowVersion: number
+  taskRowVersion: string | number
   allowedActions: string[]
   nodeCode: string
   order: FirstCheckOrder

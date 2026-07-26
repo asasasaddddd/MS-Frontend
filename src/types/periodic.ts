@@ -79,6 +79,10 @@ export interface PeriodicJudgementRecordVO {
 
 export interface PeriodicTaskVO {
   id: EntityId
+  workflowTaskId?: EntityId
+  processInstanceId?: EntityId
+  rowVersion?: EntityId
+  allowedActions?: string[]
   planId?: EntityId
   taskNo?: string
   deviceId?: EntityId
@@ -193,7 +197,9 @@ export interface PeriodicScanRequest {
 }
 
 export interface PeriodicVerificationRecordRequest {
+  periodicTaskId: EntityId
   taskId: EntityId
+  rowVersion: EntityId
   reportNo?: string
   verificationTime?: string
   verificationUnit?: string
@@ -218,14 +224,18 @@ export interface PeriodicVerificationRecordRequest {
 }
 
 export interface PeriodicManagerForwardConfirmRequest {
+  periodicTaskId: EntityId
   taskId: EntityId
+  rowVersion: EntityId
   confirmerId: string
   confirmerName: string
   opinion?: string
 }
 
 export interface PeriodicConfirmerConfirmRequest {
+  periodicTaskId: EntityId
   taskId: EntityId
+  rowVersion: EntityId
   confirmResult: PeriodicConfirmResult
   opinion?: string
 }
@@ -238,7 +248,9 @@ export interface PeriodicExceptionDisposeRequest {
 }
 
 export interface PeriodicSupplierFillInfoRequest {
+  periodicTaskId: EntityId
   taskId: EntityId
+  rowVersion: EntityId
   verificationDate: string
   result: PeriodicVerificationResult
   verificationUnit?: string
@@ -249,7 +261,9 @@ export interface PeriodicSupplierFillInfoRequest {
 }
 
 export interface PeriodicVerifierFillInfoRequest {
+  periodicTaskId: EntityId
   taskId: EntityId
+  rowVersion: EntityId
   verificationDate: string
   certificateAttachmentGroupId?: EntityId
   verificationUnit?: string
@@ -258,14 +272,18 @@ export interface PeriodicVerifierFillInfoRequest {
 
 /** 周检多轮判定请求，由后端依据当前待办决定角色、轮次和下一节点。 */
 export interface PeriodicJudgementRequest {
+  periodicTaskId: EntityId
   taskId: EntityId
+  rowVersion: EntityId
   judgeResult: PeriodicJudgementResult
   opinion?: string
 }
 
 /** 外委检定员报废处置请求。 */
 export interface PeriodicScrapDisposalRequest {
+  periodicTaskId: EntityId
   taskId: EntityId
+  rowVersion: EntityId
   scrapReason: string
   opinion?: string
 }

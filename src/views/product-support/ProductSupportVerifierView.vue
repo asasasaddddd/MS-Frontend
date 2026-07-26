@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { SearchOutlined } from '@ant-design/icons-vue'
 import { getProductSupportTaskFlowSummary } from '@/api/flowSummary'
 import {
   getProductSupportOrder,
-  listProductSupportMyHistory,
-  listProductSupportMyTasks,
   verifierSubmitProductSupport
 } from '@/api/productSupport'
+import { hasWorkflowAction, useWorkflowTask } from '@/composables/useWorkflowTask'
+import { useSessionStore } from '@/stores/session'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import type { FlowSummary } from '@/types/flowSummary'
 import type { ProductSupportEntityId, ProductSupportOrderVO, ProductSupportRatioVO } from '@/types/productSupport'
@@ -34,6 +34,23 @@ type VerifyRatioDraft = {
 }
 
 const route = useRoute()
+const session = useSessionStore()
+const workflowIdentity = computed(() => {
+  const user = session.user
+  return user ? `${user.employeeId}|${user.roleCode}` : ''
+})
+const {
+  todoTasks: workflowTodoTasks,
+  participatedTasks: workflowParticipatedTasks,
+  refresh: refreshWorkflowTasks,
+  loadDetails: loadWorkflowDetails,
+  executeTaskAction
+} = useWorkflowTask({
+  identityKey: workflowIdentity,
+  businessType: 'PRODUCT_SUPPORT',
+  views: ['todo', 'participated'],
+  immediate: false
+})
 const loading = ref(false)
 const summaryLoading = ref(false)
 const historyLoading = ref(false)
@@ -102,6 +119,10 @@ const selectedOrders = computed(() => {
 
 const rowSelection = computed(() => ({
   selectedRowKeys: selectedRowKeys.value,
+  getCheckboxProps: (row: ProductSupportDisplayRow) => {
+    const order = tasks.value.find((item) => String(item.id) === String(row.orderId))
+    return { disabled: !order || !hasWorkflowAction(order, 'SUBMIT') }
+  },
   onChange: (keys: ProductSupportEntityId[]) => {
     selectedRowKeys.value = keys
   }
@@ -135,21 +156,38 @@ function ratioDraftFrom(ratio: ProductSupportRatioVO): VerifyRatioDraft {
   }
 }
 
+let dataLoadId = 0
 async function loadRows() {
+  const loadId = ++dataLoadId
   loading.value = true
+  historyLoading.value = true
   summaryLoading.value = true
   try {
-    const [taskResult, summaryResult] = await Promise.allSettled([
-      listProductSupportMyTasks(),
+    const [workflowResult, summaryResult] = await Promise.allSettled([
+      refreshWorkflowTasks(),
       getProductSupportTaskFlowSummary()
     ])
 
-    if (taskResult.status === 'fulfilled') {
-      tasks.value = taskResult.value
+    if (workflowResult.status === 'fulfilled') {
+      const details = await loadWorkflowDetails(
+        [...workflowTodoTasks.value, ...workflowParticipatedTasks.value],
+        (task, signal) => getProductSupportOrder(task.businessId, signal)
+      )
+      if (!details || loadId !== dataLoadId) return
+      const detailByWorkflowTaskId = new Map(details.map((order) => [String(order.workflowTaskId), order]))
+      tasks.value = workflowTodoTasks.value.flatMap((task) => {
+        const detail = detailByWorkflowTaskId.get(String(task.taskId))
+        return detail ? [detail as ProductSupportOrderVO] : []
+      })
+      history.value = workflowParticipatedTasks.value.flatMap((task) => {
+        const detail = detailByWorkflowTaskId.get(String(task.taskId))
+        return detail ? [detail as ProductSupportOrderVO] : []
+      })
       await openOrderFromRoute()
     } else {
       tasks.value = []
-      message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '产品配套待办加载失败')
+      history.value = []
+      message.error(workflowResult.reason instanceof Error ? workflowResult.reason.message : '产品配套任务加载失败')
     }
 
     if (summaryResult.status === 'fulfilled') {
@@ -159,26 +197,22 @@ async function loadRows() {
       message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '产品配套当前角色待办汇总加载失败')
     }
   } finally {
-    loading.value = false
-    summaryLoading.value = false
+    if (loadId === dataLoadId) {
+      loading.value = false
+      historyLoading.value = false
+      summaryLoading.value = false
+    }
   }
 }
 
-async function loadHistory() {
-  historyLoading.value = true
-  try {
-    history.value = await listProductSupportMyHistory()
-  } catch (error) {
-    history.value = []
-    message.error(error instanceof Error ? error.message : '产品配套参与记录加载失败')
-  } finally {
-    historyLoading.value = false
-  }
+function canProcessOrder(orderId: ProductSupportEntityId) {
+  return hasWorkflowAction(tasks.value.find((order) => String(order.id) === String(orderId)), 'SUBMIT')
 }
 
 async function openOrder(orderId: ProductSupportEntityId) {
   try {
-    const detail = await getProductSupportOrder(orderId)
+    const detail = [...tasks.value, ...history.value].find((order) => String(order.id) === String(orderId))
+      || await getProductSupportOrder(orderId)
     currentOrder.value = detail
     ratioDrafts.value = (detail.ratios || []).map(ratioDraftFrom)
     attachmentGroupId.value = detail.attachmentGroupId
@@ -193,6 +227,10 @@ async function openOrder(orderId: ProductSupportEntityId) {
 async function openSelected() {
   if (selectedOrders.value.length !== 1) {
     message.warning('请选择一条产品配套单进行处理')
+    return
+  }
+  if (!hasWorkflowAction(selectedOrders.value[0], 'SUBMIT')) {
+    message.warning('当前任务没有可执行操作，请刷新待办')
     return
   }
   await openOrder(selectedOrders.value[0].id)
@@ -226,8 +264,14 @@ async function submitVerify() {
   }
   submitting.value = true
   try {
-    await verifierSubmitProductSupport({
-      orderId: currentOrder.value.id,
+    const order = currentOrder.value
+    if (order.workflowTaskId === undefined || order.rowVersion === undefined) {
+      throw new Error('工作流任务上下文已失效，请刷新待办')
+    }
+    const result = await executeTaskAction(order.workflowTaskId, () => verifierSubmitProductSupport({
+      orderId: order.id,
+      taskId: order.workflowTaskId!,
+      rowVersion: order.rowVersion!,
       verificationDate: verifyForm.verificationDate,
       attachmentGroupId: attachmentGroupId.value,
       opinion: verifyForm.opinion,
@@ -238,12 +282,15 @@ async function submitVerify() {
         unqualifiedQuantity: Number(row.unqualifiedQuantity),
         unitPrice: row.unitPrice
       }))
+    }), {
+      notifyAlreadyHandled: (notice) => message.warning(notice),
+      refresh: loadRows
     })
+    if (result.status === 'already-handled') return
     message.success('产品配套检定信息已提交')
     verifyOpen.value = false
     selectedRowKeys.value = []
     await loadRows()
-    await loadHistory()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '产品配套检定信息提交失败')
   } finally {
@@ -258,10 +305,9 @@ watch(
   }
 )
 
-onMounted(async () => {
-  await loadRows()
-  await loadHistory()
-})
+watch(workflowIdentity, () => {
+  void loadRows()
+}, { immediate: true })
 </script>
 
 <template>
@@ -309,7 +355,7 @@ onMounted(async () => {
                 <a-tag :class="['tag', productSupportTagColor(record.currentNode || record.orderStatus)]">{{ record.orderStatusName }}</a-tag>
               </template>
               <template v-else-if="column.key === 'action'">
-                <a-button type="link" class="link-btn" @click="openOrder(record.orderId)">处理</a-button>
+                <a-button v-if="canProcessOrder(record.orderId)" type="link" class="link-btn" @click="openOrder(record.orderId)">处理</a-button>
               </template>
             </template>
           </a-table>

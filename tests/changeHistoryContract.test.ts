@@ -7,9 +7,14 @@ function source(path: string) {
 
 const panel = source('../src/views/change/components/ChangeHistoryPanel.vue')
 assert.match(panel, /listWorkflowHistory/)
-assert.match(panel, /getWorkflowProcessByBusiness/)
+assert.match(panel, /getWorkflowTimeline\(task\.processInstanceId\)/)
+assert.match(panel, /activeRow\.timeline/)
+assert.doesNotMatch(panel, /getWorkflowProcessByBusiness/)
 assert.match(panel, /本人处理意见/)
 assert.match(panel, /当前流转节点/)
+
+const workflowApi = source('../src/api/workflow.ts')
+assert.doesNotMatch(workflowApi, /getWorkflowProcessByBusiness|\/workflow\/process\/by-business/)
 
 const applyView = source('../src/views/change/ChangeApplyView.vue')
 assert.doesNotMatch(applyView, /ChangeHistoryPanel/)

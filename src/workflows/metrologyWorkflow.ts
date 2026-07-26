@@ -1,12 +1,14 @@
 import type { RoleCode } from '@/types/common'
 import type { WorkflowNode, WorkflowTask } from '@/types/workflow'
 
-export type WorkflowModule = 'firstcheck' | 'periodic' | 'change'
+export type WorkflowModule = 'firstcheck' | 'periodic' | 'change' | 'sampling' | 'productSupport'
 
 export const businessTypeAliases: Record<WorkflowModule, string[]> = {
   firstcheck: ['first_check', 'FIRST_CHECK', 'firstcheck', 'FIRSTCHECK'],
   periodic: ['periodic', 'PERIODIC'],
-  change: ['change', 'CHANGE']
+  change: ['change', 'CHANGE'],
+  sampling: ['sampling', 'SAMPLING'],
+  productSupport: ['product_support', 'PRODUCT_SUPPORT', 'productSupport']
 }
 
 export const firstCheckNodes: WorkflowNode[] = [
@@ -46,10 +48,22 @@ export const changeNodes: WorkflowNode[] = [
   { code: 'verifier_handle', name: '检定员处理', module: 'change', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: 'POST /api/change/verifier-handle' }
 ]
 
+export const samplingNodes: WorkflowNode[] = [
+  { code: 'admin_confirm', name: '管理员清点', module: 'sampling', roles: ['MEASURE_ADMIN'] },
+  { code: 'verifier_fill', name: '检定员检定', module: 'sampling', roles: ['VERIFIER_SELF'] },
+  { code: 'confirmer_confirm', name: '确认员判定', module: 'sampling', roles: ['CONFIRMER'] }
+]
+
+export const productSupportNodes: WorkflowNode[] = [
+  { code: 'verifier_fill', name: '检定员填写检定信息', module: 'productSupport', roles: ['VERIFIER_SELF', 'VERIFIER_EXTERNAL'] }
+]
+
 export const workflowNodes: Record<WorkflowModule, WorkflowNode[]> = {
   firstcheck: firstCheckNodes,
   periodic: periodicNodes,
-  change: changeNodes
+  change: changeNodes,
+  sampling: samplingNodes,
+  productSupport: productSupportNodes
 }
 
 /** 各业务角色在导航和待办路由中可见的节点集合。 */

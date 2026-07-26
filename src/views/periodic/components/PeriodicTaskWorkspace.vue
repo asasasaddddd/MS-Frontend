@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { getPeriodicPlanFlowSummary } from '../../../api/flowSummary'
@@ -8,8 +8,6 @@ import {
   exceptionDisposePeriodic,
   generatePeriodicTestPlan,
   getPeriodicTask,
-  listPeriodicMyHistory,
-  listPeriodicMyTasks,
   managerForwardConfirmPeriodic,
   submitPeriodicJudgement,
   submitPeriodicScrapDisposal,
@@ -18,6 +16,8 @@ import {
   verificationRecordPeriodic,
   verifierFillInfoPeriodic
 } from '../../../api/periodic'
+import { hasWorkflowAction, useWorkflowTask } from '../../../composables/useWorkflowTask'
+import { useSessionStore } from '../../../stores/session'
 import { listUsersByDeptAndRole, type SysUserVO } from '../../../api/system'
 import type {
   EntityId,
@@ -48,27 +48,36 @@ import PeriodicVerifyDialog from './PeriodicVerifyDialog.vue'
 import {
   buildPeriodicExceptionDisposeRequest,
   canDisposePeriodicException,
-  canSubmitPeriodicException,
   type PeriodicExceptionAction
 } from '../periodicExceptionModel'
 import { getPeriodicJudgementDisplay, type PeriodicTableRole } from '../periodicDisplayModel'
 
 type ActiveTab = 'todo' | 'history'
 
-const props = withDefaults(
-  defineProps<{
-    title: string
-    role: PeriodicTableRole
-    nodeCodes: string[]
-    verificationMethods?: string[]
-  }>(),
-  {
-    verificationMethods: () => []
-  }
-)
+const props = defineProps<{
+  title: string
+  role: PeriodicTableRole
+}>()
 
 const route = useRoute()
 const router = useRouter()
+const session = useSessionStore()
+const workflowIdentity = computed(() => {
+  const user = session.user
+  return user ? `${user.employeeId}|${user.roleCode}` : ''
+})
+const {
+  todoTasks: workflowTodoTasks,
+  participatedTasks: workflowParticipatedTasks,
+  refresh: refreshWorkflowTasks,
+  loadDetails: loadWorkflowDetails,
+  executeTaskAction
+} = useWorkflowTask({
+  identityKey: workflowIdentity,
+  businessType: 'PERIODIC',
+  views: ['todo', 'participated'],
+  immediate: false
+})
 const loading = ref(false)
 const submitting = ref(false)
 const generatingTestPlan = ref(false)
@@ -174,14 +183,6 @@ const scopedHistoryTasks = computed(() => filterByRoutePlan(historyTasks.value))
 const sourceTasks = computed(() => (activeTab.value === 'todo' ? scopedCurrentTasks.value : scopedHistoryTasks.value))
 const visibleTasks = computed(() =>
   sourceTasks.value.filter((task) => {
-    const nodeMatched =
-      activeTab.value === 'history' ||
-      props.nodeCodes.length === 0 ||
-      props.nodeCodes.includes(String(task.currentNode || ''))
-    const methodMatched =
-      props.verificationMethods.length === 0 ||
-      !task.verificationMethod ||
-      props.verificationMethods.includes(String(task.verificationMethod))
     const statusMatched = statusFilter.value === 'all' || task.currentNode === statusFilter.value
     const text = keyword.value.trim()
     const keywordMatched =
@@ -189,18 +190,20 @@ const visibleTasks = computed(() =>
       [task.taskNo, task.deviceCode, task.deviceName, task.factoryCode, task.deptName]
         .filter(Boolean)
         .some((value) => String(value).includes(text))
-    return nodeMatched && methodMatched && statusMatched && keywordMatched
+    return statusMatched && keywordMatched
   })
 )
 
-const canBatchException = computed(() => props.role === 'admin' && activeTab.value === 'todo')
-const exceptionCandidates = computed(() => selectedTasks.value.filter(canSubmitPeriodicException))
-const canSelectAdminTask = (task: PeriodicTaskVO) =>
-  canSubmitPeriodicException(task) ||
-  (task.currentNode === 'manager_forward_confirm' && task.taskStatus === 'wait_confirm')
+const canBatchException = computed(() => activeTab.value === 'todo' && currentTasks.value.some(
+  (task) => hasWorkflowAction(task, 'SUBMIT_EXCEPTION')
+))
+const exceptionCandidates = computed(() => selectedTasks.value.filter(
+  (task) => hasWorkflowAction(task, 'SUBMIT_EXCEPTION')
+))
+const canSelectAdminTask = (task: PeriodicTaskVO) => Boolean(task.allowedActions?.length)
 const forwardCandidates = computed(() =>
   selectedTasks.value.filter(
-    (task) => task.currentNode === 'manager_forward_confirm' && task.taskStatus === 'wait_confirm'
+    (task) => task.currentNode === 'manager_forward_confirm' && hasWorkflowAction(task, 'SUBMIT')
   )
 )
 const canSubmitForwardSelection = computed(
@@ -314,6 +317,11 @@ async function openProcess(task: PeriodicTaskVO) {
     return
   }
 
+  if (!task.allowedActions?.length) {
+    message.warning('当前任务没有可执行操作，请刷新待办')
+    return
+  }
+
   const node = String(task.currentNode || '')
   activeTask.value = task
   if (node === 'manager_forward_confirm') {
@@ -409,31 +417,57 @@ async function loadConfirmers(tasks: PeriodicTaskVO[]) {
   }
 }
 
+let dataLoadId = 0
+
 async function loadData() {
+  const loadId = ++dataLoadId
   loading.value = true
   selectedRowKeys.value = []
   selectedTasks.value = []
-  /** 当前待办与参与记录的独立请求结果，不因单路失败互相清空。 */
-  const taskResultsPromise = Promise.allSettled([listPeriodicMyTasks(), listPeriodicMyHistory()])
   /** 路由计划的权威汇总与任务列表并行读取。 */
   const planSummaryPromise = loadPlanFlowSummary()
-  const [todoResult, historyResult] = await taskResultsPromise
-
-  currentTasks.value = todoResult.status === 'fulfilled' ? todoResult.value : []
-  historyTasks.value = historyResult.status === 'fulfilled' ? historyResult.value : []
-
-  if (todoResult.status === 'rejected') {
-    message.error(todoResult.reason instanceof Error ? todoResult.reason.message : '周检待办加载失败')
+  try {
+    await refreshWorkflowTasks()
+    const details = await loadWorkflowDetails(
+      [...workflowTodoTasks.value, ...workflowParticipatedTasks.value],
+      (task, signal) => getPeriodicTask(task.businessId, signal)
+    )
+    if (!details || loadId !== dataLoadId) return
+    const detailByWorkflowTaskId = new Map(details.map((task) => [String(task.workflowTaskId), task]))
+    currentTasks.value = workflowTodoTasks.value.flatMap((task) => {
+      const detail = detailByWorkflowTaskId.get(String(task.taskId))
+      return detail ? [detail as PeriodicTaskVO] : []
+    })
+    historyTasks.value = workflowParticipatedTasks.value.flatMap((task) => {
+      const detail = detailByWorkflowTaskId.get(String(task.taskId))
+      return detail ? [detail as PeriodicTaskVO] : []
+    })
+  } catch (error) {
+    if (loadId === dataLoadId) {
+      message.error(error instanceof Error ? error.message : '周检任务加载失败')
+    }
   }
-  if (historyResult.status === 'rejected') {
-    message.error(historyResult.reason instanceof Error ? historyResult.reason.message : '周检参与记录加载失败')
-  }
 
+  if (loadId !== dataLoadId) return
   await Promise.all([
     planSummaryPromise,
     loadConfirmers(filterByRoutePlan([...currentTasks.value, ...historyTasks.value]))
   ])
-  loading.value = false
+  if (loadId === dataLoadId) loading.value = false
+}
+
+function taskWorkflowId(task: PeriodicTaskVO) {
+  if (task.workflowTaskId === undefined || task.rowVersion === undefined) {
+    throw new Error('工作流任务上下文已失效，请刷新待办')
+  }
+  return task.workflowTaskId
+}
+
+async function executePeriodicAction<T>(task: PeriodicTaskVO, action: () => Promise<T>) {
+  return executeTaskAction(taskWorkflowId(task), action, {
+    notifyAlreadyHandled: (notice) => message.warning(notice),
+    refresh: loadData
+  })
 }
 
 async function submitForwardSelection() {
@@ -458,17 +492,25 @@ async function submitForwardSelection() {
     message.warning('请选择确认员')
     return
   }
+  const selectedConfirmerId = confirmerId.value
 
   submitting.value = true
   let completed = 0
+  let refreshedByConflict = false
   try {
     for (const task of forwardCandidates.value) {
-      await managerForwardConfirmPeriodic({
-        taskId: task.id,
-        confirmerId: confirmerId.value,
-        confirmerName: selectedConfirmer.value?.employeeName || confirmerId.value,
+      const result = await executePeriodicAction(task, () => managerForwardConfirmPeriodic({
+        periodicTaskId: task.id,
+        taskId: taskWorkflowId(task),
+        rowVersion: task.rowVersion!,
+        confirmerId: selectedConfirmerId,
+        confirmerName: selectedConfirmer.value?.employeeName || selectedConfirmerId,
         opinion: '管理员转办确认员判定'
-      })
+      }))
+      if (result.status === 'already-handled') {
+        refreshedByConflict = true
+        return
+      }
       completed += 1
     }
     message.success(`已转办 ${completed} 台设备给确认员`)
@@ -478,7 +520,7 @@ async function submitForwardSelection() {
   } finally {
     selectedRowKeys.value = []
     selectedTasks.value = []
-    await loadData()
+    if (!refreshedByConflict) await loadData()
     submitting.value = false
   }
 }
@@ -503,10 +545,12 @@ async function generateTestTask() {
   }
 }
 
-async function runSubmit(action: () => Promise<void>, successText: string, close: () => void) {
+async function runSubmit(task: PeriodicTaskVO | null, action: () => Promise<void>, successText: string, close: () => void) {
+  if (!task) return
   submitting.value = true
   try {
-    await action()
+    const result = await executePeriodicAction(task, action)
+    if (result.status === 'already-handled') return
     message.success(successText)
     close()
     await loadData()
@@ -522,7 +566,7 @@ async function submitVerify(payload: PeriodicVerificationRecordRequest) {
     message.warning('请填写检定日期')
     return
   }
-  await runSubmit(() => verificationRecordPeriodic(payload), '检定信息已提交', () => {
+  await runSubmit(activeTask.value, () => verificationRecordPeriodic(payload), '检定信息已提交', () => {
     verifyOpen.value = false
   })
 }
@@ -532,7 +576,7 @@ async function submitExternalVerify(payload: PeriodicVerifierFillInfoRequest) {
     message.warning('请填写检定日期')
     return
   }
-  await runSubmit(() => verifierFillInfoPeriodic(payload), '外委检定信息已提交', () => {
+  await runSubmit(activeTask.value, () => verifierFillInfoPeriodic(payload), '外委检定信息已提交', () => {
     externalVerifyOpen.value = false
   })
 }
@@ -542,7 +586,7 @@ async function submitSupplierFill(payload: PeriodicSupplierFillInfoRequest) {
     message.warning('请填写检定日期')
     return
   }
-  await runSubmit(() => supplierFillInfoPeriodic(payload), '外扩检定信息已提交', () => {
+  await runSubmit(activeTask.value, () => supplierFillInfoPeriodic(payload), '外扩检定信息已提交', () => {
     supplierFillOpen.value = false
   })
 }
@@ -555,7 +599,7 @@ async function submitSupplierFill(payload: PeriodicSupplierFillInfoRequest) {
 async function handleJudgementSubmit(payload: PeriodicJudgementRequest) {
   const display = getPeriodicJudgementDisplay(activeTask.value?.currentNode)
   const successText = display ? `${display.roleName}第${display.round}次判定已提交` : '周检判定已提交'
-  await runSubmit(() => submitPeriodicJudgement(payload), successText, () => {
+  await runSubmit(activeTask.value, () => submitPeriodicJudgement(payload), successText, () => {
     judgementOpen.value = false
   })
 }
@@ -566,25 +610,30 @@ async function handleJudgementSubmit(payload: PeriodicJudgementRequest) {
  * @param payload 报废原因与处理意见。
  */
 async function handleScrapDisposalSubmit(payload: PeriodicScrapDisposalRequest) {
-  await runSubmit(() => submitPeriodicScrapDisposal(payload), '报废处置已提交', () => {
+  await runSubmit(activeTask.value, () => submitPeriodicScrapDisposal(payload), '报废处置已提交', () => {
     scrapDisposalOpen.value = false
   })
 }
 
-async function submitForward(payload: Omit<PeriodicManagerForwardConfirmRequest, 'taskId'>) {
+async function submitForward(payload: Omit<PeriodicManagerForwardConfirmRequest, 'periodicTaskId' | 'taskId' | 'rowVersion'>) {
   const task = activeTask.value
   if (!task) return
   if (!payload.confirmerId) {
     message.warning('请选择确认员')
     return
   }
-  await runSubmit(() => managerForwardConfirmPeriodic({ taskId: task.id, ...payload }), '已转办确认员', () => {
+  await runSubmit(task, () => managerForwardConfirmPeriodic({
+    periodicTaskId: task.id,
+    taskId: taskWorkflowId(task),
+    rowVersion: task.rowVersion!,
+    ...payload
+  }), '已转办确认员', () => {
     forwardOpen.value = false
   })
 }
 
 async function submitConfirm(payload: PeriodicConfirmerConfirmRequest) {
-  await runSubmit(() => confirmerConfirmPeriodic(payload), '确认员判定已提交', () => {
+  await runSubmit(activeTask.value, () => confirmerConfirmPeriodic(payload), '确认员判定已提交', () => {
     confirmOpen.value = false
   })
 }
@@ -607,7 +656,9 @@ async function submitExceptionChange(payload: ChangeSubmitRequest) {
   }
 }
 
-onMounted(loadData)
+watch(workflowIdentity, () => {
+  void loadData()
+}, { immediate: true })
 
 watch(routePlanId, () => {
   selectedRowKeys.value = []

@@ -3,5 +3,5 @@ import SamplingTaskWorkspace from './components/SamplingTaskWorkspace.vue'
 </script>
 
 <template>
-  <SamplingTaskWorkspace title="C类物资待办详情" role="verifier" :node-codes="['verifier_verify']" />
+  <SamplingTaskWorkspace title="C类物资待办详情" role="verifier" />
 </template>

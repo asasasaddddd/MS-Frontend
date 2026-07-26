@@ -33,7 +33,7 @@ export interface WorkflowTask {
   scopeOrgId?: string
   audienceMode?: string
   taskStatus: WorkflowTaskStatus
-  rowVersion: number
+  rowVersion: WorkflowEntityId
   handlerId?: string
   handlerName?: string
   handlerRoleCode?: RoleCode | string
@@ -70,22 +70,30 @@ export interface WorkflowProcess {
 }
 
 export interface WorkflowTimelineEntry {
+  id: WorkflowEntityId
   taskId?: WorkflowEntityId
-  sourceNodeCode?: string
-  targetNodeCode?: string
-  operationCode?: string
-  outcomeCode?: string
-  handlerId?: string
-  handlerName?: string
-  handlerRoleCode?: string
+  businessItemId?: WorkflowEntityId
+  eventKind?: string
+  eventKindName?: string
+  nodeCode?: string
+  nodeName?: string
+  actionCode?: string
+  actionName?: string
+  nextNodeCode?: string
+  nextNodeName?: string
+  operatorId?: string
+  operatorName?: string
   opinion?: string
-  occurredAt?: string
+  resultCode?: string
+  resultName?: string
+  snapshotJson?: string
+  operatedAt?: string
 }
 
 export interface WorkflowNode {
   code: string
   name: string
-  module: 'firstcheck' | 'periodic' | 'change'
+  module: 'firstcheck' | 'periodic' | 'change' | 'sampling' | 'productSupport'
   roles: RoleCode[]
   api?: string
 }

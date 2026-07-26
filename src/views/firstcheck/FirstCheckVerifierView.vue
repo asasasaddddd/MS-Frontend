@@ -26,7 +26,7 @@ type StatusFilter = 'all' | FirstCheckVerifierStatusKey
 interface VerifierRow {
   key: string
   taskId: string | number
-  taskRowVersion: number
+  taskRowVersion: string | number
   allowedActions: string[]
   nodeCode: string
   nodeName?: string

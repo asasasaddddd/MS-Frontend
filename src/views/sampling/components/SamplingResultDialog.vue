@@ -4,7 +4,7 @@ import { message } from 'ant-design-vue'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
 import type { AttachmentId } from '@/api/attachment'
-import type { SamplingResult, SamplingTaskVO, SamplingVerificationSubmitRequest } from '@/types/sampling'
+import type { SamplingResult, SamplingTaskVO, SamplingVerificationDraft } from '@/types/sampling'
 import { display, formatDate } from '../samplingDisplayModel'
 
 const props = withDefaults(
@@ -22,7 +22,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  submit: [payload: SamplingVerificationSubmitRequest]
+  submit: [payload: SamplingVerificationDraft]
 }>()
 
 const form = reactive({
@@ -70,7 +70,6 @@ function submit() {
     return
   }
   emit('submit', {
-    taskIds: taskIds.value,
     result: props.result,
     verificationDate: form.verificationDate,
     validUntil: form.validUntil || undefined,

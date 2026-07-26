@@ -9,7 +9,7 @@ import {
   periodicNodeName
 } from '../src/api/periodicContract.ts'
 
-assert.equal(periodicEndpoint('myTasks'), '/periodic/my-tasks')
+assert.equal(periodicEndpoint('taskDetail', '2073579908903317505'), '/periodic/tasks/2073579908903317505')
 assert.equal(periodicEndpoint('generateTestPlan'), '/periodic/plans/generate-test-one')
 assert.equal(periodicEndpoint('supplierFillInfo'), '/periodic/supplier-fill-info')
 assert.equal(periodicEndpoint('judgements'), '/periodic/judgements')
@@ -72,6 +72,7 @@ assert.match(periodicWorkspaceSource, /submitForwardSelection/)
 assert.doesNotMatch(periodicWorkspaceSource, /normalSubmit|submitNormalSelection|进入正常检定/)
 
 const periodicApiSource = readFileSync(new URL('../src/api/periodic.ts', import.meta.url), 'utf8')
+assert.doesNotMatch(periodicApiSource, /my-tasks|my-history|listPeriodicMy/)
 assert.match(periodicApiSource, /generatePeriodicTestPlan\(scenario: PeriodicTestPlanScenario\)/)
 assert.match(periodicApiSource, /params:\s*\{ scenario \}/)
 assert.doesNotMatch(periodicApiSource, /normalSubmit|submitPeriodicNormalTasks/)
