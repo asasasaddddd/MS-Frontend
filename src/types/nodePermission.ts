@@ -224,6 +224,14 @@ export function filterOperationsForRole<T extends { defaultRoleCodes?: string[] 
     .some((code) => code.trim().toUpperCase() === normalizedRole))
 }
 
+export function buildNodeGrantRoleChange(roleCode: string) {
+  return {
+    roleCode: roleCode.trim().toUpperCase(),
+    nodeCode: '',
+    permissionCode: ''
+  }
+}
+
 export function getActiveGroupOrgIds(relations: UserOrgRelationSelectionInput[]) {
   const groupIds = new Set<string>()
   for (const relation of relations || []) {

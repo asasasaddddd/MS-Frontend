@@ -30,6 +30,7 @@ import type {
 } from '@/types/nodePermission'
 import {
   buildNodeGrantPreviewDisplay,
+  buildNodeGrantRoleChange,
   buildNodeScopeGrantRequest,
   buildNodeGrantRevokeCommand,
   buildScopeOrganizationTree,
@@ -845,6 +846,11 @@ watch(orgSearchKeyword, (keyword) => {
   orgExpandedKeys.value = keyword.trim()
     ? collectKeys(orgTreeData.value)
     : defaultExpandedOrgKeys.value
+})
+
+watch(() => grantForm.roleCode, (roleCode, previousRoleCode) => {
+  if (roleCode === previousRoleCode) return
+  Object.assign(grantForm, buildNodeGrantRoleChange(roleCode))
 })
 
 watch(() => grantForm.businessType, (businessType) => {

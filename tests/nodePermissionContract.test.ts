@@ -29,6 +29,7 @@ for (const helper of [
   'filterOperationsForRole',
   'getActiveGroupOrgIds',
   'buildScopeOrganizationTree',
+  'buildNodeGrantRoleChange',
   'isCurrentPermissionResponse',
   'canSaveNodeGrantPreview',
   'buildNodeGrantRevokeCommand'
@@ -90,6 +91,9 @@ const buildScopeOrganizationTree = runtime.buildScopeOrganizationTree as (
   scopeType?: string,
   allowedGroupIds?: Set<string>
 ) => Array<{ value: string; disabled: boolean; children?: Array<{ value: string; disabled: boolean }> }>
+const buildNodeGrantRoleChange = runtime.buildNodeGrantRoleChange as (
+  roleCode: string
+) => { roleCode: string; nodeCode: string; permissionCode: string }
 const isCurrentPermissionResponse = runtime.isCurrentPermissionResponse as (
   requestSerial: number,
   currentSerial: number,
@@ -190,6 +194,26 @@ const baseDraft = {
   grantReason: '',
   companyElevationConfirmed: false
 }
+const roleChangedDraft = {
+  ...baseDraft,
+  businessType: 'PERIODIC',
+  nodeCode: 'plan_confirm',
+  ...buildNodeGrantRoleChange('VERIFIER')
+}
+assert.deepEqual(
+  [roleChangedDraft.roleCode, roleChangedDraft.nodeCode, roleChangedDraft.permissionCode],
+  ['VERIFIER', '', ''],
+  '切换操作角色后必须清空旧节点和旧操作'
+)
+assert.equal(
+  buildNodeScopeGrantRequest({ ...roleChangedDraft, scopeType: 'GROUP' }).permissionCode,
+  '',
+  '角色切换后不得继续构造旧角色的节点操作组合'
+)
+assert.ok(
+  validateNodeScopeGrantDraft({ ...roleChangedDraft, scopeType: 'GROUP' }).includes('请选择操作'),
+  '清空旧操作后必须阻止预览和保存'
+)
 assert.deepEqual(
   validateNodeScopeGrantDraft({ ...baseDraft, scopeType: 'DEPARTMENT' }),
   ['部门/公司提权必须填写原因', '部门/公司提权必须设置失效时间']
@@ -537,6 +561,16 @@ assert.match(viewSource, /grantReason/)
 assert.match(viewSource, /companyElevationConfirmed/)
 assert.match(viewSource, /validateNodeScopeGrantDraft/)
 assert.match(viewSource, /buildNodeScopeGrantRequest/)
+assert.match(
+  viewSource,
+  /watch\(\(\) => grantForm\.roleCode,[\s\S]*?buildNodeGrantRoleChange/,
+  '角色变化必须通过统一 helper 清空节点和操作'
+)
+assert.match(
+  viewSource,
+  /grantForm\.roleCode[\s\S]*?invalidatePreview/,
+  '角色、业务、节点或操作变化后必须使旧预览失效'
+)
 assert.match(viewSource, /请先预览/)
 
 // 外部账号保留多角色分配，但组织授权不适用，绝不能伪造 PERSON scope grant。
