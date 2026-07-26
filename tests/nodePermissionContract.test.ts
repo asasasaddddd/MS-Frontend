@@ -400,7 +400,7 @@ assert.equal(canSaveNodeGrantPreview({
 assert.deepEqual(
   buildNodeGrantRevokeCommand(
     'U00109024',
-    { id: '2090000000000000001', rowVersion: '7' },
+    { id: '2090000000000000001', rowVersion: '7', status: 'active' },
     ' 岗位调整 '
   ),
   {
@@ -410,11 +410,20 @@ assert.deepEqual(
     reason: '岗位调整'
   }
 )
+assert.equal(
+  buildNodeGrantRevokeCommand(
+    'U00109024',
+    { id: '2090000000000000001', rowVersion: '7', status: 'revoked' },
+    'historical role adjustment'
+  ),
+  null,
+  'revoked grants must not be revoked again'
+)
 for (const invalidVersion of ['7.5', '-1', '9007199254740992', Number.MAX_SAFE_INTEGER + 1]) {
   assert.equal(
     buildNodeGrantRevokeCommand(
       'U00109024',
-      { id: '2090000000000000001', rowVersion: invalidVersion },
+      { id: '2090000000000000001', rowVersion: invalidVersion, status: 'active' },
       '岗位调整'
     ),
     null,
@@ -512,6 +521,11 @@ for (const field of [
 }
 assert.match(nodePermissionTypeSource, /'GROUP'\s*\|\s*'DEPARTMENT'\s*\|\s*'COMPANY'/)
 assert.match(nodePermissionTypeSource, /'NORMAL_CONFIG'\s*\|\s*'MANUAL_ELEVATION'/)
+assert.match(
+  nodePermissionTypeSource,
+  /interface NodeGrantVO[\s\S]*?\bstatus\??:/,
+  'historical grant VO must expose backend status'
+)
 
 for (const field of [
   'userId',
@@ -586,6 +600,9 @@ assert.doesNotMatch(nodePermissionApiSource, /scopeType[^\n]*PERSON/)
 
 // 授权记录可能只返回 id，表格行键必须兼容 grantId / id。
 assert.match(viewSource, /:row-key="grantRowKey"/)
+assert.match(viewSource, /grantColumns[\s\S]*?dataIndex:\s*'status'/)
+assert.match(viewSource, /column\.dataIndex === 'status'[\s\S]*?record\.status/)
+assert.match(viewSource, /record\.status === 'active'[\s\S]*?openDeleteGrant/)
 
 // 最终生效权限只展示后端预览/快照，不在前端推导候选数量或最终权限。
 assert.match(viewSource, /后端预览/)

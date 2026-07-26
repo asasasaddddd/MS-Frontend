@@ -91,6 +91,7 @@ export interface NodeGrantVO extends NodeScopeGrantRequest {
   scopeOrgName?: string
   scopeOrgPath?: string
   rowVersion?: string | number
+  status?: string
   createdAt?: string
   updatedAt?: string
 }
@@ -329,12 +330,13 @@ export function canSaveNodeGrantPreview(input: {
 
 export function buildNodeGrantRevokeCommand(
   userId: string,
-  grant: Pick<NodeGrantVO, 'id' | 'grantId' | 'rowVersion'>,
+  grant: Pick<NodeGrantVO, 'id' | 'grantId' | 'rowVersion' | 'status'>,
   reason: string
 ): NodeGrantRevokeCommand | null {
   const grantId = grant.grantId ?? grant.id
   const rowVersion = parseSafeNonNegativeInteger(grant.rowVersion)
   const normalizedReason = reason.trim()
+  if (String(grant.status || '').trim().toLowerCase() !== 'active') return null
   if (!userId || grantId == null || !String(grantId).trim()) return null
   if (rowVersion == null || !normalizedReason) return null
   return {

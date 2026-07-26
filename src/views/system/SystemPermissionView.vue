@@ -197,6 +197,7 @@ const grantColumns = [
   { title: '范围', dataIndex: 'scope', width: 220 },
   { title: '效果', dataIndex: 'effect', width: 90 },
   { title: '来源', dataIndex: 'grantSource', width: 160 },
+  { title: '状态', dataIndex: 'status', width: 100 },
   { title: '有效期', dataIndex: 'validity', width: 220 },
   { title: '操作', dataIndex: 'action', width: 90, fixed: 'right' }
 ]
@@ -789,6 +790,10 @@ async function handleSaveGrant() {
 
 function openDeleteGrant(grant: NodeGrantVO) {
   const grantId = grant.grantId || grant.id
+  if (grant.status !== 'active') {
+    message.warning('只有生效中的授权可撤销')
+    return
+  }
   if (!selectedUser.value || !grantId || grant.rowVersion === undefined) {
     message.error('授权记录缺少删除所需的编号或版本')
     return
@@ -1287,11 +1292,25 @@ onMounted(async () => {
                 <template v-else-if="column.dataIndex === 'grantSource'">
                   {{ record.grantSource }}
                 </template>
+                <template v-else-if="column.dataIndex === 'status'">
+                  <a-tag :color="record.status === 'active' ? 'green' : 'default'">
+                    {{ record.status === 'active' ? '生效中' : record.status || '未知' }}
+                  </a-tag>
+                </template>
                 <template v-else-if="column.dataIndex === 'validity'">
                   {{ grantValidityText(record) }}
                 </template>
                 <template v-else-if="column.dataIndex === 'action'">
-                  <a-button type="link" danger size="small" @click="openDeleteGrant(record)">删除</a-button>
+                  <a-button
+                    v-if="record.status === 'active'"
+                    type="link"
+                    danger
+                    size="small"
+                    @click="openDeleteGrant(record)"
+                  >
+                    撤销
+                  </a-button>
+                  <span v-else>-</span>
                 </template>
               </template>
               <template #emptyText>
