@@ -5,8 +5,7 @@ import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
 import { useProductionDictionaries } from '@/composables/useProductionDictionaries'
 import { useSessionStore } from '../../../stores/session'
 import { displayValue } from '../periodicDisplayModel'
-import type { ChangeSubmitRequest } from '../../../types/change'
-import type { EntityId, PeriodicTaskVO } from '../../../types/periodic'
+import type { EntityId, PeriodicExceptionChangeSubmitRequest, PeriodicTaskVO } from '../../../types/periodic'
 import {
   buildPeriodicExceptionChangeRequest,
   displayCategory,
@@ -37,7 +36,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  createChange: [payload: ChangeSubmitRequest]
+  createChange: [payload: PeriodicExceptionChangeSubmitRequest]
 }>()
 
 const session = useSessionStore()

@@ -1,61 +1,13 @@
-import type { ChangeSubmitRequest, ChangeType } from '../../types/change'
-import type { EntityId, PeriodicExceptionDisposeRequest, PeriodicTaskVO } from '../../types/periodic'
+import type { ChangeType } from '../../types/change'
+import type {
+  EntityId,
+  PeriodicExceptionChangeItem,
+  PeriodicExceptionChangeSubmitRequest,
+  PeriodicTaskVO
+} from '../../types/periodic'
 
 export type PeriodicExceptionAction = 'seal' | 'defer' | 'scrap' | 'category' | 'cycle'
 export type PeriodicExceptionHandlingType = 'seal' | 'defer' | 'scrap' | 'change'
-
-export const periodicExceptionSubmitNodeCodes = ['plan_confirm'] as const
-
-export function canSubmitPeriodicException(
-  task: Pick<PeriodicTaskVO, 'currentNode' | 'taskStatus' | 'physicalStatus'>
-) {
-  return (
-    task.currentNode === 'plan_confirm' &&
-    task.taskStatus === 'pending' &&
-    task.physicalStatus === 'wait_verifier_receive'
-  )
-}
-
-type PeriodicExceptionDisposeTask = Pick<
-  PeriodicTaskVO,
-  'id' | 'currentNode' | 'taskStatus' | 'exceptionFlowType' | 'relatedChangeOrderId'
->
-
-export function canDisposePeriodicException(task: PeriodicExceptionDisposeTask) {
-  return (
-    task.currentNode === 'exception_disposal' &&
-    task.taskStatus === 'exception' &&
-    Boolean(task.relatedChangeOrderId)
-  )
-}
-
-export function buildPeriodicExceptionDisposeRequest(
-  task: PeriodicExceptionDisposeTask
-): PeriodicExceptionDisposeRequest {
-  if (task.currentNode !== 'exception_disposal') {
-    throw new Error('周检任务尚未进入异常处置节点')
-  }
-  if (task.taskStatus !== 'exception') {
-    throw new Error('周检异常任务状态不允许完成处置')
-  }
-  if (!task.relatedChangeOrderId) {
-    throw new Error('周检异常任务缺少已完成的状态变更单')
-  }
-
-  const exceptionFlowType = String(task.exceptionFlowType || '')
-  const handlingType: PeriodicExceptionDisposeRequest['handlingType'] =
-    exceptionFlowType === 'category' || exceptionFlowType === 'cycle' ? 'change' : exceptionFlowType
-  if (!['seal', 'defer', 'scrap', 'change'].includes(handlingType)) {
-    throw new Error('周检异常处置类型无效')
-  }
-
-  return {
-    taskId: task.id,
-    handlingType,
-    relatedChangeOrderId: task.relatedChangeOrderId,
-    opinion: '状态变更审批完成，关闭周检异常任务'
-  }
-}
 
 export interface PeriodicExceptionActionMeta {
   value: PeriodicExceptionAction
@@ -146,6 +98,17 @@ function requireTaskDevice(task: PeriodicTaskVO) {
   return task.deviceId
 }
 
+function requireWorkflowIdentity(task: PeriodicTaskVO) {
+  if (task.workflowTaskId === undefined || task.rowVersion === undefined) {
+    throw new Error(`设备${task.deviceCode || '-'}的统一任务上下文已失效，请刷新待办`)
+  }
+  return {
+    periodicTaskId: task.id,
+    taskId: task.workflowTaskId,
+    rowVersion: task.rowVersion
+  }
+}
+
 function sourceIdOf(tasks: PeriodicTaskVO[]): EntityId {
   const first = tasks[0]
   return first.planId || first.id
@@ -171,7 +134,7 @@ export function buildPeriodicExceptionChangeRequest(
   taskOrTasks: PeriodicTaskVO | PeriodicTaskVO[],
   applicant: PeriodicExceptionApplicant | undefined,
   form: PeriodicExceptionFormState
-): ChangeSubmitRequest {
+): PeriodicExceptionChangeSubmitRequest {
   const reason = primaryReason(form)
   const tasks = Array.isArray(taskOrTasks) ? taskOrTasks : [taskOrTasks]
   if (tasks.length === 0) throw new Error('请选择周检异常设备')
@@ -180,7 +143,8 @@ export function buildPeriodicExceptionChangeRequest(
     : undefined
 
   const items = tasks.map((task) => {
-    const item = {
+    const item: PeriodicExceptionChangeItem = {
+      ...requireWorkflowIdentity(task),
       deviceId: requireTaskDevice(task),
       deviceCode: task.deviceCode,
       remark: [

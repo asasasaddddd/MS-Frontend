@@ -15,7 +15,7 @@ assert.equal(displayValue(null), '-')
 assert.equal(displayValue(''), '-')
 assert.equal(displayValue(0), '0')
 
-assert.equal(periodicNodeName('supplier_fill_info'), '外扩人员填写检定信息')
+assert.equal(periodicNodeName('external_common_fill'), '外扩账号填写通用设备检定信息')
 assert.equal(periodicNodeName('manager_forward_confirm'), '管理员转办确认员')
 assert.equal(periodicStatusName('completed'), '已完成')
 assert.equal(periodicTagColor('confirmer_confirm'), 'orange')
@@ -46,25 +46,20 @@ assert.equal(row.verificationCycle, '12个月')
 assert.equal(row.verificationMethodName, '外委')
 assert.equal(row.isCommonName, '否')
 
-const dualEntryTask: PeriodicTaskVO = {
+const exceptionRouteTask: PeriodicTaskVO = {
   ...task,
-  currentNode: 'plan_confirm',
-  currentNodeName: '待实物交接',
-  taskStatus: 'pending',
-  physicalStatus: 'wait_verifier_receive'
+  currentNode: 'admin_exception_route',
+  currentNodeName: '管理员异常分流',
+  taskStatus: 'pending'
 }
 
-assert.equal(mapPeriodicTaskRow(dualEntryTask, 'admin').currentNodeName, '待异常分流')
-assert.equal(mapPeriodicTaskRow(dualEntryTask, 'verifier').currentNodeName, '待扫码接收')
-assert.equal(
-  mapPeriodicTaskRow({ ...dualEntryTask, physicalStatus: 'verifier_received' }, 'admin').currentNodeName,
-  '待实物交接'
-)
+assert.equal(mapPeriodicTaskRow(exceptionRouteTask, 'admin').currentNodeName, '管理员异常分流')
+assert.equal(mapPeriodicTaskRow(exceptionRouteTask, 'verifier').currentNodeName, '管理员异常分流')
 
 const todoGroups = buildPeriodicPlanTodoGroups([
-  dualEntryTask,
-  { ...dualEntryTask, id: '2' },
-  { ...dualEntryTask, id: '3', planId: '2073579908903317501' }
+  exceptionRouteTask,
+  { ...exceptionRouteTask, id: '2' },
+  { ...exceptionRouteTask, id: '3', planId: '2073579908903317501' }
 ])
 assert.equal(todoGroups.length, 2)
 assert.equal(todoGroups.find((group) => group.planId === '2073579908903317500')?.deviceCount, 2)

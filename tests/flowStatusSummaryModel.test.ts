@@ -40,7 +40,7 @@ const summary: FlowSummary = {
       countUnit: 'device',
       totalCount: 6,
       unknownCount: 0,
-      stageCounts: { completed: 1, plan_confirm: 5 }
+      stageCounts: { completed: 1, admin_exception_route: 5 }
     },
     {
       dimensionCode: 'label',
@@ -105,7 +105,7 @@ assert.equal(
 assert.deepEqual(
   viewModel.pendingDimension?.stages.map(({ stageCode, count }) => ({ stageCode, count })),
   [
-    { stageCode: 'plan_confirm', count: 5 },
+    { stageCode: 'admin_exception_route', count: 5 },
     { stageCode: 'completed', count: 1 }
   ]
 )
@@ -144,7 +144,7 @@ const summaryWithUnregisteredStage: FlowSummary = {
       countUnit: 'order',
       totalCount: 2,
       unknownCount: 0,
-      stageCounts: { plan_confirm: 1, backend_new_node: 1 }
+      stageCounts: { admin_exception_route: 1, backend_new_node: 1 }
     }
   ]
 }
@@ -372,7 +372,7 @@ const periodicNodeSummary: FlowSummary = {
       countUnit: 'device',
       totalCount: 2,
       unknownCount: 0,
-      stageCounts: { manager_receive: 1, send_out_return: 1 }
+      stageCounts: { admin_exception_route: 1, external_uncommon_fill: 1 }
     }
   ]
 }
@@ -382,7 +382,7 @@ assert.deepEqual(
     ({ stageCode, label }) => ({ stageCode, label })
   ),
   [
-    { stageCode: 'manager_receive', label: '待管理员接收' },
-    { stageCode: 'send_out_return', label: '待外委送回' }
+    { stageCode: 'admin_exception_route', label: '待异常分流' },
+    { stageCode: 'external_uncommon_fill', label: '待外委检定员填写否通用设备信息' }
   ]
 )

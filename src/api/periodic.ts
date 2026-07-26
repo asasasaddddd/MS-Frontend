@@ -11,7 +11,7 @@ import type {
   GenerateBeforeUsePlanRequest,
   GeneratePeriodicPlanRequest,
   PeriodicConfirmerConfirmRequest,
-  PeriodicExceptionDisposeRequest,
+  PeriodicExceptionChangeSubmitRequest,
   PeriodicJudgementRequest,
   PeriodicManagerForwardConfirmRequest,
   PeriodicPlanVO,
@@ -23,7 +23,6 @@ import type {
   PeriodicVerificationRecordRequest,
   PeriodicVerifierFillInfoRequest
 } from '@/types/periodic'
-import type { ChangeSubmitRequest } from '@/types/change'
 
 export function generatePeriodicPlan(data: GeneratePeriodicPlanRequest) {
   return request<EntityId>({
@@ -71,10 +70,11 @@ export function listPeriodicPlanTasks(planId: EntityId) {
   })
 }
 
-export function getPeriodicTask(taskId: EntityId, signal?: AbortSignal) {
+export function getPeriodicTask(periodicTaskId: EntityId, workflowTaskId: EntityId, signal?: AbortSignal) {
   return request<PeriodicTaskVO>({
-    url: periodicEndpoint('taskDetail', taskId),
+    url: periodicEndpoint('taskDetail', periodicTaskId),
     method: 'GET',
+    params: { taskId: workflowTaskId },
     signal
   })
 }
@@ -127,15 +127,7 @@ export function confirmerConfirmPeriodic(data: PeriodicConfirmerConfirmRequest) 
   })
 }
 
-export function exceptionDisposePeriodic(data: PeriodicExceptionDisposeRequest) {
-  return request<void>({
-    url: periodicEndpoint('exceptionDispose'),
-    method: 'POST',
-    data
-  })
-}
-
-export function submitPeriodicExceptionChange(data: ChangeSubmitRequest) {
+export function submitPeriodicExceptionChange(data: PeriodicExceptionChangeSubmitRequest) {
   return request<EntityId>({
     url: periodicEndpoint('exceptionChangeSubmit'),
     method: 'POST',

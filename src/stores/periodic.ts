@@ -36,8 +36,8 @@ export const usePeriodicStore = defineStore('periodic', () => {
     return planTasks.value
   }
 
-  async function fetchTask(taskId: EntityId) {
-    currentTask.value = await withLoading(() => getPeriodicTask(taskId))
+  async function fetchTask(periodicTaskId: EntityId, workflowTaskId: EntityId) {
+    currentTask.value = await withLoading(() => getPeriodicTask(periodicTaskId, workflowTaskId))
     return currentTask.value
   }
 

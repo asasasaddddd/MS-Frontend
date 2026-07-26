@@ -3,9 +3,32 @@ import type {
   PeriodicJudgementResult,
   PeriodicScanRequest,
   PeriodicScrapDisposalRequest,
-  PeriodicTaskVO,
+  PeriodicNodeCode,
   PeriodicVerificationRecordRequest
 } from '@/types/periodic'
+
+const PERIODIC_NODE_CODES = new Set<PeriodicNodeCode>([
+  'system_issue',
+  'admin_exception_route',
+  'self_verify',
+  'external_common_fill',
+  'verifier_second_judge',
+  'responsible_second_judge',
+  'responsible_third_judge',
+  'verifier_third_judge',
+  'responsible_fourth_judge',
+  'verifier_scrap_disposal',
+  'external_uncommon_fill',
+  'manager_forward_confirm',
+  'confirmer_confirm'
+])
+
+/** 将统一任务节点收窄为周检权威节点，拒绝跨业务和历史节点。 */
+export function parsePeriodicNodeCode(value?: string): PeriodicNodeCode | undefined {
+  return value && PERIODIC_NODE_CODES.has(value as PeriodicNodeCode)
+    ? value as PeriodicNodeCode
+    : undefined
+}
 
 /** 周检后端接口路径表。 */
 const periodicEndpoints = {
@@ -19,13 +42,12 @@ const periodicEndpoints = {
   verifierReceive: '/periodic/verifier-receive',
   externalSendOut: '/periodic/external-send-out',
   sendOutReturn: '/periodic/send-out-return',
-  verificationRecord: '/periodic/verification-record',
+  verificationRecord: '/periodic/self-verify',
   managerForwardConfirm: '/periodic/manager-forward-confirm',
   confirmerConfirm: '/periodic/confirmer-confirm',
-  exceptionDispose: '/periodic/exception-dispose',
   exceptionChangeSubmit: '/periodic/exception-change/submit',
-  supplierFillInfo: '/periodic/supplier-fill-info',
-  verifierFillInfo: '/periodic/verifier-fill-info',
+  supplierFillInfo: '/periodic/external-common-fill',
+  verifierFillInfo: '/periodic/external-uncommon-fill',
   judgements: '/periodic/judgements',
   scrapDisposal: '/periodic/scrap-disposal'
 } as const
@@ -53,37 +75,21 @@ export function periodicEndpoint(key: PeriodicEndpointKey, id?: string | number)
  */
 export function periodicNodeName(value?: string) {
   const map: Record<string, string> = {
-    plan_issue: '计划下发',
-    plan_confirm: '待实物交接',
-    verifier_receive: '检定员扫码接收',
+    system_issue: '系统下发',
+    admin_exception_route: '管理员异常分流',
     self_verify: '自检检定',
-    verification_record: '检定记录填写',
-    send_out: '外委送出',
-    send_out_return: '外委送回',
-    supplier_fill_info: '外扩人员填写检定信息',
-    verifier_fill_info: '外委检定员填写检定信息',
+    external_common_fill: '外扩账号填写通用设备检定信息',
     verifier_second_judge: '外委检定员二次判定',
     responsible_second_judge: '责任工程师二次判定',
     responsible_third_judge: '责任工程师三次判定',
     verifier_third_judge: '外委检定员三次判定',
     responsible_fourth_judge: '责任工程师四次判定',
     verifier_scrap_disposal: '外委检定员报废处置',
+    external_uncommon_fill: '外委检定员填写否通用设备信息',
     manager_forward_confirm: '管理员转办确认员',
-    confirmer_confirm: '确认员确认',
-    exception_disposal: '异常处置',
-    completed: '已完成'
+    confirmer_confirm: '确认员确认'
   }
   return value ? map[value] || value : '-'
-}
-
-export function isPeriodicDualHandoverTask(
-  task: Pick<PeriodicTaskVO, 'currentNode' | 'taskStatus' | 'physicalStatus'>
-) {
-  return (
-    task.currentNode === 'plan_confirm' &&
-    task.taskStatus === 'pending' &&
-    task.physicalStatus === 'wait_verifier_receive'
-  )
 }
 
 export function periodicStatusName(value?: string) {

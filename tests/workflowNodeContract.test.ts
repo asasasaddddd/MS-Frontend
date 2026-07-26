@@ -8,13 +8,17 @@ import {
   workflowNodeGroups
 } from '../src/workflows/metrologyWorkflow.ts'
 
-const supplierFillNode = getWorkflowNode('periodic', 'supplier_fill_info')
+const supplierFillNode = getWorkflowNode('periodic', 'external_common_fill')
 assert.deepEqual(supplierFillNode?.roles, ['EXTERNAL_OPERATOR'])
-assert.equal(supplierFillNode?.name, '外扩人员填写检定信息')
+assert.equal(supplierFillNode?.name, '外扩账号填写通用设备检定信息')
+assert.equal(supplierFillNode?.api, 'POST /api/periodic/external-common-fill')
 
-assert.deepEqual(workflowNodeGroups.periodic.externalOperator, ['send_out', 'supplier_fill_info'])
-assert.equal(getRoleWorkflowNodes('periodic', 'EXTERNAL_OPERATOR').some((node) => node.code === 'supplier_fill_info'), true)
-assert.equal(getRoleWorkflowNodes('periodic', 'VERIFIER_EXTERNAL').some((node) => node.code === 'supplier_fill_info'), false)
+assert.deepEqual(workflowNodeGroups.periodic.externalOperator, ['external_common_fill'])
+assert.equal(getRoleWorkflowNodes('periodic', 'EXTERNAL_OPERATOR').some((node) => node.code === 'external_common_fill'), true)
+assert.equal(getRoleWorkflowNodes('periodic', 'VERIFIER_EXTERNAL').some((node) => node.code === 'external_common_fill'), false)
+assert.deepEqual(getWorkflowNode('periodic', 'system_issue')?.roles, [])
+assert.deepEqual(workflowNodeGroups.periodic.admin, ['admin_exception_route', 'manager_forward_confirm'])
+assert.deepEqual(workflowNodeGroups.periodic.selfVerifier, ['self_verify'])
 
 const responsibleJudgementNodes = [
   'responsible_second_judge',

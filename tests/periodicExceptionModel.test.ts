@@ -1,18 +1,16 @@
 import assert from 'node:assert/strict'
 
 import {
-  buildPeriodicExceptionDisposeRequest,
   buildPeriodicExceptionChangeRequest,
-  canDisposePeriodicException,
-  canSubmitPeriodicException,
   maxPeriodicVerificationCycleMonth,
-  periodicExceptionSubmitNodeCodes,
   periodicExceptionHandlingType,
   periodicCycleExtensionOptions
 } from '../src/views/periodic/periodicExceptionModel.ts'
 
 const task = {
   id: '2073579908903317505',
+  workflowTaskId: '3073579908903317505',
+  rowVersion: 7,
   planId: '2073579908903317500',
   deviceId: '2073579908903317506',
   deviceCode: 'JL20240000019',
@@ -33,75 +31,6 @@ const applicant = {
   deptName: '重一分厂'
 }
 
-assert.deepEqual(periodicExceptionSubmitNodeCodes, ['plan_confirm'])
-assert.equal(
-  canSubmitPeriodicException({
-    currentNode: 'plan_confirm',
-    taskStatus: 'pending',
-    physicalStatus: 'wait_verifier_receive'
-  }),
-  true
-)
-assert.equal(
-  canSubmitPeriodicException({
-    currentNode: 'plan_issue',
-    taskStatus: 'pending',
-    physicalStatus: 'wait_verifier_receive'
-  }),
-  false
-)
-assert.equal(
-  canSubmitPeriodicException({
-    currentNode: 'plan_confirm',
-    taskStatus: 'pending',
-    physicalStatus: 'verifier_received'
-  }),
-  false
-)
-assert.equal(
-  canSubmitPeriodicException({
-    currentNode: 'plan_confirm',
-    taskStatus: 'exception',
-    physicalStatus: 'wait_verifier_receive'
-  }),
-  false
-)
-assert.equal(
-  canSubmitPeriodicException({
-    currentNode: 'exception_disposal',
-    taskStatus: 'exception',
-    physicalStatus: 'wait_verifier_receive'
-  }),
-  false
-)
-assert.equal(
-  canDisposePeriodicException({
-    currentNode: 'exception_disposal',
-    taskStatus: 'exception',
-    relatedChangeOrderId: '9001'
-  }),
-  true
-)
-assert.equal(
-  canDisposePeriodicException({ currentNode: 'exception_disposal', taskStatus: 'exception' }),
-  false
-)
-assert.deepEqual(
-  buildPeriodicExceptionDisposeRequest({
-    id: '2001',
-    currentNode: 'exception_disposal',
-    taskStatus: 'exception',
-    exceptionFlowType: 'cycle',
-    relatedChangeOrderId: '9001'
-  }),
-  {
-    taskId: '2001',
-    handlingType: 'change',
-    relatedChangeOrderId: '9001',
-    opinion: '状态变更审批完成，关闭周检异常任务'
-  }
-)
-
 const seal = buildPeriodicExceptionChangeRequest(task, applicant, {
   actionType: 'seal',
   attachmentGroupId: '8801',
@@ -114,6 +43,9 @@ assert.equal(seal.sourceId, '2073579908903317500')
 assert.equal(typeof seal.sourceId, 'string')
 assert.equal(seal.attachmentGroupId, '8801')
 assert.equal(seal.items[0].deviceId, '2073579908903317506')
+assert.equal(seal.items[0].periodicTaskId, '2073579908903317505')
+assert.equal(seal.items[0].taskId, '3073579908903317505')
+assert.equal(seal.items[0].rowVersion, 7)
 assert.equal(seal.items[0].sealReason, '长期停用')
 assert.equal(seal.items[0].newStatus, 'sealed')
 assert.equal(periodicExceptionHandlingType('seal'), 'seal')

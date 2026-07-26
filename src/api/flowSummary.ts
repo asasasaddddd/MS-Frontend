@@ -59,15 +59,3 @@ export function getSamplingPlanFlowSummary(planId: FlowSummaryEntityId): Promise
     method: 'GET'
   })
 }
-
-/**
- * 读取当前检定员产品配套待办的权威状态汇总。
- *
- * @returns 按订单和明细分别计数的产品配套快照。
- */
-export function getProductSupportTaskFlowSummary(): Promise<FlowSummary> {
-  return request<FlowSummary>({
-    url: '/product-support/my-tasks/summary',
-    method: 'GET'
-  })
-}

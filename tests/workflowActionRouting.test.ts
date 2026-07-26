@@ -10,8 +10,10 @@ function periodicTask(currentNode: string, allowedActions: string[]) {
 
 assert.equal(resolvePeriodicTaskAction(periodicTask('self_verify', [])), undefined)
 assert.equal(resolvePeriodicTaskAction(periodicTask('self_verify', ['SUBMIT'])), 'verify')
-assert.equal(resolvePeriodicTaskAction(periodicTask('plan_confirm', ['SUBMIT_EXCEPTION'])), 'submit-exception')
-assert.equal(resolvePeriodicTaskAction(periodicTask('plan_confirm', ['RECEIVE'])), undefined)
+assert.equal(resolvePeriodicTaskAction(periodicTask('admin_exception_route', ['SUBMIT_EXCEPTION'])), 'submit-exception')
+assert.equal(resolvePeriodicTaskAction(periodicTask('admin_exception_route', ['RECEIVE'])), undefined)
+assert.equal(resolvePeriodicTaskAction(periodicTask('external_common_fill', ['SUBMIT'])), 'supplier-fill')
+assert.equal(resolvePeriodicTaskAction(periodicTask('external_uncommon_fill', ['SUBMIT'])), 'external-verify')
 assert.equal(resolvePeriodicTaskAction(periodicTask('send_out', ['SEND_OUT'])), undefined)
 assert.equal(resolvePeriodicTaskAction(periodicTask('send_out', ['SEND_OUT_RETURN'])), undefined)
 assert.equal(resolvePeriodicTaskAction(periodicTask('verifier_second_judge', ['SUBMIT'])), undefined)

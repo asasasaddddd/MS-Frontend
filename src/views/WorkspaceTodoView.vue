@@ -5,6 +5,7 @@ import type { SelectProps } from 'ant-design-vue'
 import { getFirstCheckDetail } from '@/api/firstcheck'
 import { getChangeOrderDetail } from '@/api/change'
 import { getPeriodicTask } from '@/api/periodic'
+import { parsePeriodicNodeCode } from '@/api/periodicContract'
 import { getSamplingTask } from '@/api/sampling'
 import { getProductSupportOrder } from '@/api/productSupport'
 import { hasWorkflowAction, useWorkflowTask, type WorkflowBoundDetail } from '@/composables/useWorkflowTask'
@@ -270,7 +271,8 @@ const periodicTodoEntries = computed<TodoDefinition[]>(() => {
 
   return buildPeriodicPlanTodoGroups(periodicTasks.value)
     .map(({ planId, tasks, deviceCount }) => {
-      const color: TodoColor = tasks.some((task) => task.taskStatus === 'exception' || task.currentNode === 'exception_disposal')
+      const color: TodoColor = tasks.some((task) =>
+        task.taskStatus === 'exception' || task.currentNode === 'verifier_scrap_disposal')
         ? 'red'
         : 'orange'
       return {
@@ -607,7 +609,7 @@ async function loadWorkflowSummary() {
       return getChangeOrderDetail(task.businessId, signal)
     }
     if (matchesBusinessType(task.businessType, 'periodic')) {
-      return getPeriodicTask(task.businessId, signal)
+      return getPeriodicTask(task.businessId, task.taskId, signal)
     }
     if (matchesBusinessType(task.businessType, 'sampling')) {
       return getSamplingTask(task.businessId, signal)
@@ -626,10 +628,10 @@ async function loadWorkflowSummary() {
 
   periodicTasks.value = detailsFor<PeriodicTaskVO>(
     workflowTasks.value.filter((task) => matchesBusinessType(task.businessType, 'periodic'))
-  )
+  ).map((task) => ({ ...task, currentNode: parsePeriodicNodeCode(task.currentNode) }))
   periodicHistoryTasks.value = detailsFor<PeriodicTaskVO>(
     workflowHistoryTasks.value.filter((task) => matchesBusinessType(task.businessType, 'periodic'))
-  )
+  ).map((task) => ({ ...task, currentNode: parsePeriodicNodeCode(task.currentNode) }))
   samplingTasks.value = detailsFor<SamplingTaskVO>(
     workflowTasks.value.filter((task) => matchesBusinessType(task.businessType, 'sampling'))
   )

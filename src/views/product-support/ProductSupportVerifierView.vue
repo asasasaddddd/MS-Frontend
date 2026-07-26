@@ -3,7 +3,6 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { SearchOutlined } from '@ant-design/icons-vue'
-import { getProductSupportTaskFlowSummary } from '@/api/flowSummary'
 import {
   getProductSupportOrder,
   verifierSubmitProductSupport
@@ -11,6 +10,7 @@ import {
 import { hasWorkflowAction, useWorkflowTask } from '@/composables/useWorkflowTask'
 import { useSessionStore } from '@/stores/session'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
+import { buildWorkflowTaskSummary } from '@/components/workflow/workflowTaskSummary'
 import type { FlowSummary } from '@/types/flowSummary'
 import type { ProductSupportEntityId, ProductSupportOrderVO, ProductSupportRatioVO } from '@/types/productSupport'
 import {
@@ -56,7 +56,7 @@ const summaryLoading = ref(false)
 const historyLoading = ref(false)
 const submitting = ref(false)
 const tasks = ref<ProductSupportOrderVO[]>([])
-// 后端汇总是独立的权威快照，不从当前页任务列表补算。
+// 汇总只使用同一次统一工作流待办查询返回的权威节点快照。
 const productSupportFlowSummary = ref<FlowSummary | null>(null)
 const history = ref<ProductSupportOrderVO[]>([])
 const activeTab = ref<'pending' | 'history'>(route.query.tab === 'history' ? 'history' : 'pending')
@@ -163,39 +163,28 @@ async function loadRows() {
   historyLoading.value = true
   summaryLoading.value = true
   try {
-    const [workflowResult, summaryResult] = await Promise.allSettled([
-      refreshWorkflowTasks(),
-      getProductSupportTaskFlowSummary()
-    ])
-
-    if (workflowResult.status === 'fulfilled') {
-      const details = await loadWorkflowDetails(
-        [...workflowTodoTasks.value, ...workflowParticipatedTasks.value],
-        (task, signal) => getProductSupportOrder(task.businessId, signal)
-      )
-      if (!details || loadId !== dataLoadId) return
-      const detailByWorkflowTaskId = new Map(details.map((order) => [String(order.workflowTaskId), order]))
-      tasks.value = workflowTodoTasks.value.flatMap((task) => {
-        const detail = detailByWorkflowTaskId.get(String(task.taskId))
-        return detail ? [detail as ProductSupportOrderVO] : []
-      })
-      history.value = workflowParticipatedTasks.value.flatMap((task) => {
-        const detail = detailByWorkflowTaskId.get(String(task.taskId))
-        return detail ? [detail as ProductSupportOrderVO] : []
-      })
-      await openOrderFromRoute()
-    } else {
-      tasks.value = []
-      history.value = []
-      message.error(workflowResult.reason instanceof Error ? workflowResult.reason.message : '产品配套任务加载失败')
-    }
-
-    if (summaryResult.status === 'fulfilled') {
-      productSupportFlowSummary.value = summaryResult.value
-    } else {
-      productSupportFlowSummary.value = null
-      message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '产品配套当前角色待办汇总加载失败')
-    }
+    await refreshWorkflowTasks()
+    const details = await loadWorkflowDetails(
+      [...workflowTodoTasks.value, ...workflowParticipatedTasks.value],
+      (task, signal) => getProductSupportOrder(task.businessId, signal)
+    )
+    if (!details || loadId !== dataLoadId) return
+    const detailByWorkflowTaskId = new Map(details.map((order) => [String(order.workflowTaskId), order]))
+    tasks.value = workflowTodoTasks.value.flatMap((task) => {
+      const detail = detailByWorkflowTaskId.get(String(task.taskId))
+      return detail ? [detail as ProductSupportOrderVO] : []
+    })
+    history.value = workflowParticipatedTasks.value.flatMap((task) => {
+      const detail = detailByWorkflowTaskId.get(String(task.taskId))
+      return detail ? [detail as ProductSupportOrderVO] : []
+    })
+    productSupportFlowSummary.value = buildWorkflowTaskSummary(workflowTodoTasks.value, 'PRODUCT_SUPPORT')
+    await openOrderFromRoute()
+  } catch (error) {
+    tasks.value = []
+    history.value = []
+    productSupportFlowSummary.value = null
+    message.error(error instanceof Error ? error.message : '产品配套任务加载失败')
   } finally {
     if (loadId === dataLoadId) {
       loading.value = false

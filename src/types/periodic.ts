@@ -4,26 +4,19 @@ export type PeriodicTestPlanScenario = 'self' | 'external_common' | 'external_no
 
 /** 周检任务当前业务节点编码。 */
 export type PeriodicNodeCode =
-  | 'plan_issue'
-  | 'plan_confirm'
-  | 'verifier_receive'
+  | 'system_issue'
+  | 'admin_exception_route'
   | 'self_verify'
-  | 'verification_record'
-  | 'send_out'
-  | 'send_out_return'
-  | 'supplier_fill_info'
-  | 'verifier_fill_info'
+  | 'external_common_fill'
   | 'verifier_second_judge'
   | 'responsible_second_judge'
   | 'responsible_third_judge'
   | 'verifier_third_judge'
   | 'responsible_fourth_judge'
   | 'verifier_scrap_disposal'
+  | 'external_uncommon_fill'
   | 'manager_forward_confirm'
   | 'confirmer_confirm'
-  | 'exception_disposal'
-  | 'completed'
-  | string
 
 export type PeriodicTaskStatus =
   | 'pending'
@@ -240,11 +233,39 @@ export interface PeriodicConfirmerConfirmRequest {
   opinion?: string
 }
 
-export interface PeriodicExceptionDisposeRequest {
+/** 周检异常分流中单台设备的统一任务并发身份与变更字段。 */
+export interface PeriodicExceptionChangeItem {
+  periodicTaskId: EntityId
   taskId: EntityId
-  handlingType: 'repair' | 'scrap' | 'change' | 'defer' | string
-  relatedChangeOrderId?: EntityId
-  opinion?: string
+  rowVersion: EntityId
+  deviceId?: EntityId
+  deviceCode?: string
+  newStatus?: string
+  newCategory?: string
+  newVerificationMethod?: string
+  newCycleMonth?: number
+  newValidUntil?: string
+  technicalStatus?: string
+  sealReason?: string
+  verificationReason?: string
+  adjustmentReason?: string
+  scrapType?: string
+  scrapReason?: string
+  precheckRequired?: number
+  remark?: string
+}
+
+/** 周检异常节点提交到状态变更模块的批量申请。 */
+export interface PeriodicExceptionChangeSubmitRequest {
+  changeType: string
+  sourceType?: 'periodic'
+  sourceId?: EntityId
+  applyDeptId?: string
+  applyDeptName?: string
+  reason?: string
+  remark?: string
+  attachmentGroupId?: EntityId
+  items: PeriodicExceptionChangeItem[]
 }
 
 export interface PeriodicSupplierFillInfoRequest {

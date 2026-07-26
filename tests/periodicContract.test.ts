@@ -11,11 +11,16 @@ import {
 
 assert.equal(periodicEndpoint('taskDetail', '2073579908903317505'), '/periodic/tasks/2073579908903317505')
 assert.equal(periodicEndpoint('generateTestPlan'), '/periodic/plans/generate-test-one')
-assert.equal(periodicEndpoint('supplierFillInfo'), '/periodic/supplier-fill-info')
+assert.equal(periodicEndpoint('verificationRecord'), '/periodic/self-verify')
+assert.equal(periodicEndpoint('supplierFillInfo'), '/periodic/external-common-fill')
+assert.equal(periodicEndpoint('verifierFillInfo'), '/periodic/external-uncommon-fill')
 assert.equal(periodicEndpoint('judgements'), '/periodic/judgements')
 assert.equal(periodicEndpoint('scrapDisposal'), '/periodic/scrap-disposal')
 
-assert.equal(periodicNodeName('supplier_fill_info'), '外扩人员填写检定信息')
+assert.equal(periodicNodeName('system_issue'), '系统下发')
+assert.equal(periodicNodeName('admin_exception_route'), '管理员异常分流')
+assert.equal(periodicNodeName('external_common_fill'), '外扩账号填写通用设备检定信息')
+assert.equal(periodicNodeName('external_uncommon_fill'), '外委检定员填写否通用设备信息')
 assert.equal(periodicNodeName('verifier_second_judge'), '外委检定员二次判定')
 assert.equal(periodicNodeName('responsible_second_judge'), '责任工程师二次判定')
 assert.equal(periodicNodeName('responsible_third_judge'), '责任工程师三次判定')
@@ -44,7 +49,9 @@ assert.deepEqual(
 )
 
 const verificationPayload = buildPeriodicVerificationRecordRequest({
+  periodicTaskId: '2073579908903317504',
   taskId: longTaskId,
+  rowVersion: 3,
   result: 'qualified',
   forceValidUntil: true,
   confirmationRequired: false,
@@ -52,6 +59,8 @@ const verificationPayload = buildPeriodicVerificationRecordRequest({
 })
 
 assert.equal(verificationPayload.taskId, longTaskId)
+assert.equal(verificationPayload.periodicTaskId, '2073579908903317504')
+assert.equal(verificationPayload.rowVersion, 3)
 assert.equal(typeof verificationPayload.taskId, 'string')
 assert.equal(verificationPayload.forceValidUntil, 1)
 assert.equal(verificationPayload.confirmationRequired, 0)

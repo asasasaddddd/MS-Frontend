@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message, Modal } from 'ant-design-vue'
+import { message } from 'ant-design-vue'
 import { getPeriodicPlanFlowSummary } from '../../../api/flowSummary'
 import {
   confirmerConfirmPeriodic,
-  exceptionDisposePeriodic,
   generatePeriodicTestPlan,
   getPeriodicTask,
   managerForwardConfirmPeriodic,
@@ -16,12 +15,14 @@ import {
   verificationRecordPeriodic,
   verifierFillInfoPeriodic
 } from '../../../api/periodic'
+import { parsePeriodicNodeCode } from '../../../api/periodicContract'
 import { useWorkflowTask } from '../../../composables/useWorkflowTask'
 import { useSessionStore } from '../../../stores/session'
 import { listUsersByDeptAndRole, type SysUserVO } from '../../../api/system'
 import type {
   EntityId,
   PeriodicConfirmerConfirmRequest,
+  PeriodicExceptionChangeSubmitRequest,
   PeriodicJudgementRequest,
   PeriodicManagerForwardConfirmRequest,
   PeriodicScrapDisposalRequest,
@@ -31,7 +32,6 @@ import type {
   PeriodicVerificationRecordRequest,
   PeriodicVerifierFillInfoRequest
 } from '../../../types/periodic'
-import type { ChangeSubmitRequest } from '../../../types/change'
 import type { FlowSummary } from '../../../types/flowSummary'
 import PeriodicConfirmDialog from './PeriodicConfirmDialog.vue'
 import PeriodicDetailDialog from './PeriodicDetailDialog.vue'
@@ -44,11 +44,7 @@ import PeriodicScrapDisposalDialog from './PeriodicScrapDisposalDialog.vue'
 import PeriodicSupplierFillDialog from './PeriodicSupplierFillDialog.vue'
 import PeriodicTaskTable from './PeriodicTaskTable.vue'
 import PeriodicVerifyDialog from './PeriodicVerifyDialog.vue'
-import {
-  buildPeriodicExceptionDisposeRequest,
-  canDisposePeriodicException,
-  type PeriodicExceptionAction
-} from '../periodicExceptionModel'
+import type { PeriodicExceptionAction } from '../periodicExceptionModel'
 import {
   getPeriodicJudgementDisplay,
   resolvePeriodicTaskAction,
@@ -117,18 +113,17 @@ const exceptionTasks = ref<PeriodicTaskVO[]>([])
 /** 工作台当前节点筛选项，与后端周检节点编码保持一致。 */
 const statusOptions = computed(() => [
   { label: '当前状态筛选', value: 'all' },
-  { label: props.role === 'admin' ? '待异常分流' : '待扫码接收', value: 'plan_confirm' },
+  { label: '系统下发', value: 'system_issue' },
+  { label: '管理员异常分流', value: 'admin_exception_route' },
   { label: '自检检定', value: 'self_verify' },
-  { label: '外委送出', value: 'send_out' },
-  { label: '外委送回', value: 'send_out_return' },
-  { label: '外扩填写', value: 'supplier_fill_info' },
-  { label: '外委填写', value: 'verifier_fill_info' },
+  { label: '外扩填写通用设备信息', value: 'external_common_fill' },
   { label: '外委二次判定', value: 'verifier_second_judge' },
   { label: '责任工程师二次判定', value: 'responsible_second_judge' },
   { label: '责任工程师三次判定', value: 'responsible_third_judge' },
   { label: '外委三次判定', value: 'verifier_third_judge' },
   { label: '责任工程师四次判定', value: 'responsible_fourth_judge' },
   { label: '外委报废处置', value: 'verifier_scrap_disposal' },
+  { label: '外委填写否通用设备信息', value: 'external_uncommon_fill' },
   { label: '报告待转办', value: 'manager_forward_confirm' },
   { label: '报告待确认', value: 'confirmer_confirm' }
 ])
@@ -244,32 +239,6 @@ function openException(tasks?: PeriodicTaskVO[]) {
   exceptionOpen.value = true
 }
 
-function confirmExceptionDispose(task: PeriodicTaskVO) {
-  if (!canDisposePeriodicException(task)) {
-    message.warning('状态变更流程尚未完成，暂不能关闭周检异常任务')
-    return
-  }
-  Modal.confirm({
-    title: `完成${task.exceptionFlowName || '异常'}处置`,
-    content: `关联状态变更单 ${task.relatedChangeOrderId} 已审批完成后，方可关闭本次周检任务。`,
-    okText: '确认完成',
-    cancelText: '取消',
-    async onOk() {
-      submitting.value = true
-      try {
-        await exceptionDisposePeriodic(buildPeriodicExceptionDisposeRequest(task))
-        message.success('周检异常任务已完成')
-        await loadData()
-      } catch (error) {
-        message.error(error instanceof Error ? error.message : '周检异常处置失败')
-        throw error
-      } finally {
-        submitting.value = false
-      }
-    }
-  })
-}
-
 /**
  * 读取当前任务的权威详情，供判定和报废弹窗展示完整上游记录。
  *
@@ -277,9 +246,14 @@ function confirmExceptionDispose(task: PeriodicTaskVO) {
  */
 async function loadAuthoritativeTask(task: PeriodicTaskVO) {
   try {
-    const detail = await getPeriodicTask(task.id)
+    if (task.workflowTaskId === undefined) {
+      throw new Error('统一工作流任务不存在或已处理')
+    }
+    const detail = await getPeriodicTask(task.id, task.workflowTaskId)
     const boundDetail = {
       ...detail,
+      currentNode: parsePeriodicNodeCode(task.currentNode),
+      currentNodeName: task.currentNodeName,
       workflowTaskId: task.workflowTaskId,
       processInstanceId: task.processInstanceId,
       rowVersion: task.rowVersion,
@@ -345,10 +319,6 @@ async function openProcess(task: PeriodicTaskVO) {
     confirmOpen.value = true
     return
   }
-  if (action === 'exception-dispose') {
-    confirmExceptionDispose(task)
-    return
-  }
   openDetail(task)
 }
 
@@ -411,10 +381,14 @@ async function loadData() {
     await refreshWorkflowTasks()
     const details = await loadWorkflowDetails(
       [...workflowTodoTasks.value, ...workflowParticipatedTasks.value],
-      (task, signal) => getPeriodicTask(task.businessId, signal)
+      (task, signal) => getPeriodicTask(task.businessId, task.taskId, signal)
     )
     if (!details || loadId !== dataLoadId) return
-    const detailByWorkflowTaskId = new Map(details.map((task) => [String(task.workflowTaskId), task]))
+    const normalizedDetails = details.map((task) => ({
+      ...task,
+      currentNode: parsePeriodicNodeCode(task.currentNode)
+    }))
+    const detailByWorkflowTaskId = new Map(normalizedDetails.map((task) => [String(task.workflowTaskId), task]))
     currentTasks.value = workflowTodoTasks.value.flatMap((task) => {
       const detail = detailByWorkflowTaskId.get(String(task.taskId))
       return detail ? [detail as PeriodicTaskVO] : []
@@ -619,7 +593,7 @@ async function submitConfirm(payload: PeriodicConfirmerConfirmRequest) {
   })
 }
 
-async function submitExceptionChange(payload: ChangeSubmitRequest) {
+async function submitExceptionChange(payload: PeriodicExceptionChangeSubmitRequest) {
   exceptionChangeSubmitting.value = true
   try {
     const orderId = await submitPeriodicExceptionChange(payload)

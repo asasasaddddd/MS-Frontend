@@ -22,20 +22,19 @@ export const firstCheckNodes: WorkflowNode[] = [
 
 /** 周检节点、处理角色与后端接口契约。 */
 export const periodicNodes: WorkflowNode[] = [
-  { code: 'plan_confirm', name: '待实物交接', module: 'periodic', roles: ['MEASURE_ADMIN', 'VERIFIER_SELF', 'VERIFIER_EXTERNAL'], api: '管理员异常分流 / 检定员扫码接收' },
-  { code: 'send_out', name: '外委送出', module: 'periodic', roles: ['EXTERNAL_OPERATOR'], api: 'POST /api/periodic/external-send-out' },
-  { code: 'send_out_return', name: '外委送回', module: 'periodic', roles: ['VERIFIER_EXTERNAL'], api: 'POST /api/periodic/send-out-return' },
-  { code: 'supplier_fill_info', name: '外扩人员填写检定信息', module: 'periodic', roles: ['EXTERNAL_OPERATOR'], api: 'POST /api/periodic/supplier-fill-info' },
-  { code: 'verifier_fill_info', name: '否通用设备检定信息', module: 'periodic', roles: ['VERIFIER_EXTERNAL'], api: 'POST /api/periodic/verifier-fill-info' },
+  { code: 'system_issue', name: '系统下发', module: 'periodic', roles: [], api: '系统自动' },
+  { code: 'admin_exception_route', name: '管理员异常分流', module: 'periodic', roles: ['MEASURE_ADMIN'], api: 'POST /api/periodic/exception-change/submit' },
+  { code: 'self_verify', name: '自检检定', module: 'periodic', roles: ['VERIFIER_SELF'], api: 'POST /api/periodic/self-verify' },
+  { code: 'external_common_fill', name: '外扩账号填写通用设备检定信息', module: 'periodic', roles: ['EXTERNAL_OPERATOR'], api: 'POST /api/periodic/external-common-fill' },
   { code: 'verifier_second_judge', name: '外委检定员二次判定', module: 'periodic', roles: ['VERIFIER_EXTERNAL'], api: 'POST /api/periodic/judgements' },
   { code: 'responsible_second_judge', name: '责任工程师二次判定', module: 'periodic', roles: ['RESPONSIBLE_ENGINEER'], api: 'POST /api/periodic/judgements' },
   { code: 'responsible_third_judge', name: '责任工程师三次判定', module: 'periodic', roles: ['RESPONSIBLE_ENGINEER'], api: 'POST /api/periodic/judgements' },
   { code: 'verifier_third_judge', name: '外委检定员三次判定', module: 'periodic', roles: ['VERIFIER_EXTERNAL'], api: 'POST /api/periodic/judgements' },
   { code: 'responsible_fourth_judge', name: '责任工程师四次判定', module: 'periodic', roles: ['RESPONSIBLE_ENGINEER'], api: 'POST /api/periodic/judgements' },
   { code: 'verifier_scrap_disposal', name: '外委检定员报废处置', module: 'periodic', roles: ['VERIFIER_EXTERNAL'], api: 'POST /api/periodic/scrap-disposal' },
+  { code: 'external_uncommon_fill', name: '外委检定员填写否通用设备信息', module: 'periodic', roles: ['VERIFIER_EXTERNAL'], api: 'POST /api/periodic/external-uncommon-fill' },
   { code: 'manager_forward_confirm', name: '管理员转办确认员', module: 'periodic', roles: ['MEASURE_ADMIN'], api: 'POST /api/periodic/manager-forward-confirm' },
-  { code: 'confirmer_confirm', name: '确认员判定', module: 'periodic', roles: ['CONFIRMER'], api: 'POST /api/periodic/confirmer-confirm' },
-  { code: 'exception_disposal', name: '异常处置', module: 'periodic', roles: ['MEASURE_ADMIN'], api: '系统自动' }
+  { code: 'confirmer_confirm', name: '确认员判定', module: 'periodic', roles: ['CONFIRMER'], api: 'POST /api/periodic/confirmer-confirm' }
 ]
 
 export const changeNodes: WorkflowNode[] = [
@@ -77,12 +76,10 @@ export const workflowNodeGroups = {
     externalOperator: []
   },
   periodic: {
-    admin: ['plan_confirm', 'manager_forward_confirm'],
-    selfVerifier: ['plan_confirm', 'verification_record'],
+    admin: ['admin_exception_route', 'manager_forward_confirm'],
+    selfVerifier: ['self_verify'],
     externalVerifier: [
-      'plan_confirm',
-      'send_out_return',
-      'verifier_fill_info',
+      'external_uncommon_fill',
       'verifier_second_judge',
       'verifier_third_judge',
       'verifier_scrap_disposal'
@@ -92,7 +89,7 @@ export const workflowNodeGroups = {
       'responsible_third_judge',
       'responsible_fourth_judge'
     ],
-    externalOperator: ['send_out', 'supplier_fill_info'],
+    externalOperator: ['external_common_fill'],
     confirmer: ['confirmer_confirm']
   },
   change: {

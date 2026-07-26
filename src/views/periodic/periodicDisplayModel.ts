@@ -11,7 +11,6 @@ export type PeriodicTaskAction =
   | 'scrap-disposal'
   | 'manager-forward'
   | 'confirm'
-  | 'exception-dispose'
 
 export interface PeriodicTableColumn {
   title: string
@@ -59,20 +58,18 @@ export function getPeriodicJudgementDisplay(nodeCode?: string) {
 type PeriodicActionTask = Pick<PeriodicTaskVO, 'currentNode' | 'allowedActions'>
 
 const periodicNodeActionMap: Readonly<Record<string, { code: string; action: PeriodicTaskAction }>> = {
-  plan_confirm: { code: 'SUBMIT_EXCEPTION', action: 'submit-exception' },
+  admin_exception_route: { code: 'SUBMIT_EXCEPTION', action: 'submit-exception' },
   self_verify: { code: 'SUBMIT', action: 'verify' },
-  verification_record: { code: 'SUBMIT', action: 'verify' },
-  supplier_fill_info: { code: 'SUBMIT', action: 'supplier-fill' },
-  verifier_fill_info: { code: 'SUBMIT', action: 'external-verify' },
+  external_common_fill: { code: 'SUBMIT', action: 'supplier-fill' },
   verifier_second_judge: { code: 'JUDGE', action: 'judgement' },
   responsible_second_judge: { code: 'JUDGE', action: 'judgement' },
   responsible_third_judge: { code: 'JUDGE', action: 'judgement' },
   verifier_third_judge: { code: 'JUDGE', action: 'judgement' },
   responsible_fourth_judge: { code: 'JUDGE', action: 'judgement' },
   verifier_scrap_disposal: { code: 'SUBMIT', action: 'scrap-disposal' },
+  external_uncommon_fill: { code: 'SUBMIT', action: 'external-verify' },
   manager_forward_confirm: { code: 'SUBMIT', action: 'manager-forward' },
-  confirmer_confirm: { code: 'APPROVE_REJECT', action: 'confirm' },
-  exception_disposal: { code: 'SUBMIT', action: 'exception-dispose' }
+  confirmer_confirm: { code: 'APPROVE_REJECT', action: 'confirm' }
 }
 
 export function resolvePeriodicTaskAction(task: PeriodicActionTask): PeriodicTaskAction | undefined {
@@ -84,14 +81,6 @@ export function resolvePeriodicTaskAction(task: PeriodicActionTask): PeriodicTas
 export function displayValue(value: unknown) {
   if (value === null || value === undefined || value === '') return '-'
   return String(value)
-}
-
-function isDualHandoverTask(task: PeriodicTaskVO) {
-  return (
-    task.currentNode === 'plan_confirm' &&
-    task.taskStatus === 'pending' &&
-    task.physicalStatus === 'wait_verifier_receive'
-  )
 }
 
 function formatDate(value: unknown, length = 10) {
@@ -140,25 +129,19 @@ function resultName(value?: string) {
  */
 function nodeDisplayName(value?: string) {
   const map: Record<string, string> = {
-    plan_issue: '计划下发',
-    plan_confirm: '待实物交接',
-    verifier_receive: '检定员扫码接收',
+    system_issue: '系统下发',
+    admin_exception_route: '管理员异常分流',
     self_verify: '自检检定',
-    verification_record: '检定记录填写',
-    send_out: '外委送出',
-    send_out_return: '外委送回',
-    supplier_fill_info: '外扩人员填写检定信息',
-    verifier_fill_info: '外委检定员填写检定信息',
+    external_common_fill: '外扩账号填写通用设备检定信息',
     verifier_second_judge: '外委检定员二次判定',
     responsible_second_judge: '责任工程师二次判定',
     responsible_third_judge: '责任工程师三次判定',
     verifier_third_judge: '外委检定员三次判定',
     responsible_fourth_judge: '责任工程师四次判定',
     verifier_scrap_disposal: '外委检定员报废处置',
+    external_uncommon_fill: '外委检定员填写否通用设备信息',
     manager_forward_confirm: '管理员转办确认员',
-    confirmer_confirm: '确认员判定',
-    exception_disposal: '异常处置',
-    completed: '已完成'
+    confirmer_confirm: '确认员判定'
   }
   return value ? map[value] || value : '-'
 }
@@ -185,11 +168,13 @@ function statusDisplayName(value?: string) {
  */
 export function periodicTagColor(nodeOrStatus?: string): PeriodicTagColor {
   const value = String(nodeOrStatus || '').toLowerCase()
-  if (['exception_disposal', 'exception', 'rejected', 'cancelled'].includes(value)) return 'red'
+  if (['verifier_scrap_disposal', 'exception', 'rejected', 'cancelled'].includes(value)) return 'red'
   if (['completed'].includes(value)) return 'green'
   if (
     [
-      'plan_confirm',
+      'admin_exception_route',
+      'external_common_fill',
+      'external_uncommon_fill',
       'manager_forward_confirm',
       'confirmer_confirm',
       'verifier_second_judge',
@@ -208,19 +193,8 @@ export function periodicTagColor(nodeOrStatus?: string): PeriodicTagColor {
   return 'blue'
 }
 
-function dualHandoverDisplayName(task: PeriodicTaskVO, role?: PeriodicTableRole) {
-  if (!isDualHandoverTask(task)) return undefined
-  if (role === 'admin') return '待异常分流'
-  if (role === 'verifier') return '待扫码接收'
-  return undefined
-}
-
-export function mapPeriodicTaskRow(task: PeriodicTaskVO, role?: PeriodicTableRole): PeriodicDisplayRowWithMeta {
-  const currentNodeName = dualHandoverDisplayName(task, role) || (
-    task.currentNode === 'exception_disposal' && task.exceptionFlowName
-      ? task.exceptionFlowName
-      : task.currentNodeName || nodeDisplayName(task.currentNode)
-  )
+export function mapPeriodicTaskRow(task: PeriodicTaskVO, _role?: PeriodicTableRole): PeriodicDisplayRowWithMeta {
+  const currentNodeName = task.currentNodeName || nodeDisplayName(task.currentNode)
   const taskStatusName = task.taskStatusName || statusDisplayName(task.taskStatus)
   return {
     taskId: task.id,
