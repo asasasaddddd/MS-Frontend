@@ -91,10 +91,27 @@ assert.deepEqual(
     countUnitLabel
   })),
   [
-    { metricCode: 'pending', label: '当前角色待办', value: 6, countUnitLabel: '单' },
-    { metricCode: 'today_new', label: '今日新增', value: 1, countUnitLabel: '单' }
+    { metricCode: 'today_new', label: '今日新增', value: 1, countUnitLabel: '单' },
+    { metricCode: 'pending', label: '当前角色待办', value: 6, countUnitLabel: '单' }
   ],
   '公共组件顶部只能展示后端返回的当前角色待办和今日新增，不能混入模块自定义指标'
+)
+
+const emptySummary: FlowSummary = {
+  businessType: 'ALL',
+  scope: 'all',
+  snapshotAt: '2026-07-27T18:10:00',
+  overview: [],
+  dimensions: []
+}
+
+assert.deepEqual(
+  buildFlowStatusViewModel(emptySummary).overview.map(({ metricCode, value }) => ({ metricCode, value })),
+  [
+    { metricCode: 'today_new', value: 0 },
+    { metricCode: 'pending', value: 0 }
+  ],
+  '后端成功返回空汇总时仍应固定展示今日新增和当前待办的真实零值'
 )
 
 assert.equal(
@@ -183,7 +200,10 @@ assert.deepEqual(
   [],
   '数据库聚合值以数字字符串返回时仍应按数值校验，不能发生字符串拼接'
 )
-assert.equal(buildFlowStatusViewModel(numericStringSummary).overview[0]?.value, 5)
+assert.equal(
+  buildFlowStatusViewModel(numericStringSummary).overview.find((metric) => metric.metricCode === 'pending')?.value,
+  5
+)
 assert.equal(buildFlowStatusViewModel(numericStringSummary).dimensions[0]?.totalCount, 5)
 assert.equal(buildFlowStatusViewModel(numericStringSummary).dimensions[0]?.stages[0]?.count, 4)
 
@@ -319,8 +339,8 @@ const productionContractSummary: FlowSummary = {
 }
 
 const productionContractView = buildFlowStatusViewModel(productionContractSummary)
-assert.equal(productionContractView.overview[0]?.label, '当前角色待办')
-assert.equal(productionContractView.overview[1]?.label, '今日新增')
+assert.equal(productionContractView.overview[0]?.label, '今日新增')
+assert.equal(productionContractView.overview[1]?.label, '当前角色待办')
 assert.equal(productionContractView.pendingDimension?.dimensionCode, 'workflow')
 assert.equal(productionContractView.dimensions[0]?.dimensionCode, 'workflow')
 assert.equal(productionContractView.dimensions[0]?.label, '工作流节点')

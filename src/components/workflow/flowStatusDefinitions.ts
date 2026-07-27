@@ -139,12 +139,12 @@ export const FLOW_DIMENSION_DEFINITIONS: Readonly<Record<FlowDimensionCode, Flow
 
 /** 页面顶部概览指标的中文名称和固定顺序。 */
 export const FLOW_OVERVIEW_METRIC_DEFINITIONS: readonly FlowOverviewMetricDefinition[] = [
-  { metricCode: 'total', label: '总数', order: 10 },
+  { metricCode: 'today_new', label: '今日新增', order: 10 },
   { metricCode: 'pending', label: '当前角色待办', order: 20 },
+  { metricCode: 'total', label: '总数', order: 30 },
   { metricCode: 'in_progress', label: '处理中', order: 30 },
   { metricCode: 'completed', label: '已完成', order: 40 },
   { metricCode: 'exception', label: '异常', order: 50 },
-  { metricCode: 'today_new', label: '今日新增', order: 60 },
   { metricCode: 'total_device', label: '设备总数', order: 100 },
   { metricCode: 'active_device', label: '处理中设备', order: 110 },
   { metricCode: 'completed_device', label: '已完成设备', order: 120 },
@@ -167,6 +167,15 @@ export const FLOW_OVERVIEW_METRIC_DEFINITIONS: readonly FlowOverviewMetricDefini
   { metricCode: 'ratio_count', label: '配套比例项', order: 290 },
   { metricCode: 'item_count', label: '送检明细', order: 300 }
 ]
+
+/** 总待办状态卡固定展示的五类业务标签。 */
+export const globalSummaryStatusLabels = [
+  '首次检定',
+  '周检计划',
+  '状态变更',
+  '抽检计划',
+  '产品配套'
+] as const
 
 /** 单类状态变更工作流的集中展示定义。 */
 interface ChangeWorkflowTypeDefinition {
@@ -255,6 +264,11 @@ function buildChangeWorkflowStageDefinitions(): FlowStageDefinition[] {
  * 此配置只决定中文、颜色、顺序和零值显隐；不得加入基于任务字段的统计条件。
  */
 export const FLOW_STAGE_DEFINITIONS: readonly FlowStageDefinition[] = [
+  { dimensionCode: 'business', stageCode: 'type:first_check', label: '首次检定', tone: 'info', order: 1, showWhenZero: true },
+  { dimensionCode: 'business', stageCode: 'type:periodic', label: '周检计划', tone: 'processing', order: 2, showWhenZero: true },
+  { dimensionCode: 'business', stageCode: 'type:change', label: '状态变更', tone: 'warning', order: 3, showWhenZero: true },
+  { dimensionCode: 'business', stageCode: 'type:sampling', label: '抽检计划', tone: 'success', order: 4, showWhenZero: true },
+  { dimensionCode: 'business', stageCode: 'type:product_support', label: '产品配套', tone: 'neutral', order: 5, showWhenZero: true },
   { dimensionCode: 'business', stageCode: 'draft', label: '草稿', tone: 'neutral', order: 10, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'submitted', label: '已提交', tone: 'info', order: 11, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'processing', label: '处理中', tone: 'processing', order: 12, showWhenZero: false },
@@ -417,15 +431,21 @@ export function validateFlowSummary(summary: FlowSummary): FlowSummaryValidation
 export function buildFlowStatusViewModel(summary: FlowSummary): FlowStatusViewModel {
   const validationIssues = validateFlowSummary(summary)
 
-  const overview = summary.overview
-    .filter((metric) => metric.metricCode === 'pending' || metric.metricCode === 'today_new')
-    .map((metric): FlowOverviewMetricView => {
-      const definition = overviewDefinitionIndex.get(metric.metricCode)
+  const fallbackOverviewUnit = summary.overview.find(
+    (metric) => metric.metricCode === 'today_new' || metric.metricCode === 'pending'
+  )?.countUnit ?? summary.dimensions[0]?.countUnit ?? 'item'
+
+  const overview = ['today_new', 'pending']
+    .map((metricCode): FlowOverviewMetricView => {
+      const metric = summary.overview.find((candidate) => candidate.metricCode === metricCode)
+      const definition = overviewDefinitionIndex.get(metricCode)
+      const countUnit = metric?.countUnit ?? fallbackOverviewUnit
       return {
-        ...metric,
-        value: normalizeFlowCount(metric.value),
-        label: definition?.label || `未配置指标（${metric.metricCode}）`,
-        countUnitLabel: FLOW_COUNT_UNIT_DEFINITIONS[metric.countUnit].symbol,
+        metricCode,
+        countUnit,
+        value: normalizeFlowCount(metric?.value ?? 0),
+        label: definition?.label || `未配置指标（${metricCode}）`,
+        countUnitLabel: FLOW_COUNT_UNIT_DEFINITIONS[countUnit].symbol,
         order: definition?.order ?? Number.MAX_SAFE_INTEGER
       }
     })

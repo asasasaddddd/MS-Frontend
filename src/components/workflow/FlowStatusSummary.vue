@@ -13,6 +13,8 @@ interface FlowStatusSummaryProps {
   summary?: FlowSummary | null
   /** 汇总接口请求期间是否展示加载骨架。 */
   loading?: boolean
+  /** 汇总接口失败原因；失败时不得伪装成零值。 */
+  error?: unknown
   /** 汇总区域的无障碍名称和展开详情来源标题。 */
   title?: string
   /** 后端未返回快照时的空状态文案。 */
@@ -32,6 +34,20 @@ const viewModel = computed(() =>
     ? buildFlowStatusViewModel(props.summary)
     : { overview: [], dimensions: [], pendingDimension: undefined }
 )
+
+const todayMetric = computed(() =>
+  viewModel.value.overview.find((metric) => metric.metricCode === 'today_new')
+)
+
+const pendingMetric = computed(() =>
+  viewModel.value.overview.find((metric) => metric.metricCode === 'pending')
+)
+
+const errorMessage = computed(() => {
+  if (typeof props.error === 'string') return props.error
+  if (props.error instanceof Error && props.error.message) return props.error.message
+  return '流程汇总加载失败，请稍后重试'
+})
 
 /** 后端总数与分类数量不守恒时需要展示和记录的契约问题。 */
 const validationIssues = computed(() =>
@@ -104,40 +120,44 @@ watch(
 
 <template>
   <section class="flow-status-summary" :aria-label="title">
-    <div v-if="loading" class="summary-state-card">
-      <a-skeleton active :paragraph="{ rows: 2 }" />
+    <div v-if="loading" class="summary-line summary-three-card-grid" aria-label="流程汇总加载中">
+      <a-card v-for="index in 3" :key="index" class="summary-loading-card" :bordered="false">
+        <a-skeleton active :paragraph="{ rows: index === 3 ? 2 : 1 }" />
+      </a-card>
     </div>
-    <div v-else-if="!summary" class="summary-state-card">
+    <a-card v-else-if="!summary && error" class="summary-state-card summary-state-card--error" :bordered="false">
+      <a-alert type="error" show-icon :message="errorMessage" />
+    </a-card>
+    <a-card v-else-if="!summary" class="summary-state-card" :bordered="false">
       <a-empty :description="emptyText" />
-    </div>
+    </a-card>
 
     <template v-else>
-      <div class="summary-line">
-        <div v-if="viewModel.overview.length" class="overview-metrics" aria-label="流程概览指标">
-          <a-card
-            v-for="metric in viewModel.overview"
-            :key="metric.metricCode"
-            class="overview-metric"
-            :bordered="false"
-          >
-            <a-statistic
-              :title="metric.label"
-              :value="metric.value"
-              :suffix="metric.countUnitLabel"
-            />
-          </a-card>
-        </div>
+      <div class="summary-line summary-three-card-grid">
+        <a-card class="summary-metric-card overview-metric summary-metric-card--today" :bordered="false">
+          <a-statistic
+            title="今日新增"
+            :value="todayMetric?.value ?? 0"
+            :suffix="todayMetric?.countUnitLabel || ''"
+          />
+          <span class="summary-card-caption">今日进入当前角色处理范围</span>
+        </a-card>
 
-        <div
-          v-if="viewModel.pendingDimension"
-          class="current-todo-status"
-          aria-label="当前待办状态"
-        >
+        <a-card class="summary-metric-card overview-metric summary-metric-card--pending" :bordered="false">
+          <a-statistic
+            title="当前待办"
+            :value="pendingMetric?.value ?? 0"
+            :suffix="pendingMetric?.countUnitLabel || ''"
+          />
+          <span class="summary-card-caption">当前仍需处理的有效条目</span>
+        </a-card>
+
+        <a-card class="status-summary-card" :bordered="false" aria-label="当前待办状态">
           <div class="current-todo-status__header">
-            <strong>当前待办状态</strong>
+            <strong>状态汇总</strong>
             <span>快照时间：{{ formatSnapshotTime(summary.snapshotAt) }}</span>
           </div>
-          <div v-if="viewModel.pendingDimension.stages.length" class="stage-list">
+          <div v-if="viewModel.pendingDimension?.stages.length" class="stage-list">
             <a-tag
               v-for="stage in viewModel.pendingDimension.stages"
               :key="stage.stageCode"
@@ -147,8 +167,8 @@ watch(
               <strong>{{ stage.count }} {{ stage.countUnitLabel }}</strong>
             </a-tag>
           </div>
-          <a-empty v-else class="dimension-empty" description="暂无当前待办" :image="null" />
-        </div>
+          <a-empty v-else class="dimension-empty" description="暂无当前待办状态" :image="null" />
+        </a-card>
       </div>
 
       <div
@@ -191,61 +211,77 @@ watch(
   background: #ffffff;
 }
 
-.summary-line {
-  display: flex;
-  align-items: stretch;
+.summary-state-card--error {
+  border-color: #fecdca;
+  background: #fffafa;
+}
+
+.summary-three-card-grid {
+  display: grid;
+  grid-template-columns: minmax(156px, 0.72fr) minmax(156px, 0.72fr) minmax(320px, 2fr);
   gap: 14px;
 }
 
-.overview-metrics {
-  display: flex;
-  align-items: stretch;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-
-.overview-metric {
-  width: 140px;
-  min-height: 76px;
-  flex: 0 0 auto;
+.summary-loading-card,
+.summary-metric-card,
+.status-summary-card {
+  position: relative;
+  overflow: hidden;
   border: 1px solid #e5eaf1;
   border-radius: 8px;
   background: #ffffff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.03);
 }
 
-.overview-metric :deep(.ant-card-body) {
-  padding: 12px 16px;
+.summary-metric-card::before,
+.status-summary-card::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: #1570ef;
+  content: '';
 }
 
-.overview-metric :deep(.ant-statistic-title) {
+.summary-metric-card--today::before {
+  background: #0e9384;
+}
+
+.status-summary-card::before {
+  background: #667085;
+}
+
+.summary-loading-card :deep(.ant-card-body),
+.summary-metric-card :deep(.ant-card-body),
+.status-summary-card :deep(.ant-card-body) {
+  height: 100%;
+  padding: 14px 16px 14px 18px;
+}
+
+.summary-metric-card :deep(.ant-statistic-title) {
   margin-bottom: 4px;
   color: #667085;
   font-size: 13px;
 }
 
-.overview-metric :deep(.ant-statistic-content) {
+.summary-metric-card :deep(.ant-statistic-content) {
   color: #172033;
-  font-size: 22px;
+  font-size: 26px;
+  font-weight: 650;
   line-height: 1.2;
 }
 
-.overview-metric :deep(.ant-statistic-content-suffix) {
+.summary-metric-card :deep(.ant-statistic-content-suffix) {
   margin-left: 4px;
   color: #667085;
   font-size: 13px;
 }
 
-.current-todo-status {
-  min-width: 280px;
-  display: flex;
-  align-items: flex-start;
-  flex-direction: column;
-  flex: 1;
-  gap: 10px;
-  padding: 10px 14px;
-  border: 1px solid #e5eaf1;
-  border-radius: 8px;
-  background: #ffffff;
+.summary-card-caption {
+  display: block;
+  margin-top: 7px;
+  color: #98a2b3;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .current-todo-status__header {
@@ -269,6 +305,7 @@ watch(
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
+  margin-top: 10px;
 }
 
 .flow-stage-tag {
@@ -341,23 +378,22 @@ watch(
 }
 
 @media (max-width: 1120px) {
-  .summary-line {
-    flex-direction: column;
+  .summary-three-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .current-todo-status {
-    min-width: 0;
+  .status-summary-card {
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 720px) {
-  .overview-metrics {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .summary-three-card-grid {
+    grid-template-columns: 1fr;
   }
 
-  .overview-metric {
-    width: auto;
+  .status-summary-card {
+    grid-column: auto;
   }
 
   .current-todo-status__header {
@@ -367,10 +403,4 @@ watch(
   }
 }
 
-@media (max-width: 480px) {
-  .overview-metrics {
-    grid-template-columns: 1fr;
-  }
-
-}
 </style>
