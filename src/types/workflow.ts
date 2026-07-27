@@ -18,6 +18,13 @@ export interface WorkflowTaskQuery {
   businessType?: BusinessType
 }
 
+/** 当前激活角色待办汇总的后端权威查询范围。 */
+export interface WorkflowTodoSummaryQuery {
+  businessType?: BusinessType
+  scopeType?: 'order' | 'plan'
+  scopeId?: WorkflowEntityId
+}
+
 /** 后端统一任务查询返回的权威任务结构。 */
 export interface WorkflowTask {
   taskId: WorkflowEntityId

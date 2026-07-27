@@ -1,10 +1,12 @@
 import { request } from '@/api/request'
+import type { FlowSummary } from '@/types/flowSummary'
 import type {
   BusinessType,
   WorkflowEntityId,
   WorkflowTask,
   WorkflowTaskPage,
   WorkflowTaskQuery,
+  WorkflowTodoSummaryQuery,
   WorkflowTimelineEntry
 } from '@/types/workflow'
 
@@ -33,6 +35,20 @@ export async function listWorkflowTasks(businessType?: BusinessType, signal?: Ab
 export async function listWorkflowHistory(businessType?: BusinessType, signal?: AbortSignal): Promise<WorkflowTask[]> {
   const page = await queryWorkflowTasks({ view: 'handled', businessType }, signal)
   return page.records
+}
+
+/** 读取当前人员和激活角色在指定业务入口范围内的权威待办汇总。 */
+export function getWorkflowTodoSummary(query: WorkflowTodoSummaryQuery, signal?: AbortSignal) {
+  return request<FlowSummary>({
+    url: '/workflow/tasks/summary',
+    method: 'GET',
+    signal,
+    params: {
+      businessType: query.businessType,
+      scopeType: query.scopeType,
+      scopeId: query.scopeId
+    }
+  })
 }
 
 /** 鉴权读取一条统一共享任务。 */
