@@ -1,6 +1,7 @@
 import { computed, onScopeDispose, ref, toValue, watch } from 'vue'
 import type { MaybeRefOrGetter } from 'vue'
 import { getWorkflowTodoSummary } from '@/api/workflow'
+import { useTodoNotificationStore } from '@/stores/todoNotification'
 import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTodoSummaryQuery } from '@/types/workflow'
 
@@ -16,6 +17,7 @@ export interface UseRoleTodoSummaryOptions {
  * 身份或范围变化会取消旧请求，防止旧角色响应覆盖新角色页面。
  */
 export function useRoleTodoSummary(options: UseRoleTodoSummaryOptions) {
+  const todoNotifications = useTodoNotificationStore()
   const summary = ref<FlowSummary | null>(null)
   const loading = ref(false)
   const error = ref<unknown>()
@@ -73,6 +75,14 @@ export function useRoleTodoSummary(options: UseRoleTodoSummaryOptions) {
       if (options.immediate !== false) void refresh().catch(() => undefined)
     },
     { immediate: true, deep: true }
+  )
+
+  watch(
+    () => todoNotifications.invalidationVersion,
+    (version, previousVersion) => {
+      if (version === previousVersion || !identityKey.value) return
+      void refresh().catch(() => undefined)
+    }
   )
 
   onScopeDispose(cancel)

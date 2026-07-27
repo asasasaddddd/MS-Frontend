@@ -4,15 +4,18 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons-vue'
 import { logout as logoutApi } from '@/api/auth'
+import TodoNotificationBell from '@/components/workflow/TodoNotificationBell.vue'
 import { useNavSections, findNavItem, findNavItemForRoleDisplay, getFirstNavPathForRole } from '@/composables/useNavSections'
 import { useAppStore } from '@/stores/app'
 import { useSessionStore } from '@/stores/session'
+import { useTodoNotificationStore } from '@/stores/todoNotification'
 import { roleNameMap } from '@/types/common'
 
 const route = useRoute()
 const router = useRouter()
 const app = useAppStore()
 const session = useSessionStore()
+const todoNotifications = useTodoNotificationStore()
 
 const roleCode = computed(() => session.user?.roleCode)
 const userRoleCodes = computed(() => session.user?.roles?.length ? session.user.roles : roleCode.value ? [roleCode.value] : [])
@@ -50,6 +53,12 @@ const roleOptions = computed(() =>
   }))
 )
 const operatorSelectorLabel = computed(() => session.user?.employeeName || session.user?.employeeId || '-')
+
+watch(
+  () => [session.user?.employeeId, session.user?.roleCode] as const,
+  ([userId, roleCode]) => todoNotifications.activate(userId, roleCode),
+  { immediate: true }
+)
 
 /**
  * 将媒体查询结果同步为响应式侧栏状态。
@@ -100,6 +109,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  todoNotifications.deactivate()
   narrowViewportQuery?.removeEventListener('change', syncNarrowViewport)
   narrowViewportQuery = null
 })
@@ -156,6 +166,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="header-right">
+          <TodoNotificationBell />
           <a-select
             class="role-select"
             :value="roleCode"

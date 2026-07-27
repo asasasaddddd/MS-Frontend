@@ -38,7 +38,7 @@ function clearSessionOnUnauthorized(code?: number, status?: number) {
   }
 }
 
-function buildAuthHeaders(config: AxiosRequestConfig): Record<string, string> {
+export function buildAuthHeaders(config: AxiosRequestConfig): Record<string, string> {
   const session = useSessionStore()
   const user = session.user
   const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData
@@ -61,6 +61,10 @@ function buildAuthHeaders(config: AxiosRequestConfig): Record<string, string> {
   }
 
   return headers
+}
+
+export function getApiBaseUrl() {
+  return String(httpClient.defaults.baseURL || '/api').replace(/\/$/, '')
 }
 
 export async function request<T>(config: AxiosRequestConfig): Promise<T> {
