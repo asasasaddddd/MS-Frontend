@@ -23,6 +23,22 @@ export interface BusinessTaskReference {
   businessId: string | number
 }
 
+const workflowBusinessTypeByTodoType: Record<Exclude<WorkspaceTodoType, 'all'>, string> = {
+  firstcheck: 'FIRST_CHECK',
+  periodic: 'PERIODIC',
+  change: 'CHANGE',
+  sampling: 'SAMPLING',
+  productSupport: 'PRODUCT_SUPPORT'
+}
+
+export function workspaceTodoBusinessType(type: WorkspaceTodoType) {
+  return type === 'all' ? undefined : workflowBusinessTypeByTodoType[type]
+}
+
+export function sumWorkspaceTodoCounts(entries: readonly WorkspaceTodoCountEntry[]) {
+  return entries.reduce((sum, entry) => sum + entry.count, 0)
+}
+
 const changeTaskRouteByRole: Record<string, string> = {
   MEASURE_ADMIN: '/change/admin-task',
   DEPT_LEADER: '/change/approval',

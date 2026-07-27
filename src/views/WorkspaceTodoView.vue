@@ -8,6 +8,8 @@ import { getPeriodicTask } from '@/api/periodic'
 import { parsePeriodicNodeCode } from '@/api/periodicContract'
 import { getSamplingTask } from '@/api/sampling'
 import { getProductSupportOrder } from '@/api/productSupport'
+import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
+import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
 import { hasWorkflowAction, useWorkflowTask, type WorkflowBoundDetail } from '@/composables/useWorkflowTask'
 import { roleNameMap, type RoleCode } from '@/types/common'
 import type { WorkflowTask } from '@/types/workflow'
@@ -29,8 +31,10 @@ import {
   filterVisibleTodoEntries,
   getChangeTaskRoute,
   getWorkspaceLaunchActions,
+  sumWorkspaceTodoCounts,
   uniqueTasksByBusinessId,
   visibleTodoTypeValues,
+  workspaceTodoBusinessType,
   type WorkspaceTodoType
 } from '@/views/workspaceTodoModel'
 
@@ -70,6 +74,18 @@ const workflowIdentity = computed(() => {
   const user = session.user
   return user ? `${user.employeeId}|${user.roleCode}` : ''
 })
+const selectedWorkflowBusinessType = computed(() => workspaceTodoBusinessType(selectedType.value))
+const summaryQuery = computed(() => ({
+  businessType: selectedWorkflowBusinessType.value
+}))
+const {
+  summary: todoSummary,
+  loading: todoSummaryLoading,
+  error: todoSummaryError
+} = useRoleTodoSummary({
+  identityKey: workflowIdentity,
+  query: summaryQuery
+})
 const {
   todoTasks: workflowTasks,
   handledTasks: workflowHistoryTasks,
@@ -88,7 +104,6 @@ const roleLabel = computed(() => {
   return roleNameMap[role] || session.user?.roleName || role || '-'
 })
 const isVerifier = computed(() => roleCode.value === 'VERIFIER_SELF' || roleCode.value === 'VERIFIER_EXTERNAL')
-const isSingleMetricOverview = computed(() => roleCode.value === 'CONFIRMER' || roleCode.value === 'RESPONSIBLE_ENGINEER')
 const launchActions = computed(() => getWorkspaceLaunchActions(roleCode.value))
 
 const filterOptions: SelectProps['options'] = [
@@ -497,55 +512,7 @@ const filteredTodos = computed(() => {
   })
 })
 
-function todoCountByType(type: Exclude<TodoType, 'all'>) {
-  const items = permittedTodos.value.filter((item) => item.type === type)
-  if (type === 'periodic' || type === 'sampling' || type === 'productSupport') return items.length
-  return items.reduce((sum, item) => sum + item.count, 0)
-}
-
-function todoDeviceCountByType(type: Exclude<TodoType, 'all'>) {
-  return permittedTodos.value.filter((item) => item.type === type).reduce((sum, item) => sum + item.count, 0)
-}
-
-const metrics = computed(() => {
-  const firstcheck = todoCountByType('firstcheck')
-  const periodic = todoCountByType('periodic')
-  const periodicDevices = todoDeviceCountByType('periodic')
-  const change = todoCountByType('change')
-  const sampling = todoCountByType('sampling')
-  const productSupport = todoCountByType('productSupport')
-
-  const baseMetrics = [
-    {
-      title: '待办流程',
-      value: firstcheck + periodic + change + sampling + productSupport,
-      note: '数据来自当前角色实时待办'
-    },
-    {
-      title: '未送检器具',
-      value: periodicDevices,
-      note: periodicDevices > 0 ? `当前周检设备 ${periodicDevices}` : '暂无周检送检任务'
-    },
-    {
-      title: '状态变更未完流程',
-      value: change,
-      note: change > 0 ? `当前待处理 ${change} 单` : '暂无状态变更待办'
-    }
-  ]
-  const roleMetrics = isVerifier.value
-    ? baseMetrics.slice(0, 2)
-    : isSingleMetricOverview.value
-      ? baseMetrics.slice(0, 1)
-      : baseMetrics
-  return roleMetrics.filter((metric) => metric.value > 0)
-})
-
-const pendingTotal = computed(() =>
-  permittedTodos.value.reduce(
-    (sum, item) => sum + (item.type === 'periodic' || item.type === 'sampling' || item.type === 'productSupport' ? 1 : item.count),
-    0
-  )
-)
+const pendingTotal = computed(() => sumWorkspaceTodoCounts(permittedTodos.value))
 
 const visibleFilterOptions = computed(() => {
   const types = new Set<TodoType>(visibleTodoTypeValues(activeEntries.value))
@@ -681,13 +648,13 @@ watch(roleCode, () => {
       </div>
     </a-card>
 
-    <div v-if="route.path === '/todo' && activeBucket === 'todo' && metrics.length > 0" class="metric-grid">
-      <a-card v-for="metric in metrics" :key="metric.title" class="metric-card" :bordered="false">
-        <span>{{ metric.title }}</span>
-        <strong>{{ metric.value }}</strong>
-        <small>{{ metric.note }}</small>
-      </a-card>
-    </div>
+    <FlowStatusSummary
+      v-if="route.path === '/todo' && activeBucket === 'todo'"
+      :summary="todoSummary"
+      :loading="todoSummaryLoading"
+      :error="todoSummaryError"
+      title="全部流程待办汇总"
+    />
 
     <a-card v-if="route.path === '/todo'" class="todo-panel" :bordered="false">
       <template #title>
@@ -779,35 +746,6 @@ watch(roleCode, () => {
   margin: 4px 0 0;
   color: #667085;
   font-size: 12px;
-}
-
-.metric-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.metric-card {
-  border: 1px solid #e5eaf1;
-  border-radius: 8px;
-  background: #ffffff;
-}
-
-.metric-card :deep(.ant-card-body) {
-  padding: 16px 18px;
-}
-
-.metric-card span,
-.metric-card small {
-  color: #667085;
-}
-
-.metric-card strong {
-  display: block;
-  margin: 8px 0 4px;
-  color: #172033;
-  font-size: 34px;
-  line-height: 1.08;
 }
 
 .todo-panel {
@@ -942,10 +880,6 @@ watch(roleCode, () => {
 }
 
 @media (max-width: 980px) {
-  .metric-grid {
-    grid-template-columns: 1fr;
-  }
-
   .task-filter {
     grid-template-columns: 1fr;
   }

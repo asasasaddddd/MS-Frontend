@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 const workspace = readFileSync(new URL('../src/views/WorkspaceTodoView.vue', import.meta.url), 'utf8')
+assert.match(workspace, /useRoleTodoSummary/)
+assert.doesNotMatch(workspace, /const metrics = computed/)
 
 const todoStart = workspace.indexOf('const changeTodoEntries')
 const historyStart = workspace.indexOf('const changeHistoryEntries')
