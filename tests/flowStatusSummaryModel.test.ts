@@ -290,7 +290,7 @@ assert.doesNotMatch(componentSource, /@click\.stop/)
 assert.doesNotMatch(componentSource, /v-show=/)
 assert.doesNotMatch(componentSource, /<h2>\{\{ title \}\}<\/h2>/)
 assert.doesNotMatch(componentSource, /setInterval|setTimeout/)
-assert.match(apiSource, /\/periodic\/plans\/\$\{encodeURIComponent\(String\(planId\)\)\}\/summary/)
+assert.doesNotMatch(apiSource, /\/periodic\/plans\/.*\/summary/)
 assert.doesNotMatch(changeApplySource, /FlowStatusSummary|getChangeFlowSummary/)
 assert.doesNotMatch(changeHistorySource, /FlowStatusSummary|getChangeFlowSummary/)
 changeTodoSources.forEach((source) => {
