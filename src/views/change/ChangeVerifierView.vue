@@ -3,11 +3,11 @@ import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute } from 'vue-router'
 import { getChangeOrderDetail, verifierHandleChange } from '@/api/change'
-import { getChangeFlowSummary } from '@/api/flowSummary'
 import { listWorkflowTasks } from '@/api/workflow'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
+import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
+import { useSessionStore } from '@/stores/session'
 import type { ChangeOrderVO, ChangeVerifierHandleRequest } from '@/types/change'
-import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
 import {
   CHANGE_VERIFY_ACTION,
@@ -25,10 +25,9 @@ import ChangeHistoryPanel from '@/views/change/components/ChangeHistoryPanel.vue
 import { isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 
 const route = useRoute()
+const session = useSessionStore()
 const loading = ref(false)
 const rows = ref<ChangeTaskRow[]>([])
-/** 当前检定员待办范围内由后端生成的权威流程汇总。 */
-const changeFlowSummary = ref<FlowSummary | null>(null)
 const keyword = ref('')
 const sourceFilter = ref('all')
 const detailOpen = ref(false)
@@ -39,6 +38,23 @@ const routeOrderId = computed(() => {
   const value = route.query.orderId
   if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
   return value ? String(value) : ''
+})
+const workflowIdentity = computed(() => {
+  const user = session.user
+  return user ? `${user.employeeId}|${user.roleCode}` : ''
+})
+const summaryScope = computed(() => routeOrderId.value
+  ? { businessType: 'CHANGE', scopeType: 'order' as const, scopeId: routeOrderId.value }
+  : { businessType: 'CHANGE' })
+const {
+  summary: changeFlowSummary,
+  loading: summaryLoading,
+  error: summaryError,
+  refresh: refreshSummary
+} = useRoleTodoSummary({
+  identityKey: workflowIdentity,
+  query: summaryScope,
+  immediate: false
 })
 
 const sourceOptions = [
@@ -103,17 +119,8 @@ function toRow(task: WorkflowTask, order: ChangeOrderVO): ChangeTaskRow {
 
 async function loadRows() {
   loading.value = true
-  const [taskResult, summaryResult] = await Promise.allSettled([
-    listWorkflowTasks('CHANGE'),
-    getChangeFlowSummary('pending')
-  ])
-
-  if (summaryResult.status === 'fulfilled') {
-    changeFlowSummary.value = summaryResult.value
-  } else {
-    changeFlowSummary.value = null
-    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '状态变更待办流程汇总加载失败')
-  }
+  const summaryPromise = refreshSummary().catch(() => undefined)
+  const [taskResult] = await Promise.allSettled([listWorkflowTasks('CHANGE')])
 
   if (taskResult.status === 'fulfilled') {
     const tasks = taskResult.value.filter(
@@ -136,6 +143,7 @@ async function loadRows() {
     message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '检定员状态变更待办加载失败')
   }
   loading.value = false
+  await summaryPromise
 }
 
 function openDetail(row: ChangeTaskRow) {
@@ -192,7 +200,8 @@ onMounted(loadRows)
     <template v-if="activeTab === 'todo'">
     <FlowStatusSummary
       :summary="changeFlowSummary"
-      :loading="loading"
+      :loading="summaryLoading"
+      :error="summaryError"
       title="状态变更流程汇总（当前待办）"
     />
 

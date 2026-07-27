@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute } from 'vue-router'
 import { approveChange, getChangeOrderDetail, rejectChange } from '@/api/change'
-import { getChangeFlowSummary } from '@/api/flowSummary'
 import { listWorkflowTasks } from '@/api/workflow'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
+import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
+import { useSessionStore } from '@/stores/session'
 import type { ChangeOrderVO } from '@/types/change'
-import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
 import {
   CHANGE_APPROVE_ACTION,
@@ -25,13 +25,34 @@ import { isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrolog
 import ChangeApprovalDialog from '@/views/change/components/ChangeApprovalDialog.vue'
 
 const route = useRoute()
+const session = useSessionStore()
 const loading = ref(false)
 const submitting = ref(false)
 const rows = ref<ChangeTaskRow[]>([])
-/** 当前管理员待办范围内由后端生成的权威流程汇总。 */
-const changeFlowSummary = ref<FlowSummary | null>(null)
 const activeOrders = ref<ChangeOrderVO[]>([])
 const dialogOpen = ref(false)
+const routeOrderId = computed(() => {
+  const value = route.query.orderId
+  if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
+  return value ? String(value) : ''
+})
+const workflowIdentity = computed(() => {
+  const user = session.user
+  return user ? `${user.employeeId}|${user.roleCode}` : ''
+})
+const summaryScope = computed(() => routeOrderId.value
+  ? { businessType: 'CHANGE', scopeType: 'order' as const, scopeId: routeOrderId.value }
+  : { businessType: 'CHANGE' })
+const {
+  summary: changeFlowSummary,
+  loading: summaryLoading,
+  error: summaryError,
+  refresh: refreshSummary
+} = useRoleTodoSummary({
+  identityKey: workflowIdentity,
+  query: summaryScope,
+  immediate: false
+})
 
 const columns = [
   { title: '申请编号', key: 'orderNo', width: 180 },
@@ -76,17 +97,8 @@ function openOrder(row: ChangeTaskRow) {
 
 async function loadRows() {
   loading.value = true
-  const [taskResult, summaryResult] = await Promise.allSettled([
-    listWorkflowTasks('CHANGE'),
-    getChangeFlowSummary('pending')
-  ])
-
-  if (summaryResult.status === 'fulfilled') {
-    changeFlowSummary.value = summaryResult.value
-  } else {
-    changeFlowSummary.value = null
-    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '状态变更待办流程汇总加载失败')
-  }
+  const summaryPromise = refreshSummary().catch(() => undefined)
+  const [taskResult] = await Promise.allSettled([listWorkflowTasks('CHANGE')])
 
   if (taskResult.status === 'fulfilled') {
     const tasks = taskResult.value.filter(
@@ -110,6 +122,7 @@ async function loadRows() {
     message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '接收管理员待办加载失败')
   }
   loading.value = false
+  await summaryPromise
 }
 
 async function handleApprove(opinion: string) {
@@ -169,7 +182,8 @@ onMounted(loadRows)
   <section class="receive-workspace">
     <FlowStatusSummary
       :summary="changeFlowSummary"
-      :loading="loading"
+      :loading="summaryLoading"
+      :error="summaryError"
       title="状态变更流程汇总（当前待办）"
     />
 

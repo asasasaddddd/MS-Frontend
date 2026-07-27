@@ -295,7 +295,8 @@ assert.doesNotMatch(changeApplySource, /FlowStatusSummary|getChangeFlowSummary/)
 assert.doesNotMatch(changeHistorySource, /FlowStatusSummary|getChangeFlowSummary/)
 changeTodoSources.forEach((source) => {
   assert.match(source, /FlowStatusSummary/)
-  assert.match(source, /getChangeFlowSummary\('pending'\)/)
+  assert.match(source, /useRoleTodoSummary/)
+  assert.doesNotMatch(source, /getChangeFlowSummary/)
 })
 
 const productionContractSummary: FlowSummary = {

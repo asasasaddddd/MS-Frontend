@@ -11,6 +11,8 @@ interface SamplingPlanSummaryProps {
   summary?: FlowSummary | null
   /** 计划与汇总是否正在加载。 */
   loading?: boolean
+  /** 统一汇总接口失败时透传给公共错误卡。 */
+  error?: unknown
 }
 
 withDefaults(defineProps<SamplingPlanSummaryProps>(), {
@@ -53,6 +55,7 @@ function displayDate(value?: string): string {
     <FlowStatusSummary
       :summary="summary"
       :loading="loading"
+      :error="error"
       title="抽检流程汇总"
       empty-text="当前计划暂无流程汇总"
     />

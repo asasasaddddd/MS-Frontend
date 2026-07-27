@@ -5,9 +5,8 @@ import { message } from 'ant-design-vue'
 import { getFirstCheckDetail } from '@/api/firstcheck'
 import { listWorkflowTasks } from '@/api/workflow'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
-import { buildWorkflowTaskSummary } from '@/components/workflow/workflowTaskSummary'
+import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
 import type { FirstCheckOrder } from '@/types/firstcheck'
-import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
 import { useSessionStore } from '@/stores/session'
 import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
@@ -40,10 +39,6 @@ const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
 const loading = ref(false)
-/** 后端按当前检定员角色待办范围生成的首检流程汇总快照。 */
-const firstCheckFlowSummary = ref<FlowSummary | null>(null)
-/** 统一汇总接口的加载状态，与待办表加载状态分别传给各自组件。 */
-const summaryLoading = ref(false)
 const actionLoading = ref(false)
 const rows = ref<VerifierRow[]>([])
 const selectedRowKeys = ref<string[]>([])
@@ -57,6 +52,23 @@ const routeOrderId = computed(() => {
   const value = route.query.orderId
   if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
   return value ? String(value) : ''
+})
+const workflowIdentity = computed(() => {
+  const user = session.user
+  return user ? `${user.employeeId}|${user.roleCode}` : ''
+})
+const summaryScope = computed(() => routeOrderId.value
+  ? { businessType: 'FIRST_CHECK', scopeType: 'order' as const, scopeId: routeOrderId.value }
+  : { businessType: 'FIRST_CHECK' })
+const {
+  summary: firstCheckFlowSummary,
+  loading: summaryLoading,
+  error: summaryError,
+  refresh: refreshSummary
+} = useRoleTodoSummary({
+  identityKey: workflowIdentity,
+  query: summaryScope,
+  immediate: false
 })
 
 function matchesRouteOrder(task: WorkflowTask) {
@@ -211,21 +223,19 @@ async function fetchTaskRows(): Promise<{ rows: VerifierRow[]; tasks: WorkflowTa
  */
 async function loadRows(): Promise<void> {
   loading.value = true
-  summaryLoading.value = true
+  const summaryPromise = refreshSummary().catch(() => undefined)
   selectedRowKeys.value = []
 
   try {
     const result = await fetchTaskRows()
     rows.value = result.rows
-    firstCheckFlowSummary.value = buildWorkflowTaskSummary(result.tasks, 'FIRST_CHECK')
   } catch (error) {
     rows.value = []
-    firstCheckFlowSummary.value = null
     message.error(error instanceof Error ? error.message : '检定员首检待办加载失败')
   }
 
   loading.value = false
-  summaryLoading.value = false
+  await summaryPromise
 }
 
 function openVerify(row: VerifierRow) {
@@ -276,6 +286,7 @@ onMounted(loadRows)
     <FlowStatusSummary
       :summary="firstCheckFlowSummary"
       :loading="summaryLoading"
+      :error="summaryError"
       title="首检当前角色待办汇总"
       empty-text="暂无首检当前角色待办汇总"
     />

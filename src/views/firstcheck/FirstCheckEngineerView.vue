@@ -5,9 +5,9 @@ import { message } from 'ant-design-vue'
 import { getFirstCheckDetail } from '@/api/firstcheck'
 import { listWorkflowTasks } from '@/api/workflow'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
-import { buildWorkflowTaskSummary } from '@/components/workflow/workflowTaskSummary'
+import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
+import { useSessionStore } from '@/stores/session'
 import type { FirstCheckOrder } from '@/types/firstcheck'
-import type { FlowSummary } from '@/types/flowSummary'
 import type { WorkflowTask } from '@/types/workflow'
 import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
 import FirstCheckEngineerDialog from '@/views/firstcheck/components/FirstCheckEngineerDialog.vue'
@@ -23,11 +23,8 @@ interface EngineerRow {
 }
 
 const route = useRoute()
+const session = useSessionStore()
 const loading = ref(false)
-/** 后端按当前责任工程师角色待办范围生成的首检流程汇总快照。 */
-const firstCheckFlowSummary = ref<FlowSummary | null>(null)
-/** 统一汇总接口的加载状态，与待办表加载状态分别传给各自组件。 */
-const summaryLoading = ref(false)
 const rows = ref<EngineerRow[]>([])
 const statusFilter = ref('all')
 const keyword = ref('')
@@ -39,6 +36,23 @@ const routeOrderId = computed(() => {
   const value = route.query.orderId
   if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
   return value ? String(value) : ''
+})
+const workflowIdentity = computed(() => {
+  const user = session.user
+  return user ? `${user.employeeId}|${user.roleCode}` : ''
+})
+const summaryScope = computed(() => routeOrderId.value
+  ? { businessType: 'FIRST_CHECK', scopeType: 'order' as const, scopeId: routeOrderId.value }
+  : { businessType: 'FIRST_CHECK' })
+const {
+  summary: firstCheckFlowSummary,
+  loading: summaryLoading,
+  error: summaryError,
+  refresh: refreshSummary
+} = useRoleTodoSummary({
+  identityKey: workflowIdentity,
+  query: summaryScope,
+  immediate: false
 })
 
 function matchesRouteOrder(task: WorkflowTask) {
@@ -140,20 +154,18 @@ async function fetchTaskRows(): Promise<{ rows: EngineerRow[]; tasks: WorkflowTa
  */
 async function loadRows(): Promise<void> {
   loading.value = true
-  summaryLoading.value = true
+  const summaryPromise = refreshSummary().catch(() => undefined)
 
   try {
     const result = await fetchTaskRows()
     rows.value = result.rows
-    firstCheckFlowSummary.value = buildWorkflowTaskSummary(result.tasks, 'FIRST_CHECK')
   } catch (error) {
     rows.value = []
-    firstCheckFlowSummary.value = null
     message.error(error instanceof Error ? error.message : '责任工程师首检待办加载失败')
   }
 
   loading.value = false
-  summaryLoading.value = false
+  await summaryPromise
 }
 
 onMounted(loadRows)
@@ -169,6 +181,7 @@ onMounted(loadRows)
     <FlowStatusSummary
       :summary="firstCheckFlowSummary"
       :loading="summaryLoading"
+      :error="summaryError"
       title="首检当前角色待办汇总"
       empty-text="暂无首检当前角色待办汇总"
     />

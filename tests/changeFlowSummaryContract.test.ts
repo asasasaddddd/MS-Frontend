@@ -16,15 +16,18 @@ const nonTodoSources = [applyView, historyPanel]
 
 for (const nonTodoSource of nonTodoSources) {
   assert.doesNotMatch(nonTodoSource, /getChangeFlowSummary/)
+  assert.doesNotMatch(nonTodoSource, /useRoleTodoSummary/)
   assert.doesNotMatch(nonTodoSource, /FlowStatusSummary/)
   assert.doesNotMatch(nonTodoSource, /:summary="changeFlowSummary"/)
 }
 
 for (const pendingSource of pendingSources) {
-  assert.match(pendingSource, /getChangeFlowSummary\('pending'\)/)
-  assert.doesNotMatch(pendingSource, /getChangeFlowSummary\('(history|applied)'\)/)
+  assert.match(pendingSource, /useRoleTodoSummary/)
+  assert.match(pendingSource, /businessType:\s*'CHANGE'/)
+  assert.match(pendingSource, /scopeType:\s*'order'/)
+  assert.match(pendingSource, /route\.query\.orderId/)
+  assert.doesNotMatch(pendingSource, /getChangeFlowSummary/)
   assert.match(pendingSource, /FlowStatusSummary/)
-  assert.match(pendingSource, /Promise\.allSettled/)
   assert.match(pendingSource, /:summary="changeFlowSummary"/)
 }
 

@@ -19,13 +19,20 @@ const directTodoPages = [
 for (const path of directTodoPages) {
   const pageSource = source(path)
   assert.match(pageSource, /FlowStatusSummary/, `${path} must use the shared todo summary component`)
+  assert.match(pageSource, /useRoleTodoSummary/, `${path} must use the authoritative summary composable`)
   assert.doesNotMatch(pageSource, /setInterval|setTimeout/, `${path} must not poll the summary`)
+  assert.doesNotMatch(
+    pageSource,
+    /buildWorkflowTaskSummary|getChangeFlowSummary|getPeriodicPlanFlowSummary|getSamplingPlanFlowSummary/
+  )
 }
 
 const periodicWorkspace = source('../src/views/periodic/components/PeriodicTaskWorkspace.vue')
 const periodicSummary = source('../src/views/periodic/components/PeriodicPlanSummary.vue')
 const periodicDetail = source('../src/views/periodic/components/PeriodicDetailDialog.vue')
 assert.match(periodicWorkspace, /PeriodicPlanSummary/)
+assert.match(periodicWorkspace, /useRoleTodoSummary/)
+assert.doesNotMatch(periodicWorkspace, /getPeriodicPlanFlowSummary/)
 assert.match(periodicSummary, /FlowStatusSummary/)
 assert.doesNotMatch(periodicSummary, /计划基本信息|plan-panel|a-descriptions/)
 assert.doesNotMatch(periodicDetail, /计划基本信息|PeriodicPlanVO|plan\?\./)
@@ -34,6 +41,8 @@ assert.doesNotMatch(periodicWorkspace, /getPeriodicPlan\(|currentPlan|:plan="cur
 const samplingWorkspace = source('../src/views/sampling/components/SamplingTaskWorkspace.vue')
 const samplingSummary = source('../src/views/sampling/components/SamplingPlanSummary.vue')
 assert.match(samplingWorkspace, /SamplingPlanSummary/)
+assert.match(samplingWorkspace, /useRoleTodoSummary/)
+assert.doesNotMatch(samplingWorkspace, /getSamplingPlanFlowSummary/)
 assert.match(samplingSummary, /FlowStatusSummary/)
 
 const nonTodoPages = [

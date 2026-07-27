@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getPeriodicPlanFlowSummary } from '../../../api/flowSummary'
 import {
   confirmerConfirmPeriodic,
   generatePeriodicTestPlan,
@@ -16,6 +15,7 @@ import {
   verifierFillInfoPeriodic
 } from '../../../api/periodic'
 import { parsePeriodicNodeCode } from '../../../api/periodicContract'
+import { useRoleTodoSummary } from '../../../composables/useRoleTodoSummary'
 import { useWorkflowTask } from '../../../composables/useWorkflowTask'
 import { useSessionStore } from '../../../stores/session'
 import { listUsersByDeptAndRole, type SysUserVO } from '../../../api/system'
@@ -32,7 +32,6 @@ import type {
   PeriodicVerificationRecordRequest,
   PeriodicVerifierFillInfoRequest
 } from '../../../types/periodic'
-import type { FlowSummary } from '../../../types/flowSummary'
 import PeriodicConfirmDialog from './PeriodicConfirmDialog.vue'
 import PeriodicDetailDialog from './PeriodicDetailDialog.vue'
 import PeriodicExceptionDialog from './PeriodicExceptionDialog.vue'
@@ -87,8 +86,6 @@ const statusFilter = ref<string>('all')
 const keyword = ref('')
 const currentTasks = ref<PeriodicTaskVO[]>([])
 const historyTasks = ref<PeriodicTaskVO[]>([])
-/** 当前路由计划由后端生成的权威流程状态快照。 */
-const periodicFlowSummary = ref<FlowSummary | null>(null)
 const activeTask = ref<PeriodicTaskVO | null>(null)
 const selectedRowKeys = ref<EntityId[]>([])
 const selectedTasks = ref<PeriodicTaskVO[]>([])
@@ -159,6 +156,19 @@ const routePlanId = computed(() => {
   const value = route.query.planId
   if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
   return value ? String(value) : ''
+})
+const summaryScope = computed(() => routePlanId.value
+  ? { businessType: 'PERIODIC', scopeType: 'plan' as const, scopeId: routePlanId.value }
+  : { businessType: 'PERIODIC' })
+const {
+  summary: periodicFlowSummary,
+  loading: summaryLoading,
+  error: summaryError,
+  refresh: refreshSummary
+} = useRoleTodoSummary({
+  identityKey: workflowIdentity,
+  query: summaryScope,
+  immediate: false
 })
 
 function filterByRoutePlan(tasks: PeriodicTaskVO[]) {
@@ -322,26 +332,6 @@ async function openProcess(task: PeriodicTaskVO) {
   openDetail(task)
 }
 
-/**
- * 读取路由指定计划的权威状态快照。
- *
- * 未选择计划时不从任务列表猜测计划，避免把多个计划的明细误展示为同一计划汇总。
- */
-async function loadPlanFlowSummary() {
-  const planId = routePlanId.value
-  if (!planId) {
-    periodicFlowSummary.value = null
-    return
-  }
-
-  try {
-    periodicFlowSummary.value = await getPeriodicPlanFlowSummary(planId)
-  } catch (error) {
-    periodicFlowSummary.value = null
-    message.error(error instanceof Error ? error.message : '周检状态汇总加载失败')
-  }
-}
-
 async function loadConfirmers(tasks: PeriodicTaskVO[]) {
   if (!tasks.some((task) => resolvePeriodicTaskAction(task) === 'manager-forward')) {
     confirmers.value = []
@@ -376,7 +366,7 @@ async function loadData() {
   selectedRowKeys.value = []
   selectedTasks.value = []
   /** 路由计划的权威汇总与任务列表并行读取。 */
-  const planSummaryPromise = loadPlanFlowSummary()
+  const planSummaryPromise = refreshSummary().catch(() => undefined)
   try {
     await refreshWorkflowTasks()
     const details = await loadWorkflowDetails(
@@ -618,13 +608,13 @@ watch(workflowIdentity, () => {
 watch(routePlanId, () => {
   selectedRowKeys.value = []
   selectedTasks.value = []
-  void loadPlanFlowSummary()
+  void refreshSummary().catch(() => undefined)
 })
 </script>
 
 <template>
   <section class="periodic-workspace">
-    <PeriodicPlanSummary :summary="periodicFlowSummary" :loading="loading" />
+    <PeriodicPlanSummary :summary="periodicFlowSummary" :loading="summaryLoading" :error="summaryError" />
 
     <a-card class="panel" :bordered="false">
       <template #title>

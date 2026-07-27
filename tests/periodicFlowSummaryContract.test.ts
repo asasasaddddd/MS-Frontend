@@ -19,12 +19,15 @@ assert.match(summaryComponentSource, /summary\??:\s*FlowSummary\s*\|\s*null/)
 assert.doesNotMatch(summaryComponentSource, /tasks\??\s*:/)
 assert.doesNotMatch(summaryComponentSource, /buildPeriodicPlanSummary/)
 
-assert.match(workspaceSource, /getPeriodicPlanFlowSummary/)
+assert.match(workspaceSource, /useRoleTodoSummary/)
+assert.match(workspaceSource, /businessType:\s*'PERIODIC'/)
+assert.match(workspaceSource, /scopeType:\s*'plan'/)
+assert.match(workspaceSource, /route\.query\.planId/)
 assert.match(workspaceSource, /periodicFlowSummary/)
 assert.match(workspaceSource, /:summary="periodicFlowSummary"/)
+assert.doesNotMatch(workspaceSource, /getPeriodicPlanFlowSummary/)
 assert.doesNotMatch(workspaceSource, /:tasks="scopedSummaryTasks"/)
 assert.doesNotMatch(workspaceSource, /setInterval|setTimeout/)
 
 assert.doesNotMatch(displayModelSource, /function buildPeriodicPlanSummary/)
 assert.doesNotMatch(displayModelSource, /function countTasks/)
-

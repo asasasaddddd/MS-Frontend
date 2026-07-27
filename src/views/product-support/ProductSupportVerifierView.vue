@@ -7,11 +7,10 @@ import {
   getProductSupportOrder,
   verifierSubmitProductSupport
 } from '@/api/productSupport'
+import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
 import { hasWorkflowAction, useWorkflowTask } from '@/composables/useWorkflowTask'
 import { useSessionStore } from '@/stores/session'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
-import { buildWorkflowTaskSummary } from '@/components/workflow/workflowTaskSummary'
-import type { FlowSummary } from '@/types/flowSummary'
 import type { ProductSupportEntityId, ProductSupportOrderVO, ProductSupportRatioVO } from '@/types/productSupport'
 import {
   display,
@@ -52,12 +51,9 @@ const {
   immediate: false
 })
 const loading = ref(false)
-const summaryLoading = ref(false)
 const historyLoading = ref(false)
 const submitting = ref(false)
 const tasks = ref<ProductSupportOrderVO[]>([])
-// 汇总只使用同一次统一工作流待办查询返回的权威节点快照。
-const productSupportFlowSummary = ref<FlowSummary | null>(null)
 const history = ref<ProductSupportOrderVO[]>([])
 const activeTab = ref<'pending' | 'history'>(route.query.tab === 'history' ? 'history' : 'pending')
 const selectedRowKeys = ref<ProductSupportEntityId[]>([])
@@ -67,6 +63,24 @@ const currentOrder = ref<ProductSupportOrderVO | null>(null)
 const verifyOpen = ref(false)
 const attachmentGroupId = ref<ProductSupportEntityId | undefined>()
 const ratioDrafts = ref<VerifyRatioDraft[]>([])
+const routeOrderId = computed(() => {
+  const value = route.query.orderId
+  if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
+  return value ? String(value) : ''
+})
+const summaryScope = computed(() => routeOrderId.value
+  ? { businessType: 'PRODUCT_SUPPORT', scopeType: 'order' as const, scopeId: routeOrderId.value }
+  : { businessType: 'PRODUCT_SUPPORT' })
+const {
+  summary: productSupportFlowSummary,
+  loading: summaryLoading,
+  error: summaryError,
+  refresh: refreshSummary
+} = useRoleTodoSummary({
+  identityKey: workflowIdentity,
+  query: summaryScope,
+  immediate: false
+})
 
 const verifyForm = reactive({
   verificationDate: new Date().toISOString().slice(0, 10),
@@ -161,7 +175,7 @@ async function loadRows() {
   const loadId = ++dataLoadId
   loading.value = true
   historyLoading.value = true
-  summaryLoading.value = true
+  const summaryPromise = refreshSummary().catch(() => undefined)
   try {
     await refreshWorkflowTasks()
     const details = await loadWorkflowDetails(
@@ -178,18 +192,16 @@ async function loadRows() {
       const detail = detailByWorkflowTaskId.get(String(task.taskId))
       return detail ? [detail as ProductSupportOrderVO] : []
     })
-    productSupportFlowSummary.value = buildWorkflowTaskSummary(workflowTodoTasks.value, 'PRODUCT_SUPPORT')
     await openOrderFromRoute()
   } catch (error) {
     tasks.value = []
     history.value = []
-    productSupportFlowSummary.value = null
     message.error(error instanceof Error ? error.message : '产品配套任务加载失败')
   } finally {
+    await summaryPromise
     if (loadId === dataLoadId) {
       loading.value = false
       historyLoading.value = false
-      summaryLoading.value = false
     }
   }
 }
@@ -290,7 +302,7 @@ async function submitVerify() {
 watch(
   () => route.query.orderId,
   () => {
-    openOrderFromRoute()
+    void Promise.all([openOrderFromRoute(), refreshSummary().catch(() => undefined)])
   }
 )
 
@@ -304,6 +316,7 @@ watch(workflowIdentity, () => {
     <FlowStatusSummary
       :summary="productSupportFlowSummary"
       :loading="summaryLoading"
+      :error="summaryError"
       title="产品配套流程汇总"
     />
 

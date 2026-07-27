@@ -8,6 +8,8 @@ interface PeriodicPlanSummaryProps {
   summary?: FlowSummary | null
   /** 状态汇总是否正在加载。 */
   loading?: boolean
+  /** 统一汇总接口失败时透传给公共错误卡。 */
+  error?: unknown
 }
 
 withDefaults(defineProps<PeriodicPlanSummaryProps>(), {
@@ -21,6 +23,7 @@ withDefaults(defineProps<PeriodicPlanSummaryProps>(), {
     <FlowStatusSummary
       :summary="summary"
       :loading="loading"
+      :error="error"
       title="周检流程汇总"
       empty-text="当前计划暂无状态汇总"
     />

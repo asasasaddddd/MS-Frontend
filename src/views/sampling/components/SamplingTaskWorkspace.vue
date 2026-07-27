@@ -2,7 +2,6 @@
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getSamplingPlanFlowSummary } from '@/api/flowSummary'
 import {
   adminConfirmSampling,
   confirmerSubmitSampling,
@@ -10,9 +9,9 @@ import {
   getSamplingTask,
   verifierSubmitSampling
 } from '@/api/sampling'
+import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
 import { useWorkflowTask } from '@/composables/useWorkflowTask'
 import { useSessionStore } from '@/stores/session'
-import type { FlowSummary } from '@/types/flowSummary'
 import type {
   SamplingEntityId,
   SamplingPlanVO,
@@ -61,8 +60,6 @@ const keyword = ref('')
 const currentTasks = ref<SamplingTaskVO[]>([])
 const historyTasks = ref<SamplingTaskVO[]>([])
 const currentPlan = ref<SamplingPlanVO | null>(null)
-/** 后端按当前计划生成的权威流程状态快照。 */
-const samplingFlowSummary = ref<FlowSummary | null>(null)
 const activeTask = ref<SamplingTaskVO | null>(null)
 const selectedRowKeys = ref<SamplingEntityId[]>([])
 const selectedTasks = ref<SamplingTaskVO[]>([])
@@ -76,6 +73,19 @@ const routePlanId = computed(() => {
   const value = route.query.planId
   if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
   return value ? String(value) : ''
+})
+const summaryScope = computed(() => routePlanId.value
+  ? { businessType: 'SAMPLING', scopeType: 'plan' as const, scopeId: routePlanId.value }
+  : { businessType: 'SAMPLING' })
+const {
+  summary: samplingFlowSummary,
+  loading: summaryLoading,
+  error: summaryError,
+  refresh: refreshSummary
+} = useRoleTodoSummary({
+  identityKey: workflowIdentity,
+  query: summaryScope,
+  immediate: false
 })
 
 const statusOptions = [
@@ -257,27 +267,23 @@ async function submitResult(payload: SamplingVerificationDraft) {
   }
 }
 
-/** 并行加载当前路由计划及其后端汇总，两个结果互不覆盖。 */
+/** 并行加载当前路由计划及其统一角色待办汇总，两个结果互不覆盖。 */
 async function loadPlanContext() {
   const planId = routePlanId.value
   if (!planId) {
     currentPlan.value = null
-    samplingFlowSummary.value = null
+    await refreshSummary().catch(() => undefined)
     return
   }
 
-  const [planResult, summaryResult] = await Promise.allSettled([
+  const [planResult] = await Promise.allSettled([
     getSamplingPlan(planId),
-    getSamplingPlanFlowSummary(planId)
+    refreshSummary()
   ])
   currentPlan.value = planResult.status === 'fulfilled' ? planResult.value : null
-  samplingFlowSummary.value = summaryResult.status === 'fulfilled' ? summaryResult.value : null
 
   if (planResult.status === 'rejected') {
     message.error(planResult.reason instanceof Error ? planResult.reason.message : '抽检计划信息加载失败')
-  }
-  if (summaryResult.status === 'rejected') {
-    message.error(summaryResult.reason instanceof Error ? summaryResult.reason.message : '抽检流程汇总加载失败')
   }
 }
 
@@ -346,7 +352,12 @@ watch(routePlanId, () => {
 
 <template>
   <section class="sampling-workspace">
-    <SamplingPlanSummary :plan="currentPlan" :summary="samplingFlowSummary" :loading="loading" />
+    <SamplingPlanSummary
+      :plan="currentPlan"
+      :summary="samplingFlowSummary"
+      :loading="loading || summaryLoading"
+      :error="summaryError"
+    />
 
     <a-card class="panel" :bordered="false">
       <template #title>
