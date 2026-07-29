@@ -1,34 +1,82 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { startFirstCheck } from '@/api/firstcheck'
+import { getAllowedOrganizationTree } from '@/api/system'
 import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
 import { useSessionStore } from '@/stores/session'
 import type { AttachmentId } from '@/types/firstcheck'
+import type { AllowedOrganizationNodeVO } from '@/types/nodePermission'
 
 const session = useSessionStore()
 const router = useRouter()
 const submitting = ref(false)
+const orgLoading = ref(false)
+const allowedOrganizations = ref<AllowedOrganizationNodeVO[]>([])
 
 const form = reactive({
   purchaseOrderNo: '',
   materialCode: '',
   materialName: '',
   quantity: 1,
-  applyDeptName: session.user?.deptName || '',
+  responsibilityOrgId: '',
   supplierName: session.user?.employeeName || '',
   attachmentGroupId: undefined as AttachmentId | undefined,
   applyTime: new Date().toLocaleDateString('zh-CN'),
   remark: ''
 })
 
+interface ResponsibilityOrganizationTreeNode {
+  value: string
+  title: string
+  searchText: string
+  orgType: 'DEPARTMENT' | 'GROUP'
+  children: ResponsibilityOrganizationTreeNode[]
+}
+
+function mapAllowedOrganizationNode(node: AllowedOrganizationNodeVO): ResponsibilityOrganizationTreeNode {
+  const organizationName = node.orgName || node.orgId
+  const organizationPath = node.orgFullPath || organizationName
+  const typeName = node.orgType === 'GROUP' ? '组' : '部门'
+  return {
+    value: node.orgId,
+    title: `${organizationPath} · ${typeName}`,
+    searchText: [node.orgId, node.orgName, node.orgFullPath, node.orgType]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase(),
+    orgType: node.orgType,
+    children: (node.children || []).map(mapAllowedOrganizationNode)
+  }
+}
+
+const responsibilityOrgTreeData = computed(() =>
+  allowedOrganizations.value.map(mapAllowedOrganizationNode)
+)
+
+function filterResponsibilityOrg(input: string, node: { searchText?: string }) {
+  return String(node.searchText || '').includes(input.trim().toLowerCase())
+}
+
+async function loadAllowedOrganizations() {
+  orgLoading.value = true
+  try {
+    allowedOrganizations.value = await getAllowedOrganizationTree()
+  } catch (error) {
+    allowedOrganizations.value = []
+    message.error(error instanceof Error ? error.message : '责任部门/组加载失败')
+  } finally {
+    orgLoading.value = false
+  }
+}
+
 function resetForm() {
   form.purchaseOrderNo = ''
   form.materialCode = ''
   form.materialName = ''
   form.quantity = 1
-  form.applyDeptName = session.user?.deptName || ''
+  form.responsibilityOrgId = ''
   form.supplierName = session.user?.employeeName || ''
   form.attachmentGroupId = undefined
   form.applyTime = new Date().toLocaleDateString('zh-CN')
@@ -60,8 +108,8 @@ async function submit() {
     message.warning('数量必须大于 0')
     return
   }
-  if (!form.applyDeptName.trim()) {
-    message.warning('请填写使用部门')
+  if (!form.responsibilityOrgId) {
+    message.warning('请选择责任部门/组')
     return
   }
   if (!form.supplierName.trim()) {
@@ -74,8 +122,7 @@ async function submit() {
       purchaseOrderNo: form.purchaseOrderNo.trim(),
       supplierName: form.supplierName.trim(),
       attachmentGroupId: form.attachmentGroupId,
-      applyDeptId: session.user?.deptId || form.applyDeptName.trim(),
-      applyDeptName: form.applyDeptName.trim(),
+      responsibilityOrgId: form.responsibilityOrgId,
       material: {
         materialCode: form.materialCode.trim(),
         materialName: form.materialName.trim(),
@@ -94,6 +141,8 @@ async function submit() {
     submitting.value = false
   }
 }
+
+onMounted(loadAllowedOrganizations)
 </script>
 
 <template>
@@ -120,7 +169,21 @@ async function submit() {
           <span>数量</span>
           <a-input-number v-model:value="form.quantity" class="full-input" :min="1" placeholder="填写数量" />
         </label>
-        <label class="field"><span>使用部门</span><a-input v-model:value="form.applyDeptName" placeholder="填写使用部门" /></label>
+        <label class="field">
+          <span>责任部门/组</span>
+          <a-tree-select
+            v-model:value="form.responsibilityOrgId"
+            class="full-input"
+            :tree-data="responsibilityOrgTreeData"
+            :field-names="{ value: 'value', label: 'title', children: 'children' }"
+            :filter-tree-node="filterResponsibilityOrg"
+            :loading="orgLoading"
+            tree-node-filter-prop="searchText"
+            show-search
+            allow-clear
+            placeholder="选择责任部门/组（显示完整路径与类型）"
+          />
+        </label>
         <label class="field"><span>供应商名称</span><a-input v-model:value="form.supplierName" placeholder="填写供应商名称" /></label>
         <label class="field">
           <span>附件</span>

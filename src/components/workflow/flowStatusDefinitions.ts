@@ -177,46 +177,39 @@ export const globalSummaryStatusLabels = [
   '产品配套'
 ] as const
 
-/** 单类状态变更工作流的集中展示定义。 */
-interface ChangeWorkflowTypeDefinition {
+/** 单类状态变更业务节点的集中展示定义。 */
+interface ChangeBusinessTypeDefinition {
   /** 状态变更类型稳定编码。 */
   code: string
   /** 状态变更类型中文名称。 */
   label: string
-  /** 该类型后端允许返回的工作流节点编码。 */
-  nodeCodes: readonly string[]
 }
 
-/** 七种状态变更类型及各自合法节点，顺序与后端生产流程保持一致。 */
-const CHANGE_WORKFLOW_TYPE_DEFINITIONS: readonly ChangeWorkflowTypeDefinition[] = [
-  { code: 'seal', label: '封存', nodeCodes: ['dept_leader_approve', 'measure_leader_review', 'verifier_handle'] },
-  { code: 'enable', label: '启用', nodeCodes: ['dept_leader_approve', 'measure_leader_review', 'verifier_handle'] },
-  {
-    code: 'transfer',
-    label: '设备转移',
-    nodeCodes: ['dept_leader_approve', 'measure_leader_review', 'receive_dept_leader_confirm', 'receive_admin_confirm']
-  },
-  { code: 'category', label: '管理类别调整', nodeCodes: ['dept_leader_approve', 'responsible_engineer_review'] },
-  { code: 'cycle', label: '检定周期调整', nodeCodes: ['dept_leader_approve', 'responsible_engineer_review', 'verifier_handle'] },
-  {
-    code: 'scrap',
-    label: '报废',
-    nodeCodes: ['dept_leader_approve', 'measure_leader_review', 'responsible_engineer_review', 'verifier_handle']
-  },
-  { code: 'precheck', label: '用前检定', nodeCodes: ['dept_leader_approve', 'measure_leader_review', 'verifier_handle'] }
+/** 八种状态变更类型，节点目录由统一状态变更流程定义集中提供。 */
+const CHANGE_BUSINESS_TYPE_DEFINITIONS: readonly ChangeBusinessTypeDefinition[] = [
+  { code: 'seal', label: '封存' },
+  { code: 'enable', label: '启用' },
+  { code: 'transfer', label: '设备转移' },
+  { code: 'category', label: '管理类别调整' },
+  { code: 'cycle', label: '检定周期调整' },
+  { code: 'scrap', label: '报废' },
+  { code: 'precheck', label: '用前检定' },
+  { code: 'defer', label: '缓检' }
 ]
 
-/** 状态变更工作流节点的中文与语义色定义。 */
-const CHANGE_WORKFLOW_NODE_DEFINITIONS: Readonly<Record<string, { label: string; tone: FlowStatusTone }>> = {
+/** 状态变更业务节点的中文与语义色定义。 */
+const CHANGE_BUSINESS_NODE_DEFINITIONS: Readonly<Record<string, { label: string; tone: FlowStatusTone }>> = {
+  admin_submit: { label: '待管理员发起', tone: 'processing' },
   dept_leader_approve: { label: '待分厂主管领导审批', tone: 'warning' },
   measure_leader_review: { label: '待计量领导审批', tone: 'warning' },
   responsible_engineer_review: { label: '待责任工程师审批', tone: 'warning' },
+  manager_revise: { label: '退回管理员修订', tone: 'error' },
   verifier_handle: { label: '待检定员处理', tone: 'processing' },
   receive_dept_leader_confirm: { label: '待接收部门主管确认', tone: 'warning' },
   receive_admin_confirm: { label: '待接收部门管理员确认', tone: 'warning' }
 }
 
-/** 状态变更工作流实例终态的中文与语义色定义。 */
+/** 状态变更流程实例终态的中文与语义色定义。 */
 const CHANGE_PROCESS_STAGE_DEFINITIONS: Readonly<Record<string, { label: string; tone: FlowStatusTone }>> = {
   approved: { label: '流程已通过', tone: 'success' },
   rejected: { label: '流程已驳回', tone: 'error' },
@@ -229,14 +222,13 @@ const CHANGE_PROCESS_STAGE_DEFINITIONS: Readonly<Record<string, { label: string;
  *
  * 该函数只展开静态生产流程元数据，不读取明细数据，也不参与数量计算。
  *
- * @returns 状态变更工作流全部合法状态的集中展示定义。
+ * @returns 状态变更业务维度全部合法状态的集中展示定义。
  */
-function buildChangeWorkflowStageDefinitions(): FlowStageDefinition[] {
-  return CHANGE_WORKFLOW_TYPE_DEFINITIONS.flatMap((typeDefinition, typeIndex) => {
-    const nodeDefinitions = typeDefinition.nodeCodes.map((nodeCode, nodeIndex) => {
-      const nodeDefinition = CHANGE_WORKFLOW_NODE_DEFINITIONS[nodeCode]
+function buildChangeBusinessStageDefinitions(): FlowStageDefinition[] {
+  return CHANGE_BUSINESS_TYPE_DEFINITIONS.flatMap((typeDefinition, typeIndex) => {
+    const nodeDefinitions = Object.entries(CHANGE_BUSINESS_NODE_DEFINITIONS).map(([nodeCode, nodeDefinition], nodeIndex) => {
       return {
-        dimensionCode: 'workflow' as const,
+        dimensionCode: 'business' as const,
         stageCode: `${typeDefinition.code}:${nodeCode}`,
         label: `${typeDefinition.label} · ${nodeDefinition.label}`,
         tone: nodeDefinition.tone,
@@ -246,11 +238,11 @@ function buildChangeWorkflowStageDefinitions(): FlowStageDefinition[] {
     })
     const terminalDefinitions = Object.entries(CHANGE_PROCESS_STAGE_DEFINITIONS).map(
       ([processStatus, processDefinition], terminalIndex) => ({
-        dimensionCode: 'workflow' as const,
+        dimensionCode: 'business' as const,
         stageCode: `${typeDefinition.code}:process_${processStatus}`,
         label: `${typeDefinition.label} · ${processDefinition.label}`,
         tone: processDefinition.tone,
-        order: 1060 + typeIndex * 100 + terminalIndex * 10,
+        order: 1080 + typeIndex * 100 + terminalIndex * 10,
         showWhenZero: false
       })
     )
@@ -303,10 +295,12 @@ export const FLOW_STAGE_DEFINITIONS: readonly FlowStageDefinition[] = [
   { dimensionCode: 'business', stageCode: 'responsible_engineer_handle', label: '待责任工程师处理', tone: 'warning', order: 200, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'assign_code', label: '待完善计量编号', tone: 'processing', order: 210, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'admin_receive', label: '待管理员取回', tone: 'processing', order: 220, showWhenZero: false },
+  { dimensionCode: 'business', stageCode: 'admin_take_back', label: '待管理员取回', tone: 'processing', order: 221, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'approved', label: '已通过', tone: 'success', order: 245, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'rejected', label: '已驳回', tone: 'error', order: 250, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'cancelled', label: '已取消', tone: 'neutral', order: 260, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'completed', label: '已完成', tone: 'success', order: 270, showWhenZero: false },
+  ...buildChangeBusinessStageDefinitions(),
 
   { dimensionCode: 'workflow', stageCode: 'dept_leader_approve', label: '待分厂主管领导审批', tone: 'warning', order: 10, showWhenZero: false },
   { dimensionCode: 'workflow', stageCode: 'measure_leader_review', label: '待计量领导审批', tone: 'warning', order: 20, showWhenZero: false },
@@ -318,8 +312,6 @@ export const FLOW_STAGE_DEFINITIONS: readonly FlowStageDefinition[] = [
   { dimensionCode: 'workflow', stageCode: 'rejected', label: '流程已驳回', tone: 'error', order: 70, showWhenZero: false },
   { dimensionCode: 'workflow', stageCode: 'cancelled', label: '流程已取消', tone: 'neutral', order: 80, showWhenZero: false },
   { dimensionCode: 'workflow', stageCode: 'returned', label: '流程已退回', tone: 'error', order: 90, showWhenZero: false },
-  ...buildChangeWorkflowStageDefinitions(),
-
   { dimensionCode: 'physical', stageCode: 'none', label: '未进入实物交接', tone: 'neutral', order: 1, showWhenZero: false },
   { dimensionCode: 'physical', stageCode: 'wait_verifier_receive', label: '待检定员接收', tone: 'warning', order: 10, showWhenZero: false },
   { dimensionCode: 'physical', stageCode: 'verifier_received', label: '检定员已接收', tone: 'success', order: 20, showWhenZero: false },

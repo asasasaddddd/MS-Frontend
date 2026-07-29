@@ -14,6 +14,7 @@ import {
   verificationRecordPeriodic,
   verifierFillInfoPeriodic
 } from '../../../api/periodic'
+import { listUnifiedScanInbox } from '../../../api/scan'
 import { parsePeriodicNodeCode } from '../../../api/periodicContract'
 import { useRoleTodoSummary } from '../../../composables/useRoleTodoSummary'
 import { useWorkflowTask } from '../../../composables/useWorkflowTask'
@@ -46,7 +47,9 @@ import PeriodicVerifyDialog from './PeriodicVerifyDialog.vue'
 import type { PeriodicExceptionAction } from '../periodicExceptionModel'
 import {
   getPeriodicJudgementDisplay,
+  mergePeriodicTaskPhysicalActions,
   resolvePeriodicTaskAction,
+  periodicScanRouteAction,
   type PeriodicTableRole
 } from '../periodicDisplayModel'
 
@@ -122,7 +125,8 @@ const statusOptions = computed(() => [
   { label: '外委报废处置', value: 'verifier_scrap_disposal' },
   { label: '外委填写否通用设备信息', value: 'external_uncommon_fill' },
   { label: '报告待转办', value: 'manager_forward_confirm' },
-  { label: '报告待确认', value: 'confirmer_confirm' }
+  { label: '报告待确认', value: 'confirmer_confirm' },
+  { label: '管理员取回', value: 'admin_take_back' }
 ])
 
 const testPlanScenarioOptions: Array<{ label: string; value: PeriodicTestPlanScenario }> = [
@@ -295,6 +299,44 @@ async function openProcess(task: PeriodicTaskVO) {
   }
 
   activeTask.value = task
+  if (action === 'scan-receive') {
+    await router.push({
+      path: '/scan',
+      query: {
+        module: 'periodic',
+        taskId: String(task.id),
+        action: 'periodic-verifier-receive'
+      }
+    })
+    return
+  }
+  if (action === 'scan-send-out' || action === 'scan-send-out-return') {
+    const scanAction = periodicScanRouteAction(action)
+    if (!scanAction) {
+      message.warning('当前扫码任务缺少可执行动作，请刷新待办')
+      return
+    }
+    await router.push({
+      path: '/scan',
+      query: {
+        module: 'periodic',
+        taskId: String(task.id),
+        action: scanAction
+      }
+    })
+    return
+  }
+  if (action === 'scan-take-back') {
+    await router.push({
+      path: '/scan',
+      query: {
+        module: 'periodic',
+        taskId: String(task.id),
+        action: 'periodic-manager-take-back'
+      }
+    })
+    return
+  }
   if (action === 'submit-exception') {
     openException([task])
     return
@@ -368,25 +410,38 @@ async function loadData() {
   /** 路由计划的权威汇总与任务列表并行读取。 */
   const planSummaryPromise = refreshSummary().catch(() => undefined)
   try {
-    await refreshWorkflowTasks()
-    const details = await loadWorkflowDetails(
-      [...workflowTodoTasks.value, ...workflowParticipatedTasks.value],
-      (task, signal) => getPeriodicTask(task.businessId, task.taskId, signal)
-    )
-    if (!details || loadId !== dataLoadId) return
-    const normalizedDetails = details.map((task) => ({
-      ...task,
-      currentNode: parsePeriodicNodeCode(task.currentNode)
-    }))
-    const detailByWorkflowTaskId = new Map(normalizedDetails.map((task) => [String(task.workflowTaskId), task]))
-    currentTasks.value = workflowTodoTasks.value.flatMap((task) => {
-      const detail = detailByWorkflowTaskId.get(String(task.taskId))
-      return detail ? [detail as PeriodicTaskVO] : []
-    })
-    historyTasks.value = workflowParticipatedTasks.value.flatMap((task) => {
-      const detail = detailByWorkflowTaskId.get(String(task.taskId))
-      return detail ? [detail as PeriodicTaskVO] : []
-    })
+    const [workflowResult, scanResult] = await Promise.allSettled([
+      refreshWorkflowTasks(),
+      listUnifiedScanInbox()
+    ])
+    const scanInboxRows = scanResult.status === 'fulfilled' ? scanResult.value : []
+    if (workflowResult.status === 'rejected' && scanResult.status === 'rejected') {
+      throw workflowResult.reason
+    }
+    if (workflowResult.status === 'rejected') {
+      currentTasks.value = mergePeriodicTaskPhysicalActions([], scanInboxRows)
+      historyTasks.value = []
+    } else {
+      const details = await loadWorkflowDetails(
+        [...workflowTodoTasks.value, ...workflowParticipatedTasks.value],
+        (task, signal) => getPeriodicTask(task.businessId, task.taskId, signal)
+      )
+      if (!details || loadId !== dataLoadId) return
+      const normalizedDetails = details.map((task) => ({
+        ...task,
+        currentNode: parsePeriodicNodeCode(task.currentNode)
+      }))
+      const detailByWorkflowTaskId = new Map(normalizedDetails.map((task) => [String(task.workflowTaskId), task]))
+      const workflowCurrentTasks = workflowTodoTasks.value.flatMap((task) => {
+        const detail = detailByWorkflowTaskId.get(String(task.taskId))
+        return detail ? [detail as PeriodicTaskVO] : []
+      })
+      currentTasks.value = mergePeriodicTaskPhysicalActions(workflowCurrentTasks, scanInboxRows)
+      historyTasks.value = workflowParticipatedTasks.value.flatMap((task) => {
+        const detail = detailByWorkflowTaskId.get(String(task.taskId))
+        return detail ? [detail as PeriodicTaskVO] : []
+      })
+    }
   } catch (error) {
     if (loadId === dataLoadId) {
       message.error(error instanceof Error ? error.message : '周检任务加载失败')
@@ -694,7 +749,12 @@ watch(routePlanId, () => {
       />
     </a-card>
 
-    <PeriodicDetailDialog v-model:open="detailOpen" :task="activeTask" title="周检任务详情" />
+    <PeriodicDetailDialog
+      v-model:open="detailOpen"
+      :task="activeTask"
+      :role="role"
+      title="周检任务详情"
+    />
     <PeriodicVerifyDialog v-model:open="verifyOpen" :task="activeTask" :submitting="submitting" @submit="submitVerify" />
     <PeriodicExternalVerifyDialog
       v-model:open="externalVerifyOpen"

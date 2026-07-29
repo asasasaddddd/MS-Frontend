@@ -65,10 +65,16 @@ const attachmentGroupId = computed(() => firstOrder.value?.attachmentGroupId)
 const primaryFields = computed(() => {
   const type = changeType.value
   if (type === 'category') {
-    return [{ label: '调整后管理类别', value: aggregateItemValue((item) => normalizeCategory(item.newCategory)), required: true }]
+    return [
+      { label: '调整后管理类别', value: aggregateItemValue((item) => normalizeCategory(item.newCategory)), required: true },
+      { label: '是否检定', value: aggregateItemValue((item) => (item.precheckRequired === 1 ? '是' : '否')) }
+    ]
   }
   if (type === 'cycle') {
-    return [{ label: '调整后检定周期', value: aggregateItemValue((item) => formatCycleMonth(item.newCycleMonth)), required: true }]
+    return [
+      { label: '调整后检定周期', value: aggregateItemValue((item) => formatCycleMonth(item.newCycleMonth)), required: true },
+      { label: '是否检定', value: aggregateItemValue((item) => (item.precheckRequired === 1 ? '是' : '否')) }
+    ]
   }
   if (type === 'seal') {
     return [{ label: '封存原因', value: aggregateItemValue((item, order) => item.sealReason || order.reason), required: true }]
@@ -86,11 +92,7 @@ const primaryFields = computed(() => {
     return [{ label: '报废原因', value: aggregateItemValue((item, order) => item.scrapReason || order.reason), required: true }]
   }
   if (type === 'precheck') {
-    return [
-      { label: '检定原因', value: aggregateItemValue((item, order) => item.verificationReason || order.reason), required: true },
-      { label: '是否需要外送', value: aggregateItemValue((item) => (item.sendOutRequired === 1 ? '是' : '否')) },
-      { label: '外送单位', value: aggregateItemValue((item) => item.sendOutUnit) }
-    ]
+    return [{ label: '检定原因', value: aggregateItemValue((item, order) => item.verificationReason || order.reason), required: true }]
   }
   return [{ label: '申请原因', value: aggregateItemValue((item, order) => order.reason || item.remark), required: true }]
 })

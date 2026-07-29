@@ -18,6 +18,18 @@ assert.equal(model.workspaceTodoBusinessType('all'), undefined)
 assert.equal(model.workspaceTodoBusinessType('periodic'), 'PERIODIC')
 assert.equal(model.workspaceTodoBusinessType('firstcheck'), 'FIRST_CHECK')
 
+assert.equal(typeof model.workspaceTodoTypeFromQuery, 'function')
+assert.equal(model.workspaceTodoTypeFromQuery('periodic'), 'periodic')
+assert.equal(model.workspaceTodoTypeFromQuery(['change', 'periodic']), 'change')
+assert.equal(model.workspaceTodoTypeFromQuery('unsupported'), 'all')
+assert.equal(model.workspaceTodoTypeFromQuery('__proto__'), 'all')
+assert.equal(model.workspaceTodoTypeFromQuery(undefined), 'all')
+assert.match(
+  workspace,
+  /watch\(\s*\(\) => route\.query\.type[\s\S]*workspaceTodoTypeFromQuery/,
+  '铃铛回退到 /todo?type=... 时，总待办必须同步业务类型筛选'
+)
+
 assert.equal(typeof model.sumWorkspaceTodoCounts, 'function')
 const entries = [
   { type: 'firstcheck', count: 2 },

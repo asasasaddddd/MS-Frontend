@@ -251,6 +251,7 @@ export interface DevicePageQuery {
   deviceName?: string
   modelSpec?: string
   factoryCode?: string
+  deptId?: string
   deptName?: string
   manageCategory?: string
   deviceStatus?: string

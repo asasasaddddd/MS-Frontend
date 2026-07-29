@@ -8,6 +8,7 @@ export type ChangeType =
   | 'cycle'
   | 'scrap'
   | 'precheck'
+  | 'defer'
 
 export type ChangeOrderStatus =
   | 'draft'
@@ -57,6 +58,17 @@ export interface ChangeSubmitRequest {
   items: ChangeItemSubmitRequest[]
 }
 
+export interface ChangeReviseRequest {
+  orderId: EntityId
+  taskId: EntityId
+  rowVersion: EntityId
+  reason?: string
+  remark?: string
+  attachmentGroupId?: EntityId
+  opinion: string
+  items: ChangeItemSubmitRequest[]
+}
+
 export interface ChangeApproveRequest {
   orderId: EntityId
   /** 统一工作流任务主键。 */
@@ -81,12 +93,11 @@ export interface ChangeVerifierHandleRequest {
   taskId: EntityId
   /** 统一工作流任务乐观并发版本。 */
   rowVersion: EntityId
-  verificationResult: 'qualified' | 'unqualified' | 'scrap' | 'repair' | string
+  verificationResult: 'qualified' | 'scrap' | 'repair'
   verificationDate?: string
   validUntil?: string
   certificateAttachmentGroupId?: EntityId
   reason?: string
-  sendOutRequired?: number
   responsibleEngineerId?: string
   responsibleEngineerName?: string
   newCycleMonth?: number
@@ -116,6 +127,7 @@ export interface ChangeItemVO {
   newCycleMonth?: number
   oldValidUntil?: string
   newValidUntil?: string
+  confirmInterval?: string
   technicalStatus?: string
   sealReason?: string
   enableReason?: string

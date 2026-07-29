@@ -17,7 +17,11 @@ assert.deepEqual(workflowNodeGroups.periodic.externalOperator, ['external_common
 assert.equal(getRoleWorkflowNodes('periodic', 'EXTERNAL_OPERATOR').some((node) => node.code === 'external_common_fill'), true)
 assert.equal(getRoleWorkflowNodes('periodic', 'VERIFIER_EXTERNAL').some((node) => node.code === 'external_common_fill'), false)
 assert.deepEqual(getWorkflowNode('periodic', 'system_issue')?.roles, [])
-assert.deepEqual(workflowNodeGroups.periodic.admin, ['admin_exception_route', 'manager_forward_confirm'])
+assert.deepEqual(workflowNodeGroups.periodic.admin, [
+  'admin_exception_route',
+  'manager_forward_confirm',
+  'admin_take_back'
+])
 assert.deepEqual(workflowNodeGroups.periodic.selfVerifier, ['self_verify'])
 
 const responsibleJudgementNodes = [

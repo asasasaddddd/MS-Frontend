@@ -1,10 +1,13 @@
 import { request } from '@/api/request'
 import {
   externalSendOutPeriodic,
+  managerTakeBackPeriodic,
   sendOutReturnPeriodic,
   verifierReceivePeriodic
 } from '@/api/periodic'
 import type {
+  ChangeScanInboxItem,
+  ChangeScanRequest,
   FirstCheckScanInboxItem,
   FirstCheckScanRequest,
   PeriodicScanInboxItem,
@@ -14,11 +17,15 @@ import type {
 } from '@/types/scan'
 import {
   isUnifiedScanActionAllowed,
+  normalizeChangeInboxRow,
   normalizeFirstCheckInboxRow,
   normalizePeriodicInboxRow
 } from '@/views/scan/scanModel'
 
 export type {
+  ChangeScanAction,
+  ChangeScanInboxItem,
+  ChangeScanRequest,
   FirstCheckScanAction,
   FirstCheckScanInboxItem,
   FirstCheckScanRequest,
@@ -54,8 +61,13 @@ export function scanActionName(value?: string) {
     'sendout-return': '\u5916\u59d4\u9001\u56de',
     'take-back': '\u53d6\u56de',
     'periodic-verifier-receive': '\u68c0\u5b9a\u5458\u626b\u7801\u63a5\u6536',
-    'periodic-external-send-out': '\u5916\u6269\u4eba\u5458\u63a5\u6536',
-    'periodic-send-out-return': '\u5916\u59d4\u9001\u56de'
+    'periodic-external-send-out': '\u5916\u59d4\u9001\u51fa',
+    'periodic-send-out-return': '\u5916\u59d4\u9001\u56de',
+    'periodic-manager-take-back': '\u7ba1\u7406\u5458\u53d6\u56de',
+    'change-verifier-receive': '\u68c0\u5b9a\u5458\u626b\u7801\u63a5\u6536',
+    'change-external-send-out': '\u5916\u59d4\u9001\u51fa',
+    'change-send-out-return': '\u5916\u59d4\u9001\u56de',
+    'change-manager-take-back': '\u7ba1\u7406\u5458\u53d6\u56de'
   }
   return value ? map[value] || '\u672a\u77e5\u64cd\u4f5c' : '-'
 }
@@ -90,12 +102,25 @@ export function listPeriodicScanInbox(signal?: AbortSignal) {
   })
 }
 
+export function listChangeScanInbox(signal?: AbortSignal) {
+  return request<ChangeScanInboxItem[]>({
+    url: '/change/scan-inbox',
+    method: 'GET',
+    ...(signal ? { signal } : {})
+  })
+}
+
 export async function listUnifiedScanInbox(signal?: AbortSignal) {
-  const [firstCheckResult, periodicResult] = await Promise.allSettled([
+  const [firstCheckResult, periodicResult, changeResult] = await Promise.allSettled([
     listFirstCheckScanInbox(signal),
-    listPeriodicScanInbox(signal)
+    listPeriodicScanInbox(signal),
+    listChangeScanInbox(signal)
   ])
-  if (firstCheckResult.status === 'rejected' && periodicResult.status === 'rejected') {
+  if (
+    firstCheckResult.status === 'rejected'
+    && periodicResult.status === 'rejected'
+    && changeResult.status === 'rejected'
+  ) {
     throw firstCheckResult.reason
   }
   const rows: UnifiedScanInboxItem[] = []
@@ -108,6 +133,12 @@ export async function listUnifiedScanInbox(signal?: AbortSignal) {
   if (periodicResult.status === 'fulfilled') {
     rows.push(...periodicResult.value.flatMap((row) => {
       const normalized = normalizePeriodicInboxRow(row)
+      return normalized ? [normalized] : []
+    }))
+  }
+  if (changeResult.status === 'fulfilled') {
+    rows.push(...changeResult.value.flatMap((row) => {
+      const normalized = normalizeChangeInboxRow(row)
       return normalized ? [normalized] : []
     }))
   }
@@ -130,6 +161,32 @@ export function returnFirstCheckDevice(data: FirstCheckScanRequest) {
 
 export function takeBackFirstCheckDevice(data: FirstCheckScanRequest) {
   return request<ScanRecord>({ url: '/scan/firstcheck/take-back', method: 'POST', data: buildScanRequest(data) })
+}
+
+function buildChangeScanRequest(input: ChangeScanRequest): ChangeScanRequest {
+  const scanCode = input.scanCode.trim()
+  return {
+    ...input,
+    scanCode,
+    scanContent: input.scanContent || scanCode,
+    scanLocation: input.scanLocation || '\u73b0\u573a\u626b\u7801'
+  }
+}
+
+export function verifierReceiveChangeDevice(data: ChangeScanRequest) {
+  return request<void>({ url: '/change/verifier-receive', method: 'POST', data: buildChangeScanRequest(data) })
+}
+
+export function externalSendOutChangeDevice(data: ChangeScanRequest) {
+  return request<void>({ url: '/change/external-send-out', method: 'POST', data: buildChangeScanRequest(data) })
+}
+
+export function sendOutReturnChangeDevice(data: ChangeScanRequest) {
+  return request<void>({ url: '/change/send-out-return', method: 'POST', data: buildChangeScanRequest(data) })
+}
+
+export function managerTakeBackChangeDevice(data: ChangeScanRequest) {
+  return request<void>({ url: '/change/manager-take-back', method: 'POST', data: buildChangeScanRequest(data) })
 }
 
 export function submitFirstCheckScan(action: string, data: FirstCheckScanRequest) {
@@ -158,7 +215,31 @@ export function submitUnifiedScan(row: UnifiedScanInboxItem, payload: UnifiedSca
     if (row.scanAction === 'periodic-verifier-receive') return verifierReceivePeriodic(requestPayload)
     if (row.scanAction === 'periodic-external-send-out') return externalSendOutPeriodic(requestPayload)
     if (row.scanAction === 'periodic-send-out-return') return sendOutReturnPeriodic(requestPayload)
+    if (row.scanAction === 'periodic-manager-take-back') return managerTakeBackPeriodic(requestPayload)
     return Promise.reject(new Error(`Unsupported periodic scan action: ${row.scanAction}`))
+  }
+  if (row.businessType === 'change') {
+    if (row.orderId === undefined || row.orderId === null) {
+      return Promise.reject(new Error('Missing change order ID'))
+    }
+    if (row.itemId === undefined || row.itemId === null) {
+      return Promise.reject(new Error('Missing change item ID'))
+    }
+    if (row.deviceId === undefined || row.deviceId === null) {
+      return Promise.reject(new Error('Missing change device ID'))
+    }
+    const requestPayload: ChangeScanRequest = {
+      orderId: row.orderId,
+      itemId: row.itemId,
+      deviceId: row.deviceId,
+      scanCode: payload.scanCode,
+      opinion: payload.opinion
+    }
+    if (row.scanAction === 'change-verifier-receive') return verifierReceiveChangeDevice(requestPayload)
+    if (row.scanAction === 'change-external-send-out') return externalSendOutChangeDevice(requestPayload)
+    if (row.scanAction === 'change-send-out-return') return sendOutReturnChangeDevice(requestPayload)
+    if (row.scanAction === 'change-manager-take-back') return managerTakeBackChangeDevice(requestPayload)
+    return Promise.reject(new Error(`Unsupported change scan action: ${row.scanAction}`))
   }
   return Promise.reject(new Error(`Unsupported scan business type: ${row.businessType}`))
 }

@@ -8,8 +8,9 @@ import type { ChangeSubmitRequest, ChangeType } from '@/types/change'
 import type { DeviceVO } from '@/types/device'
 import {
   changeTypeMetas,
+  currentDeviceStatusColor,
+  currentDeviceStatusName,
   deviceRowKey,
-  deviceStatusName,
   display,
   formatDate,
   haveUniformOriginalCategory
@@ -134,7 +135,7 @@ async function loadDevices() {
     const page = await listDevicePage({
       current: query.current,
       size: query.size,
-      deptName: session.user?.deptName || undefined,
+      deptId: session.user?.deptId || undefined,
       deviceCode: codeLike ? keyword || undefined : undefined,
       deviceName: !codeLike ? keyword || undefined : undefined
     })
@@ -207,7 +208,7 @@ onMounted(() => {
                 <template v-else-if="column.key === 'deviceName'">{{ display(record.deviceName) }}</template>
                 <template v-else-if="column.key === 'modelSpec'">{{ display(record.modelSpec) }}</template>
                 <template v-else-if="column.key === 'deviceStatus'">
-                  <a-tag class="tag green">{{ deviceStatusName(record.deviceStatus) }}</a-tag>
+                  <a-tag :class="['tag', currentDeviceStatusColor(record)]">{{ currentDeviceStatusName(record) }}</a-tag>
                 </template>
                 <template v-else-if="column.key === 'action'">
                   <a-button type="link" danger @click="removeDevice(tableRowKey(record))">移除</a-button>
@@ -252,7 +253,7 @@ onMounted(() => {
           <template v-else-if="column.key === 'modelSpec'">{{ display(record.modelSpec) }}</template>
           <template v-else-if="column.key === 'deptName'">{{ display(record.deptName) }}</template>
           <template v-else-if="column.key === 'deviceStatus'">
-            <a-tag :class="['tag', record.deviceStatus === 'sealed' ? 'red' : 'green']">{{ deviceStatusName(record.deviceStatus) }}</a-tag>
+            <a-tag :class="['tag', currentDeviceStatusColor(record)]">{{ currentDeviceStatusName(record) }}</a-tag>
           </template>
           <template v-else-if="column.key === 'lastVerificationDate'">{{ formatDate(record.lastVerificationDate) }}</template>
         </template>

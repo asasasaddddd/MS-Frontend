@@ -2,15 +2,17 @@
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute } from 'vue-router'
-import { approveChange, getChangeOrderDetail, rejectChange } from '@/api/change'
+import { approveChange, getChangeOrderDetail, rejectChange, reviseChange } from '@/api/change'
 import { listWorkflowTasks } from '@/api/workflow'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
 import { useSessionStore } from '@/stores/session'
-import type { ChangeOrderVO } from '@/types/change'
+import type { ChangeOrderVO, ChangeSubmitRequest, ChangeType } from '@/types/change'
+import type { DeviceVO } from '@/types/device'
 import type { WorkflowTask } from '@/types/workflow'
 import {
   CHANGE_APPROVE_ACTION,
+  CHANGE_REVISE_ACTION,
   changeNodeName,
   changeStatusName,
   changeTagColor,
@@ -23,6 +25,7 @@ import {
 } from '@/views/change/changeDisplayModel'
 import { isPendingWorkflowTask, matchesBusinessType } from '@/workflows/metrologyWorkflow'
 import ChangeApprovalDialog from '@/views/change/components/ChangeApprovalDialog.vue'
+import ChangeApplyDialog from '@/views/change/components/ChangeApplyDialog.vue'
 
 const route = useRoute()
 const session = useSessionStore()
@@ -31,6 +34,10 @@ const submitting = ref(false)
 const rows = ref<ChangeTaskRow[]>([])
 const activeOrders = ref<ChangeOrderVO[]>([])
 const dialogOpen = ref(false)
+const reviseOpen = ref(false)
+const revisionOrder = ref<ChangeOrderVO | null>(null)
+const revisionDevices = ref<DeviceVO[]>([])
+const revisionType = computed(() => revisionOrder.value?.changeType as ChangeType | undefined)
 const routeOrderId = computed(() => {
   const value = route.query.orderId
   if (Array.isArray(value)) return value[0] ? String(value[0]) : ''
@@ -87,12 +94,75 @@ function rowKey(row: ChangeTaskRow) {
 }
 
 function openOrder(row: ChangeTaskRow) {
+  if (row.nodeCode === 'manager_revise') {
+    if (!hasChangeAction(row, CHANGE_REVISE_ACTION)) {
+      message.warning('当前退回任务已无法修订，请刷新后重试')
+      return
+    }
+    revisionOrder.value = row.order
+    revisionDevices.value = (row.order.items || []).map((item) => ({
+      id: item.deviceId ?? item.id,
+      deviceCode: item.deviceCode,
+      deviceName: item.deviceName,
+      modelSpec: item.modelSpec,
+      factoryCode: item.factoryCode,
+      deptId: item.deptId,
+      deptName: item.deptName,
+      manageCategory: item.oldCategory,
+      verificationMethod: item.oldVerificationMethod,
+      verificationCycleMonth: item.oldCycleMonth,
+      validUntil: item.oldValidUntil,
+      confirmInterval: item.confirmInterval,
+      responsibleEngineerId: item.responsibleEngineerId,
+      responsibleEngineerName: item.responsibleEngineerName
+    }))
+    reviseOpen.value = true
+    return
+  }
   if (!hasChangeAction(row, CHANGE_APPROVE_ACTION)) {
     message.warning('当前任务已无审批权限，请刷新后重试')
     return
   }
   activeOrders.value = [row.order]
   dialogOpen.value = true
+}
+
+async function handleRevise(payload: ChangeSubmitRequest & { opinion?: string }) {
+  const order = revisionOrder.value
+  if (!order) return
+  submitting.value = true
+  try {
+    if (order.taskId === undefined || order.rowVersion === undefined) {
+      throw new Error('状态变更修订任务身份不完整，请刷新后重试')
+    }
+    const originalDeviceIds = new Set((order.items || []).map((item) => String(item.deviceId)))
+    const revisedDeviceIds = new Set(payload.items.map((item) => String(item.deviceId)))
+    if (
+      originalDeviceIds.size !== revisedDeviceIds.size ||
+      [...originalDeviceIds].some((deviceId) => !revisedDeviceIds.has(deviceId))
+    ) {
+      throw new Error('修订设备范围已变化，请刷新后重试')
+    }
+    await reviseChange({
+      orderId: order.id,
+      taskId: order.taskId,
+      rowVersion: order.rowVersion,
+      reason: payload.reason,
+      remark: payload.remark,
+      attachmentGroupId: payload.attachmentGroupId,
+      opinion: payload.opinion || '已按退回意见修订并重新提交',
+      items: payload.items
+    })
+    message.success('状态变更修订已重新提交')
+    reviseOpen.value = false
+    revisionOrder.value = null
+    revisionDevices.value = []
+    await loadRows()
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '状态变更修订提交失败')
+  } finally {
+    submitting.value = false
+  }
 }
 
 async function loadRows() {
@@ -214,7 +284,7 @@ onMounted(loadRows)
           </template>
           <template v-else-if="column.key === 'action'">
             <a-button
-              v-if="hasChangeAction(record, CHANGE_APPROVE_ACTION)"
+              v-if="hasChangeAction(record, CHANGE_APPROVE_ACTION) || hasChangeAction(record, CHANGE_REVISE_ACTION)"
               type="link"
               class="button-link"
               @click="openOrder(record)"
@@ -234,6 +304,14 @@ onMounted(loadRows)
       :submitting="submitting"
       @approve="handleApprove"
       @reject="handleReject"
+    />
+    <ChangeApplyDialog
+      v-model:open="reviseOpen"
+      :type="revisionType"
+      :devices="revisionDevices"
+      :order="revisionOrder"
+      :submitting="submitting"
+      @submit="handleRevise"
     />
   </section>
 </template>

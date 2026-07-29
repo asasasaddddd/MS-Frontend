@@ -27,6 +27,9 @@ export interface FirstCheckOrder {
   supplierName?: string
   attachmentGroupId?: AttachmentId
   usageScenario?: string
+  responsibilityOrgId?: string
+  responsibilityOrgName?: string
+  responsibilityOrgType?: 'DEPARTMENT' | 'GROUP'
   applyDeptId?: string
   applyDeptName?: string
   applicantId?: string
@@ -83,7 +86,7 @@ export interface FirstCheckOrder {
   isCommon?: number
   isWithReport?: number
   needSendout?: number
-  reportFileId?: number
+  reportFileId?: AttachmentId
   applyTime?: string
   sendTime?: string
   receiveTime?: string
@@ -152,8 +155,9 @@ export interface StartFirstCheckRequest {
   supplierName?: string
   attachmentGroupId?: AttachmentId
   usageScenario?: string
-  applyDeptId: string
-  applyDeptName: string
+  responsibilityOrgId: string
+  applyDeptId?: string
+  applyDeptName?: string
   material: FirstCheckMaterialRequest
   remark?: string
 }
@@ -183,7 +187,7 @@ export interface ConfirmCategoryRequest {
   taskId: string | number
   taskRowVersion: string | number
   isWithReport: number
-  reportFileId?: number
+  reportFileId?: AttachmentId
   usageScenario?: string
   requestedCategory: ManageCategory
   measureManagerId?: string
@@ -280,4 +284,12 @@ export interface FirstCheckAdminRow {
   statusLabel: string
   statusColor: 'orange' | 'blue' | 'red' | 'green' | 'cyan'
   order: FirstCheckOrder
+  isPhysicalScan?: boolean
+  scanAction?: string
+  scanCode?: string
+  deviceCode?: string
+  deviceName?: string
+  materialCode?: string
+  useDeptName?: string
+  lineNo?: number
 }

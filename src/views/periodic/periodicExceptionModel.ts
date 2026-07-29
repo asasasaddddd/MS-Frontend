@@ -115,7 +115,7 @@ function sourceIdOf(tasks: PeriodicTaskVO[]): EntityId {
 }
 
 function changeTypeOf(action: PeriodicExceptionAction): ChangeType {
-  if (action === 'defer') return 'precheck'
+  if (action === 'defer') return 'defer'
   if (action === 'category') return 'category'
   if (action === 'cycle') return 'cycle'
   return action
@@ -164,8 +164,7 @@ export function buildPeriodicExceptionChangeRequest(
     }
     if (form.actionType === 'defer') {
       Object.assign(item, {
-        verificationReason: reason,
-        precheckRequired: 1
+        verificationReason: reason
       })
     }
     if (form.actionType === 'scrap') {

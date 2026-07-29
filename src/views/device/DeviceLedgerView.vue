@@ -36,8 +36,8 @@ import DeviceLedgerEditForm from '@/views/device/DeviceLedgerEditForm.vue'
 import {
   deviceCategoryColor,
   deviceCategoryText,
-  deviceStatusColor,
-  deviceStatusText,
+  currentDeviceStatusColor,
+  currentDeviceStatusText,
   displayValue,
   formatCycle,
   formatDate,
@@ -194,7 +194,7 @@ const detailFields = computed(() => {
     { label: '出厂日期', value: formatDate(device.factoryDate) },
     { label: '学科大类', value: displayValue(device.subjectCategory) },
     { label: '学科小类', value: displayValue(device.subjectSubCategory) },
-    { label: '设备状态', value: deviceStatusText(device.deviceStatus), tag: deviceStatusColor(device.deviceStatus) },
+    { label: '设备状态', value: currentDeviceStatusText(device), tag: currentDeviceStatusColor(device) },
     { label: '是否强检', value: yesNoText(device.isMandatory) },
     { label: '标准器', value: displayValue(device.standardDevice) },
     { label: '确认间隔', value: displayValue(device.confirmInterval) },
@@ -449,7 +449,7 @@ async function exportLedger() {
     const basicHeaders = ['计量编号', '设备名称', '管理类别', '规格型号', '出厂编号', '设备状态', '检定周期', '有效期', '检定日期', '使用部门', '生产厂家', '检定方式']
     const basicRows = exportDevices.map((device) => [
       device.deviceCode, device.deviceName, deviceCategoryText(device.manageCategory), device.modelSpec,
-      device.factoryCode, deviceStatusText(device.deviceStatus), formatCycle(device.verificationCycleMonth),
+      device.factoryCode, currentDeviceStatusText(device), formatCycle(device.verificationCycleMonth),
       formatDate(device.validUntil), formatDate(device.lastVerificationDate), device.deptName,
       device.manufacturer, verificationMethodText(device.verificationMethod)
     ])

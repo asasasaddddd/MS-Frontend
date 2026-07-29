@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 
 import type { FlowSummary } from '../src/types/flowSummary.ts'
 import {
+  FLOW_STAGE_DEFINITIONS,
   buildFlowStatusViewModel,
   validateFlowSummary
 } from '../src/components/workflow/flowStatusDefinitions.ts'
@@ -309,7 +310,7 @@ const productionContractSummary: FlowSummary = {
   ],
   dimensions: [
     {
-      dimensionCode: 'workflow',
+      dimensionCode: 'business',
       countUnit: 'order',
       totalCount: 2,
       unknownCount: 0,
@@ -342,13 +343,107 @@ const productionContractSummary: FlowSummary = {
 const productionContractView = buildFlowStatusViewModel(productionContractSummary)
 assert.equal(productionContractView.overview[0]?.label, '今日新增')
 assert.equal(productionContractView.overview[1]?.label, '当前角色待办')
-assert.equal(productionContractView.pendingDimension?.dimensionCode, 'workflow')
-assert.equal(productionContractView.dimensions[0]?.dimensionCode, 'workflow')
-assert.equal(productionContractView.dimensions[0]?.label, '工作流节点')
+assert.equal(productionContractView.pendingDimension?.dimensionCode, 'business')
+assert.equal(productionContractView.dimensions[0]?.dimensionCode, 'business')
+assert.equal(productionContractView.dimensions[0]?.label, '业务流程')
 assert.equal(productionContractView.dimensions[0]?.stages[0]?.label, '封存 · 待计量领导审批')
+assert.deepEqual(productionContractView.dimensions[0]?.unregisteredStageCodes, [])
 assert.equal(productionContractView.dimensions[1]?.hasWarning, false)
 assert.equal(productionContractView.dimensions[2]?.stages[0]?.label, '未生成')
 assert.equal(productionContractView.dimensions[3]?.stages[0]?.label, '限用')
+
+const changeNodeCodes = [
+  'admin_submit',
+  'dept_leader_approve',
+  'measure_leader_review',
+  'responsible_engineer_review',
+  'manager_revise',
+  'verifier_handle',
+  'receive_dept_leader_confirm',
+  'receive_admin_confirm'
+] as const
+const changeTypeNodeMatrix = Object.fromEntries(
+  ['seal', 'enable', 'transfer', 'category', 'cycle', 'scrap', 'precheck', 'defer']
+    .map((changeType) => [changeType, changeNodeCodes])
+) as Record<string, readonly string[]>
+const changeProcessStatuses = ['approved', 'rejected', 'cancelled', 'returned'] as const
+const changeBusinessStageCodes = Object.entries(changeTypeNodeMatrix).flatMap(([changeType, nodeCodes]) => [
+  ...nodeCodes.map((nodeCode) => `${changeType}:${nodeCode}`),
+  ...changeProcessStatuses.map((status) => `${changeType}:process_${status}`)
+])
+
+const changeBusinessSummary: FlowSummary = {
+  businessType: 'CHANGE',
+  scope: 'pending',
+  snapshotAt: '2026-07-27T20:00:00',
+  overview: [{ metricCode: 'pending', countUnit: 'order', value: changeBusinessStageCodes.length }],
+  dimensions: [
+    {
+      dimensionCode: 'business',
+      countUnit: 'order',
+      totalCount: changeBusinessStageCodes.length,
+      unknownCount: 0,
+      stageCounts: Object.fromEntries(changeBusinessStageCodes.map((stageCode) => [stageCode, 1]))
+    }
+  ]
+}
+
+const changeBusinessView = buildFlowStatusViewModel(changeBusinessSummary)
+assert.equal(changeBusinessView.pendingDimension?.dimensionCode, 'business')
+assert.deepEqual(
+  changeBusinessView.pendingDimension?.unregisteredStageCodes,
+  [],
+  '状态变更八类业务节点与终态组合必须全部注册在 business 维度'
+)
+assert.deepEqual(
+  changeBusinessView.pendingDimension?.stages.map(({ stageCode }) => stageCode).sort(),
+  [...changeBusinessStageCodes].sort()
+)
+
+const roleCoverageLabels = new Map(
+  changeBusinessView.pendingDimension?.stages.map(({ stageCode, label }) => [stageCode, label])
+)
+assert.equal(roleCoverageLabels.get('seal:dept_leader_approve'), '封存 · 待分厂主管领导审批')
+assert.equal(roleCoverageLabels.get('defer:measure_leader_review'), '缓检 · 待计量领导审批')
+assert.equal(roleCoverageLabels.get('category:responsible_engineer_review'), '管理类别调整 · 待责任工程师审批')
+assert.equal(roleCoverageLabels.get('category:manager_revise'), '管理类别调整 · 退回管理员修订')
+assert.equal(roleCoverageLabels.get('cycle:verifier_handle'), '检定周期调整 · 待检定员处理')
+assert.equal(roleCoverageLabels.get('transfer:receive_dept_leader_confirm'), '设备转移 · 待接收部门主管确认')
+assert.equal(roleCoverageLabels.get('transfer:receive_admin_confirm'), '设备转移 · 待接收部门管理员确认')
+
+const changeCombinationDefinitions = FLOW_STAGE_DEFINITIONS.filter((definition) =>
+  changeBusinessStageCodes.includes(definition.stageCode)
+)
+assert.equal(changeCombinationDefinitions.length, changeBusinessStageCodes.length)
+assert.ok(
+  changeCombinationDefinitions.every((definition) => definition.dimensionCode === 'business'),
+  '状态变更组合定义必须整体迁移到 business 维度，不能保留 workflow 单码补丁'
+)
+assert.ok(
+  FLOW_STAGE_DEFINITIONS.some(
+    (definition) => definition.dimensionCode === 'result' && definition.stageCode === 'unqualified'
+  ),
+  '通用结果维度仍需保留历史不合格状态'
+)
+
+const adminTakeBackSummary: FlowSummary = {
+  businessType: 'PERIODIC',
+  scope: 'pending',
+  snapshotAt: '2026-07-27T20:10:00',
+  overview: [],
+  dimensions: [
+    {
+      dimensionCode: 'business',
+      countUnit: 'device',
+      totalCount: 1,
+      unknownCount: 0,
+      stageCounts: { admin_take_back: 1 }
+    }
+  ]
+}
+const adminTakeBackView = buildFlowStatusViewModel(adminTakeBackSummary)
+assert.deepEqual(adminTakeBackView.pendingDimension?.unregisteredStageCodes, [])
+assert.equal(adminTakeBackView.pendingDimension?.stages[0]?.label, '待管理员取回')
 
 const changeResultSummary: FlowSummary = {
   businessType: 'CHANGE',

@@ -2,10 +2,11 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { confirmCategoryFirstCheck } from '@/api/firstcheck'
-import { listUsersByDeptAndRole, type SysUserVO } from '@/api/system'
+import { previewTaskCandidates } from '@/api/nodePermission'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import { useSessionStore } from '@/stores/session'
-import type { FirstCheckOrder, ManageCategory } from '@/types/firstcheck'
+import type { AttachmentId, FirstCheckOrder, ManageCategory } from '@/types/firstcheck'
+import type { RoleScopeType, TaskCandidatePreviewQuery, TaskCandidateVO } from '@/types/nodePermission'
 import { latestFirstCheckReturnFeedback } from '@/views/firstcheck/firstCheckReturnModel'
 
 const props = defineProps<{
@@ -24,22 +25,24 @@ const emit = defineEmits<{
 const session = useSessionStore()
 const submitting = ref(false)
 const loadingUsers = ref(false)
-const engineers = ref<SysUserVO[]>([])
-const engineerDeptName = ref('')
+const engineers = ref<TaskCandidateVO[]>([])
+const responsibilityOrgName = ref('')
+let engineerRequestSerial = 0
+let submitRequestSerial = 0
 
 const form = reactive({
   isWithReport: undefined as number | undefined,
   requestedCategory: undefined as ManageCategory | undefined,
   usageScenario: '',
-  reportFileId: undefined as number | undefined,
+  reportFileId: undefined as AttachmentId | undefined,
   responsibleEngineerId: undefined as string | undefined,
   opinion: '设备信息核对无误，同意进入首检流程'
 })
 
 const engineerOptions = computed(() =>
   engineers.value.map((user) => ({
-    label: `${user.employeeName || user.employeeId} / ${user.employeeId}`,
-    value: user.employeeId
+    label: `${user.userName || user.userId} / ${user.userId}`,
+    value: user.userId
   }))
 )
 
@@ -48,10 +51,13 @@ const returnFeedback = computed(() => latestFirstCheckReturnFeedback(props.order
 const canSubmit = computed(() => Boolean(
   props.order && props.taskId !== undefined && props.taskRowVersion !== undefined &&
   (props.allowedActions.includes('SUBMIT') || props.allowedActions.includes('RESUBMIT')) &&
-  form.isWithReport !== undefined && form.requestedCategory && form.responsibleEngineerId
+  !loadingUsers.value && form.isWithReport !== undefined && form.requestedCategory &&
+  form.responsibleEngineerId &&
+  engineers.value.some((user) => user.userId === form.responsibleEngineerId)
 ))
 
 function close() {
+  invalidateSubmitRequest()
   emit('update:open', false)
 }
 
@@ -65,33 +71,101 @@ function normalizeDate(value?: string) {
   return value.replace('T', ' ').slice(0, 16)
 }
 
-function resolveDeptId(order?: FirstCheckOrder) {
-  return order?.applyDeptId || session.user?.deptId || ''
+interface ResponsibilityOrganization {
+  orgId: string
+  orgName: string
+  orgType: RoleScopeType
+}
+
+interface SubmitRequestIdentity {
+  serial: number
+  orderId: FirstCheckOrder['id']
+  taskId: string | number
+  taskRowVersion: string | number
+}
+
+function invalidateSubmitRequest() {
+  submitRequestSerial += 1
+  submitting.value = false
+}
+
+function isCurrentSubmitRequest(request: SubmitRequestIdentity) {
+  return props.open &&
+    request.serial === submitRequestSerial &&
+    props.order?.id === request.orderId &&
+    props.taskId === request.taskId
+}
+
+function resolveResponsibilityOrganization(order?: FirstCheckOrder): ResponsibilityOrganization | null {
+  if (
+    order?.responsibilityOrgId &&
+    (order.responsibilityOrgType === 'DEPARTMENT' || order.responsibilityOrgType === 'GROUP')
+  ) {
+    return {
+      orgId: order.responsibilityOrgId,
+      orgName: order.responsibilityOrgName || order.responsibilityOrgId,
+      orgType: order.responsibilityOrgType
+    }
+  }
+
+  if (!order?.applyDeptId) return null
+  return {
+    orgId: order.applyDeptId,
+    orgName: order.applyDeptName || order.applyDeptId,
+    orgType: 'DEPARTMENT'
+  }
 }
 
 async function loadEngineerUsers(order?: FirstCheckOrder) {
-  const deptId = resolveDeptId(order)
-  engineerDeptName.value = order?.applyDeptName || session.user?.deptName || ''
+  const requestSerial = ++engineerRequestSerial
+  const responsibilityOrg = resolveResponsibilityOrganization(order)
+  responsibilityOrgName.value = responsibilityOrg?.orgName || ''
+  engineers.value = []
+  form.responsibleEngineerId = undefined
 
-  if (!deptId) {
-    engineers.value = []
-    form.responsibleEngineerId = undefined
+  if (!responsibilityOrg) {
+    loadingUsers.value = false
+    message.warning('责任部门/组信息不完整，无法解析责任工程师候选')
     return
   }
 
   loadingUsers.value = true
   try {
-    const users = await listUsersByDeptAndRole(deptId, 'RESPONSIBLE_ENGINEER')
+    const candidateContext = {
+      businessType: 'FIRST_CHECK',
+      nodeCode: 'engineer_route',
+      operationCode: 'SUBMIT_RETURN',
+      permissionCode: 'first_check.main.engineer_route.submit_return',
+      requiredRoleCode: 'RESPONSIBLE_ENGINEER'
+    }
+    const query: TaskCandidatePreviewQuery = responsibilityOrg.orgType === 'GROUP'
+      ? {
+          ...candidateContext,
+          scopeType: responsibilityOrg.orgType,
+          scopeOrgId: responsibilityOrg.orgId,
+          audienceMode: 'EXACT'
+        }
+      : {
+          ...candidateContext,
+          scopeType: responsibilityOrg.orgType,
+          scopeOrgId: responsibilityOrg.orgId,
+          audienceMode: 'SUBTREE'
+        }
+    const users = await previewTaskCandidates(query)
+    if (requestSerial !== engineerRequestSerial) return
     engineers.value = users
-    if (form.responsibleEngineerId && !users.some((user) => user.employeeId === form.responsibleEngineerId)) {
+    if (!users.length) {
       form.responsibleEngineerId = undefined
+      message.warning(`${responsibilityOrg.orgName}暂无可选责任工程师`)
+      return
     }
   } catch (error) {
+    if (requestSerial !== engineerRequestSerial) return
     engineers.value = []
     form.responsibleEngineerId = undefined
-    message.warning(error instanceof Error ? error.message : '责任工程师列表加载失败')
+    message.error(error instanceof Error ? error.message : '责任工程师列表加载失败')
   } finally {
-    loadingUsers.value = false
+    if (requestSerial === engineerRequestSerial) loadingUsers.value = false
   }
 }
 
@@ -132,41 +206,67 @@ async function submit() {
     return
   }
 
-  const engineer = engineers.value.find((user) => user.employeeId === form.responsibleEngineerId)
+  const engineer = engineers.value.find((user) => user.userId === form.responsibleEngineerId)
+  if (!engineer) {
+    message.warning('所选责任工程师已不在当前候选范围，请重新选择')
+    return
+  }
 
+  const request = {
+    serial: ++submitRequestSerial,
+    orderId: order.id,
+    taskId: props.taskId,
+    taskRowVersion: props.taskRowVersion
+  }
   submitting.value = true
   try {
     await confirmCategoryFirstCheck({
-      orderId: order.id,
-      taskId: props.taskId,
-      taskRowVersion: props.taskRowVersion,
+      orderId: request.orderId,
+      taskId: request.taskId,
+      taskRowVersion: request.taskRowVersion,
       isWithReport: form.isWithReport,
       reportFileId: form.reportFileId,
       usageScenario: form.usageScenario.trim() || undefined,
       requestedCategory: form.requestedCategory,
       measureManagerId: session.user?.employeeId,
       measureManagerName: session.user?.employeeName,
-      responsibleEngineerId: form.responsibleEngineerId,
-      responsibleEngineerName: engineer?.employeeName || form.responsibleEngineerId,
+      responsibleEngineerId: engineer.userId,
+      responsibleEngineerName: engineer.userName || engineer.userId,
       opinion: form.opinion
     })
+    if (!isCurrentSubmitRequest(request)) return
     message.success('首检分类已提交，流程已流转到主管领导')
     emit('success')
     close()
   } catch (error) {
+    if (!isCurrentSubmitRequest(request)) return
     message.error(error instanceof Error ? error.message : '分类提交失败')
   } finally {
-    submitting.value = false
+    if (isCurrentSubmitRequest(request)) submitting.value = false
   }
 }
 
 watch(
-  () => props.open,
-  async (open) => {
-    if (!open) return
+  () => [
+    props.open,
+    props.order?.id,
+    props.taskId,
+    props.taskRowVersion,
+    props.order?.responsibilityOrgId,
+    props.order?.responsibilityOrgType,
+    props.order?.applyDeptId
+  ] as const,
+  async ([open]) => {
+    invalidateSubmitRequest()
+    if (!open) {
+      engineerRequestSerial += 1
+      loadingUsers.value = false
+      return
+    }
     resetForm(props.order)
     await loadEngineerUsers(props.order)
-  }
+  },
+  { immediate: true }
 )
 </script>
 
@@ -214,7 +314,7 @@ watch(
           <label><span>物料编号</span><a-input :value="display(order?.materialCode)" readonly /></label>
           <label><span>物料描述</span><a-input :value="display(order?.materialName)" readonly /></label>
           <label><span>数量</span><a-input :value="`${display(order?.quantity)} 台`" readonly /></label>
-          <label><span>使用部门</span><a-input :value="display(order?.applyDeptName)" readonly /></label>
+          <label><span>责任部门/组</span><a-input :value="display(order?.responsibilityOrgName || order?.applyDeptName)" readonly /></label>
           <label><span>供应商名称</span><a-input :value="display(order?.supplierName)" readonly /></label>
           <label>
             <span>附件</span>
@@ -228,7 +328,10 @@ watch(
         <div class="panel-header">
           <div>
             <h2>设备分类</h2>
-            <p>责任工程师仅从{{ engineerDeptName || '当前使用部门' }}中选择；主管领导由后端按使用部门自动匹配。</p>
+            <p>
+              责任工程师按{{ responsibilityOrgName || '当前责任部门/组' }}的授权范围解析，人员主组可不同；
+              主管领导由后端按责任组织自动匹配。
+            </p>
           </div>
         </div>
         <div class="form-grid cols-4">
@@ -259,7 +362,7 @@ watch(
             <span>责任工程师</span>
             <a-select
               v-model:value="form.responsibleEngineerId"
-              placeholder="请选择本部门责任工程师"
+              placeholder="请选择责任部门/组授权范围内的责任工程师"
               :loading="loadingUsers"
               :options="engineerOptions"
               show-search

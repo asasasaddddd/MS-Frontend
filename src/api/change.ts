@@ -2,6 +2,7 @@ import { request } from '@/api/request'
 import {
   buildChangeApproveRequest,
   buildChangeRejectRequest,
+  buildChangeReviseRequest,
   buildChangeSubmitRequest,
   buildChangeVerifierHandleRequest,
   changeEndpoint
@@ -10,6 +11,7 @@ import type {
   ChangeApproveRequest,
   ChangeOrderVO,
   ChangeRejectRequest,
+  ChangeReviseRequest,
   ChangeSubmitRequest,
   ChangeVerifierHandleRequest
 } from '@/types/change'
@@ -37,6 +39,14 @@ export function rejectChange(data: ChangeRejectRequest) {
     url: changeEndpoint('reject'),
     method: 'POST',
     data: buildChangeRejectRequest(data)
+  })
+}
+
+export function reviseChange(data: ChangeReviseRequest) {
+  return request<void>({
+    url: changeEndpoint('revise'),
+    method: 'POST',
+    data: buildChangeReviseRequest(data)
   })
 }
 

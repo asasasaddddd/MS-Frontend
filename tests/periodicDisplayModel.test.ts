@@ -5,10 +5,13 @@ import {
   displayValue,
   getPeriodicTableColumns,
   mapPeriodicTaskRow,
-  periodicTagColor
+  periodicTagColor,
+  resolvePeriodicTaskAction
 } from '../src/views/periodic/periodicDisplayModel.ts'
+import * as periodicDisplayModel from '../src/views/periodic/periodicDisplayModel.ts'
 import { periodicNodeName, periodicStatusName } from '../src/api/periodicContract.ts'
 import type { PeriodicTaskVO } from '../src/types/periodic.ts'
+import type { UnifiedScanInboxItem } from '../src/types/scan.ts'
 
 assert.equal(displayValue(undefined), '-')
 assert.equal(displayValue(null), '-')
@@ -30,6 +33,8 @@ const task: PeriodicTaskVO = {
   modelSpec: '0-2.5MPa',
   currentNode: 'manager_forward_confirm',
   taskStatus: 'wait_confirm',
+  physicalStatus: 'wait_verifier_receive',
+  physicalStatusName: '待检定员接收',
   verificationMethod: 'send_out',
   verificationCycleMonth: 12,
   isCommon: 0
@@ -41,6 +46,7 @@ assert.equal(typeof row.taskId, 'string')
 assert.equal(row.currentNodeName, '管理员转办确认员')
 assert.equal(row.taskStatusName, '待确认')
 assert.equal(row.factoryCode, '-')
+assert.equal(row.physicalStatusName, '待接收')
 assert.equal(row.deptName, '-')
 assert.equal(row.verificationCycle, '12个月')
 assert.equal(row.verificationMethodName, '外委')
@@ -54,7 +60,102 @@ const exceptionRouteTask: PeriodicTaskVO = {
 }
 
 assert.equal(mapPeriodicTaskRow(exceptionRouteTask, 'admin').currentNodeName, '管理员异常分流')
-assert.equal(mapPeriodicTaskRow(exceptionRouteTask, 'verifier').currentNodeName, '管理员异常分流')
+assert.equal(mapPeriodicTaskRow(exceptionRouteTask, 'verifier').currentNodeName, '待接收')
+
+const takeBackTask: PeriodicTaskVO = {
+  ...task,
+  currentNode: 'admin_take_back',
+  currentNodeName: undefined,
+  taskStatus: 'processing',
+  physicalStatus: 'wait_manager_take_back',
+  physicalStatusName: undefined,
+  allowedActions: ['TAKE_BACK']
+}
+assert.equal(resolvePeriodicTaskAction(takeBackTask), 'scan-take-back')
+assert.equal(mapPeriodicTaskRow(takeBackTask, 'admin').currentNodeName, '管理员取回')
+assert.equal(mapPeriodicTaskRow(takeBackTask, 'admin').physicalStatusName, '待管理员取回')
+
+assert.equal(resolvePeriodicTaskAction({
+  allowedActions: ['SEND_OUT'],
+  physicalStatus: 'wait_external_receive',
+  scanAction: 'periodic-external-send-out'
+}), 'scan-send-out')
+assert.equal(resolvePeriodicTaskAction({
+  allowedActions: ['SEND_OUT_RETURN'],
+  physicalStatus: 'wait_sendout_return_receive',
+  scanAction: 'periodic-send-out-return'
+}), 'scan-send-out-return')
+
+assert.equal(resolvePeriodicTaskAction({
+  currentNode: 'external_common_fill',
+  allowedActions: ['SUBMIT', 'SEND_OUT'],
+  physicalStatus: 'wait_external_receive',
+  scanAction: 'periodic-external-send-out'
+}), 'scan-send-out')
+
+assert.equal(resolvePeriodicTaskAction({
+  currentNode: 'external_uncommon_fill',
+  allowedActions: ['SUBMIT', 'SEND_OUT_RETURN'],
+  physicalStatus: 'wait_sendout_return_receive',
+  scanAction: 'periodic-send-out-return'
+}), 'scan-send-out-return')
+
+const mergePeriodicTaskPhysicalActions = (
+  periodicDisplayModel as unknown as {
+    mergePeriodicTaskPhysicalActions?: (
+      tasks: readonly PeriodicTaskVO[],
+      scanRows: readonly UnifiedScanInboxItem[]
+    ) => PeriodicTaskVO[]
+  }
+).mergePeriodicTaskPhysicalActions
+assert.equal(typeof mergePeriodicTaskPhysicalActions, 'function')
+
+if (mergePeriodicTaskPhysicalActions) {
+  const workflowTask: PeriodicTaskVO = {
+    ...task,
+    id: 'periodic-task-merge',
+    planId: 'periodic-plan-merge',
+    currentNode: 'external_common_fill',
+    allowedActions: ['SUBMIT'],
+    physicalStatus: undefined,
+    physicalStatusName: undefined,
+    scanAction: undefined
+  }
+  const physicalRow: UnifiedScanInboxItem = {
+    id: 'periodic-periodic-task-merge-periodic-external-send-out-1',
+    businessType: 'periodic',
+    sourceType: 'PERIODIC',
+    sourceLabel: 'periodic',
+    businessId: 'periodic-plan-merge',
+    taskId: 'periodic-task-merge',
+    taskNo: 'ZJ-TEST-0001',
+    currentNodeName: 'pending external handover',
+    scanAction: 'periodic-external-send-out',
+    allowedActions: ['SEND_OUT'],
+    scanCode: 'DEVICE-001',
+    deviceCode: 'DEVICE-001',
+    scanned: false
+  }
+  const mergedTasks = mergePeriodicTaskPhysicalActions(
+    [workflowTask],
+    [physicalRow, { ...physicalRow, id: `${physicalRow.id}-duplicate` }]
+  )
+
+  assert.equal(mergedTasks.length, 1)
+  assert.equal(mergedTasks[0]?.id, 'periodic-task-merge')
+  assert.equal(mergedTasks[0]?.currentNode, 'external_common_fill')
+  assert.equal(mergedTasks[0]?.physicalStatus, 'wait_external_receive')
+  assert.equal(mergedTasks[0]?.physicalStatusName, 'pending external handover')
+  assert.equal(mergedTasks[0]?.scanAction, 'periodic-external-send-out')
+  assert.deepEqual(mergedTasks[0]?.allowedActions, ['SUBMIT', 'SEND_OUT'])
+  assert.equal(resolvePeriodicTaskAction(mergedTasks[0]!), 'scan-send-out')
+
+  const physicalOnlyTasks = mergePeriodicTaskPhysicalActions([], [physicalRow, physicalRow])
+  assert.equal(physicalOnlyTasks.length, 1)
+  assert.equal(physicalOnlyTasks[0]?.id, 'periodic-task-merge')
+  assert.equal(physicalOnlyTasks[0]?.planId, 'periodic-plan-merge')
+  assert.equal(physicalOnlyTasks[0]?.currentNode, 'external_common_fill')
+}
 
 const todoGroups = buildPeriodicPlanTodoGroups([
   exceptionRouteTask,

@@ -2,7 +2,12 @@
 import { computed } from 'vue'
 import AttachmentListButton from '../../../components/AttachmentListButton.vue'
 import type { EntityId, PeriodicTaskVO } from '../../../types/periodic'
-import { displayValue, mapPeriodicTaskRow } from '../periodicDisplayModel'
+import PeriodicJudgementHistory from './PeriodicJudgementHistory.vue'
+import {
+  displayValue,
+  mapPeriodicTaskRow,
+  type PeriodicTableRole
+} from '../periodicDisplayModel'
 
 type TaskWithAttachment = PeriodicTaskVO & {
   certificateAttachmentGroupId?: EntityId
@@ -14,6 +19,7 @@ const props = withDefaults(
   defineProps<{
     open: boolean
     task?: PeriodicTaskVO | null
+    role: PeriodicTableRole
     title?: string
   }>(),
   {
@@ -31,7 +37,7 @@ const modalOpen = computed({
   set: (value: boolean) => emit('update:open', value)
 })
 
-const row = computed(() => (props.task ? mapPeriodicTaskRow(props.task) : null))
+const row = computed(() => (props.task ? mapPeriodicTaskRow(props.task, props.role) : null))
 const attachmentTask = computed(() => props.task as TaskWithAttachment | null)
 </script>
 
@@ -74,6 +80,7 @@ const attachmentTask = computed(() => props.task as TaskWithAttachment | null)
         <a-descriptions bordered size="small" :column="{ xs: 1, sm: 2, lg: 4 }">
           <a-descriptions-item label="当前节点">{{ row.currentNodeName }}</a-descriptions-item>
           <a-descriptions-item label="当前状态">{{ row.taskStatusName }}</a-descriptions-item>
+          <a-descriptions-item label="实物状态">{{ row.physicalStatusName }}</a-descriptions-item>
           <a-descriptions-item label="计量管理员">{{ row.measureManagerName }}</a-descriptions-item>
           <a-descriptions-item label="计量检定员">{{ row.assignedVerifierName }}</a-descriptions-item>
           <a-descriptions-item label="是否通用">{{ row.isCommonName }}</a-descriptions-item>
@@ -94,6 +101,8 @@ const attachmentTask = computed(() => props.task as TaskWithAttachment | null)
           <a-descriptions-item label="备注">{{ row.remark }}</a-descriptions-item>
         </a-descriptions>
       </section>
+
+      <PeriodicJudgementHistory :records="task.judgementRecords" />
     </div>
   </a-modal>
 </template>

@@ -27,7 +27,6 @@ assert.equal(
 for (const helper of [
   'resolvePermissionDetailLoad',
   'filterOperationsForRole',
-  'getActiveGroupOrgIds',
   'buildScopeOrganizationTree',
   'buildNodeGrantRoleChange',
   'isCurrentPermissionResponse',
@@ -36,6 +35,11 @@ for (const helper of [
 ]) {
   assert.equal(typeof runtime[helper], 'function', `缺少可执行的权限状态规则：${helper}`)
 }
+assert.equal(
+  runtime.getActiveGroupOrgIds,
+  undefined,
+  '组织授权不得再导出按人员 MDM 主组收窄范围的 helper'
+)
 
 const isSelectableOrganization = runtime.isSelectableOrganization as (
   org: Record<string, unknown>
@@ -83,13 +87,9 @@ const filterOperationsForRole = runtime.filterOperationsForRole as (
   operations: Array<Record<string, unknown>>,
   roleCode: string
 ) => Array<Record<string, unknown>>
-const getActiveGroupOrgIds = runtime.getActiveGroupOrgIds as (
-  relations: Array<Record<string, unknown>>
-) => Set<string>
 const buildScopeOrganizationTree = runtime.buildScopeOrganizationTree as (
   organizations: Array<Record<string, unknown>>,
-  scopeType?: string,
-  allowedGroupIds?: Set<string>
+  scopeType?: string
 ) => Array<{ value: string; disabled: boolean; children?: Array<{ value: string; disabled: boolean }> }>
 const buildNodeGrantRoleChange = runtime.buildNodeGrantRoleChange as (
   roleCode: string
@@ -187,12 +187,12 @@ assert.deepEqual(previewDisplay.existingGrant, {
 const baseDraft = {
   roleCode: 'MEASURE_ADMIN',
   permissionCode: 'PERIODIC_PLAN_CONFIRM',
+  scopeType: 'GROUP',
   scopeOrgId: 'G100305001',
   effect: 'DENY',
   effectiveFrom: '',
   effectiveTo: '',
-  grantReason: '',
-  companyElevationConfirmed: false
+  grantReason: ''
 }
 const roleChangedDraft = {
   ...baseDraft,
@@ -216,33 +216,25 @@ assert.ok(
 )
 assert.deepEqual(
   validateNodeScopeGrantDraft({ ...baseDraft, scopeType: 'DEPARTMENT' }),
-  ['部门/公司提权必须填写原因', '部门/公司提权必须设置失效时间']
+  ['部门提权必须填写原因', '部门提权必须设置失效时间']
 )
 assert.deepEqual(
   validateNodeScopeGrantDraft({
     ...baseDraft,
-    scopeType: 'COMPANY',
-    grantReason: '临时公司级授权',
-    effectiveTo: '2026-08-25T08:00:00'
-  }),
-  ['公司提权必须明确确认风险']
+    scopeType: 'COMPANY'
+  } as never),
+  ['请选择有效授权范围']
 )
 
-const groupRequest = buildNodeScopeGrantRequest({ ...baseDraft, scopeType: 'GROUP' })
+const groupRequest = buildNodeScopeGrantRequest(baseDraft)
 assert.equal(groupRequest.grantSource, 'NORMAL_CONFIG')
 assert.equal('companyElevationConfirmed' in groupRequest, false)
 
-const companyRequest = buildNodeScopeGrantRequest({
-  ...baseDraft,
-  scopeType: 'COMPANY',
-  scopeOrgId: 'COMPANY-001',
-  grantReason: ' 临时公司级授权 ',
-  effectiveTo: '2026-08-25T08:00:00',
-  companyElevationConfirmed: true
-})
-assert.equal(companyRequest.grantSource, 'MANUAL_ELEVATION')
-assert.equal(companyRequest.grantReason, '临时公司级授权')
-assert.equal(companyRequest.companyElevationConfirmed, true)
+assert.throws(
+  () => buildNodeScopeGrantRequest({ ...baseDraft, scopeType: 'COMPANY' } as never),
+  /GROUP|DEPARTMENT/,
+  'write builder must reject historical COMPANY scope'
+)
 
 const fulfilledRoles = { status: 'fulfilled', value: ['MEASURE_ADMIN'] } as const
 const fulfilledRelations = {
@@ -287,14 +279,6 @@ const roleFilteredOperations = filterOperationsForRole([
 ], 'MEASURE_ADMIN')
 assert.deepEqual(roleFilteredOperations.map((item) => item.permissionCode), ['A'])
 
-const activeGroupIds = getActiveGroupOrgIds([
-  { orgId: 'G-OWNED', relationType: 'GROUP', status: 'enabled' },
-  { orgId: 'G-DISABLED', relationType: 'GROUP', status: 'disabled' },
-  { orgId: 'G-UNTRUSTED', orgType: 'GROUP', status: 'enabled' },
-  { orgId: 'D-1', relationType: 'DEPARTMENT', status: 'enabled' }
-])
-assert.deepEqual([...activeGroupIds], ['G-OWNED'])
-
 const groupScopeTree = buildScopeOrganizationTree([
   {
     orgId: 'C-1',
@@ -310,14 +294,14 @@ const groupScopeTree = buildScopeOrganizationTree([
       ]
     }]
   }
-], 'GROUP', activeGroupIds)
+], 'GROUP')
 assert.equal(groupScopeTree.length, 1)
 assert.equal(groupScopeTree[0]?.disabled, true, '公司祖先只能导航')
 assert.equal(groupScopeTree[0]?.children?.[0]?.disabled, true, '部门祖先只能导航')
 assert.deepEqual(
   groupScopeTree[0]?.children?.[0]?.children?.map((node) => [node.value, node.disabled]),
-  [['G-OWNED', false]],
-  'GROUP 范围只能暴露人员真实有效班组'
+  [['G-OWNED', false], ['G-FOREIGN', false]],
+  'GROUP 范围必须允许树中全部有效组，不能按人员 MDM 主组过滤'
 )
 
 const visibleOrganizationTree = buildScopeOrganizationTree([
@@ -442,17 +426,28 @@ const systemApiSource = source('../src/api/system.ts')
 const nodePermissionApiSource = source('../src/api/nodePermission.ts')
 const nodePermissionTypeSource = source('../src/types/nodePermission.ts')
 
-// 权威组织树只能按真实组织类型建模，不能继续猜测固定 L4/L5/L6 层级。
-assert.doesNotMatch(viewSource, /visibleOrgLevels|['"]4['"],\s*['"]5['"],\s*['"]6['"]/)
-for (const orgType of ['COMPANY', 'DEPARTMENT', 'GROUP']) {
-  assert.ok(viewSource.includes(orgType), `组织树缺少真实类型 ${orgType}`)
-}
-assert.match(viewSource, /isSelectableOrg/)
-assert.match(viewSource, /isSelectableOrganization/)
+assert.doesNotMatch(
+  nodePermissionTypeSource,
+  /UserOrgRelationSelectionInput|getActiveGroupOrgIds|allowedGroupIds/,
+  '节点授权类型层不得保留人员 MDM 组白名单参数或 helper'
+)
 assert.match(
+  nodePermissionTypeSource,
+  /export function buildScopeOrganizationTree\(\s*organizations:\s*OrganizationTreeInput\[],\s*targetType\?:\s*NodeScopeType\s*\)/,
+  '组织树 helper 只能接受组织树和目标类型'
+)
+
+// 页面只能消费后端允许部门树。根节点与动态 MDM 组必须原样建模，不能继续
+// 调用系统全量组织，也不能猜测固定层级或硬编码特殊部门下的组名单。
+assert.doesNotMatch(viewSource, /visibleOrgLevels|['"]4['"],\s*['"]5['"],\s*['"]6['"]|listSystemOrgs/)
+assert.match(viewSource, /getAllowedOrganizationTree/)
+assert.match(viewSource, /AllowedOrganizationNodeVO/)
+assert.match(viewSource, /org\.children\s*\|\|\s*\[\]/)
+assert.doesNotMatch(viewSource, /allowedGroupIds|getActiveGroupOrgIds/)
+assert.doesNotMatch(
   viewSource,
-  /function toOrgTreeNodes[\s\S]*?return buildScopeOrganizationTree\(input\)/,
-  '人员导航树和授权树必须复用同一有效组织过滤 helper'
+  /质检(?:部|组)|电站服务事业部|备件部|工程部/,
+  'allowed-tree consumers must not hardcode dynamic MDM group names'
 )
 assert.match(systemApiSource, /orgFictitious\?:\s*boolean\s*\|\s*number\s*\|\s*string/)
 assert.doesNotMatch(systemApiSource, /isVirtual\?:|virtual\?:/)
@@ -460,7 +455,57 @@ assert.match(viewSource, /orgFullPath/)
 assert.match(viewSource, /filterTreeNode/)
 assert.match(viewSource, /orgSearchKeyword/)
 
-// 人员必须支持工号、姓名模糊查询，并按需补齐组织关系与多角色。
+// 人员只能在 allowed-users 返回集合内做工号、姓名和分页。部门选择传本部门
+// 及所有后代组，组选择只传自身，未选择组织时传空数组表示全部允许范围。
+assert.match(viewSource, /listAllowedOrganizationUsers/)
+assert.doesNotMatch(viewSource, /listSystemUsers/)
+assert.match(
+  viewSource,
+  /const selectedOrganizationUserIds = computed\([\s\S]*?if \(!selectedOrgId\.value\) return \[\][\s\S]*?org\?\.type === 'DEPARTMENT'[\s\S]*?return org\.descendantIds[\s\S]*?return \[selectedOrgId\.value\]/,
+  'selected organization must map department to descendants and group to its own id'
+)
+assert.match(
+  viewSource,
+  /listAllowedOrganizationUsers\(selectedOrganizationUserIds\.value\)/,
+  'allowed users query must receive the selected allowed-tree scope'
+)
+assert.match(viewSource, /allowedUsers\.value\.filter/)
+assert.match(viewSource, /\.slice\(start,\s*start \+ pager\.size\)/)
+const loadAllowedUsersStart = viewSource.indexOf('async function loadAllowedUsers')
+const loadAllowedUsersEnd = viewSource.indexOf('async function loadNodeGrants', loadAllowedUsersStart)
+assert.ok(loadAllowedUsersStart >= 0 && loadAllowedUsersEnd > loadAllowedUsersStart, 'missing allowed-users loader')
+const loadAllowedUsersSource = viewSource.slice(loadAllowedUsersStart, loadAllowedUsersEnd)
+assert.equal(
+  [...loadAllowedUsersSource.matchAll(/listAllowedOrganizationUsers\(/g)].length,
+  1,
+  'allowed-users loader must issue exactly one allowed personnel request'
+)
+assert.doesNotMatch(
+  loadAllowedUsersSource,
+  /getUserOrgRelations|getUserRoles|enrichPerson|Promise\.all/,
+  'allowed-users loader must not fan out per-person relation or role requests'
+)
+assert.match(
+  loadAllowedUsersSource,
+  /\(result\s*\|\|\s*\[\]\)\.map\(personFromAllowedUser\)/,
+  'allowed-users response must be mapped locally into lightweight rows'
+)
+assert.doesNotMatch(viewSource, /async function enrichPerson/)
+const permissionDetailsStart = viewSource.indexOf('async function loadPermissionDetails')
+const permissionDetailsEnd = viewSource.indexOf('async function retryPermissionDetails', permissionDetailsStart)
+const permissionDetailsSource = viewSource.slice(permissionDetailsStart, permissionDetailsEnd)
+for (const detailCall of [
+  'getUserRoles',
+  'getUserOrgRelations',
+  'getUserNodeGrants',
+  'listUserRoleScopes'
+]) {
+  assert.match(
+    permissionDetailsSource,
+    new RegExp(`${detailCall}\\(user\\.employeeId\\)`),
+    `permission detail must lazily load ${detailCall}`
+  )
+}
 assert.match(viewSource, /输入工号模糊查询/)
 assert.match(viewSource, /输入姓名模糊查询/)
 assert.match(systemApiSource, /getUserOrgRelations/)
@@ -472,6 +517,9 @@ assert.match(viewSource, /selectedRoleCodes/)
 assert.match(viewSource, /multiple/)
 for (const column of ['主组织', '部门', '班组', '已有角色']) {
   assert.ok(viewSource.includes(column), `人员列表缺少字段：${column}`)
+}
+for (const readOnlyPath of ['primaryOrgPath', 'departmentPath', 'groupPath']) {
+  assert.match(viewSource, new RegExp(`\\b${readOnlyPath}\\b`), `人员缺少只读 MDM 路径：${readOnlyPath}`)
 }
 
 // 授权配置必须严格按 操作角色 -> 业务 -> 节点 -> 操作 -> 范围 -> 组织 排列。
@@ -514,17 +562,24 @@ for (const field of [
   'grantSource',
   'effectiveFrom',
   'effectiveTo',
-  'grantReason',
-  'companyElevationConfirmed'
+  'grantReason'
 ]) {
   assert.match(nodePermissionTypeSource, new RegExp(`\\b${field}\\??:`), `授权请求缺少字段：${field}`)
 }
-assert.match(nodePermissionTypeSource, /'GROUP'\s*\|\s*'DEPARTMENT'\s*\|\s*'COMPANY'/)
+assert.match(nodePermissionTypeSource, /export type NodeGrantScopeType\s*=\s*'GROUP'\s*\|\s*'DEPARTMENT'/)
 assert.match(nodePermissionTypeSource, /'NORMAL_CONFIG'\s*\|\s*'MANUAL_ELEVATION'/)
+for (const contractName of ['NodeScopeGrantRequest', 'NodeScopeGrantDraft']) {
+  const contractSource = nodePermissionTypeSource.match(
+    new RegExp(`interface ${contractName}[\\s\\S]*?\\n}`)
+  )
+  assert.ok(contractSource, `missing ${contractName}`)
+  assert.match(contractSource[0], /scopeType:\s*NodeGrantScopeType/)
+  assert.doesNotMatch(contractSource[0], /COMPANY|companyElevationConfirmed/)
+}
 assert.match(
   nodePermissionTypeSource,
-  /interface NodeGrantVO[\s\S]*?\bstatus\??:/,
-  'historical grant VO must expose backend status'
+  /interface NodeGrantVO[\s\S]*?scopeType:\s*NodeScopeType[\s\S]*?\bstatus\??:/,
+  'historical grant VO must preserve COMPANY-compatible scope type and backend status'
 )
 
 for (const field of [
@@ -560,7 +615,7 @@ assert.doesNotMatch(
   /NodeGrantUserSnapshot|NodeGrantNodeSnapshot|NodeGrantOperationSnapshot|NodeGrantScopeSnapshot|existingGrantSnapshot|existingGrant\?:/
 )
 
-// 普通配置仅限班组，部门/公司提权必须预览、填写原因和有效期，公司还需明确确认。
+// 普通配置仅限班组，部门提权必须预览、填写原因和有效期。
 assert.match(viewSource, /NORMAL_CONFIG/)
 assert.match(viewSource, /MANUAL_ELEVATION/)
 assert.match(viewSource, /previewUserNodeGrant/)
@@ -572,9 +627,24 @@ assert.match(viewSource, /existingGrant\.rowVersion/)
 assert.match(viewSource, /effectiveFrom/)
 assert.match(viewSource, /effectiveTo/)
 assert.match(viewSource, /grantReason/)
-assert.match(viewSource, /companyElevationConfirmed/)
+assert.doesNotMatch(viewSource, /companyElevationConfirmed/)
 assert.match(viewSource, /validateNodeScopeGrantDraft/)
 assert.match(viewSource, /buildNodeScopeGrantRequest/)
+const scopeOptionsSource = viewSource.match(/const scopeOptions\s*=\s*\[[\s\S]*?\n]/)
+assert.ok(scopeOptionsSource, 'missing node-grant scope options')
+assert.match(scopeOptionsSource[0], /value:\s*'GROUP'/)
+assert.match(scopeOptionsSource[0], /value:\s*'DEPARTMENT'/)
+assert.doesNotMatch(scopeOptionsSource[0], /value:\s*'COMPANY'/)
+assert.doesNotMatch(viewSource, /公司提权|公司级提权|公司风险确认/)
+assert.doesNotMatch(nodePermissionApiSource, /companyElevationConfirmed/)
+
+for (const functionName of ['validateNodeScopeGrantDraft', 'buildNodeScopeGrantRequest']) {
+  const functionSource = nodePermissionTypeSource.match(
+    new RegExp(`export function ${functionName}[\\s\\S]*?\\n}`)
+  )
+  assert.ok(functionSource, `missing ${functionName}`)
+  assert.doesNotMatch(functionSource[0], /companyElevationConfirmed|scopeType\s*===\s*'COMPANY'/)
+}
 assert.match(
   viewSource,
   /watch\(\(\) => grantForm\.roleCode,[\s\S]*?buildNodeGrantRoleChange/,
@@ -595,7 +665,11 @@ assert.match(viewSource, /组织授权不适用/)
 assert.doesNotMatch(viewSource, /v-if="!externalAccount"\s+class="grant-list-section"/)
 assert.match(viewSource, /detailReady/)
 assert.match(viewSource, /重试/)
-assert.doesNotMatch(nodePermissionTypeSource, /scopeType[^\n]*PERSON/)
+const nodeScopeGrantRequestSource = nodePermissionTypeSource.match(
+  /interface NodeScopeGrantRequest[\s\S]*?\n}/
+)
+assert.ok(nodeScopeGrantRequestSource, 'missing node-scope grant request contract')
+assert.doesNotMatch(nodeScopeGrantRequestSource[0], /scopeType[^\n]*PERSON/)
 assert.doesNotMatch(nodePermissionApiSource, /scopeType[^\n]*PERSON/)
 
 // 授权记录可能只返回 id，表格行键必须兼容 grantId / id。
@@ -607,3 +681,272 @@ assert.match(viewSource, /record\.status === 'active'[\s\S]*?openDeleteGrant/)
 // 最终生效权限只展示后端预览/快照，不在前端推导候选数量或最终权限。
 assert.match(viewSource, /后端预览/)
 assert.doesNotMatch(viewSource, /candidateCount|effectivePermission\s*=|deriveEffectivePermission/)
+
+// New organization-scoped business configuration must stay inside the allowed
+// department tree. Historical node-grant reads may still expose COMPANY via
+// NodeScopeType, but new role scopes and selectable options must not.
+assert.match(
+  nodePermissionTypeSource,
+  /export type RoleScopeType\s*=\s*'DEPARTMENT'\s*\|\s*'GROUP'/,
+  'missing restricted DEPARTMENT/GROUP role-scope type'
+)
+assert.doesNotMatch(
+  nodePermissionTypeSource,
+  /export type RoleScopeType[^\n]*COMPANY/,
+  'new role scopes must not expose COMPANY'
+)
+const roleScopeTypeOptions = runtime.ROLE_SCOPE_TYPE_OPTIONS as Array<{ value: string }> | undefined
+assert.ok(Array.isArray(roleScopeTypeOptions), 'missing exported role-scope options')
+assert.deepEqual(
+  roleScopeTypeOptions.map((option) => option.value),
+  ['DEPARTMENT', 'GROUP'],
+  'new role-scope options must contain only DEPARTMENT and GROUP'
+)
+
+for (const field of [
+  'orgId',
+  'orgName',
+  'orgFullPath',
+  'orgType',
+  'parentOrgId',
+  'allowedDepartmentOrgId',
+  'children'
+]) {
+  assert.match(
+    nodePermissionTypeSource,
+    new RegExp(`interface AllowedOrganizationNodeVO[\\s\\S]*?\\b${field}\\??:`),
+    `allowed organization node is missing ${field}`
+  )
+}
+assert.match(
+  nodePermissionTypeSource,
+  /interface AllowedOrganizationNodeVO[\s\S]*?orgType:\s*RoleScopeType/,
+  'allowed organization tree must use the restricted DEPARTMENT/GROUP type'
+)
+
+for (const field of [
+  'roleCode',
+  'scopeType',
+  'scopeOrgId',
+  'audienceMode',
+  'grantSource',
+  'effectiveFrom',
+  'effectiveTo',
+  'grantReason',
+  'rowVersion'
+]) {
+  assert.match(
+    nodePermissionTypeSource,
+    new RegExp(`interface UserRoleScopeRequest[\\s\\S]*?\\b${field}\\??:`),
+    `role-scope request is missing ${field}`
+  )
+}
+assert.match(
+  nodePermissionTypeSource,
+  /interface UserRoleScopeRequest[\s\S]*?scopeType:\s*RoleScopeType/,
+  'role-scope requests must reject COMPANY at compile time'
+)
+
+for (const field of [
+  'id',
+  'userId',
+  'userName',
+  'roleCode',
+  'roleName',
+  'scopeType',
+  'scopeOrgId',
+  'scopeOrgName',
+  'scopeOrgPath',
+  'allowedDepartmentOrgId',
+  'audienceMode',
+  'grantSource',
+  'effectiveFrom',
+  'effectiveTo',
+  'grantReason',
+  'status',
+  'rowVersion'
+]) {
+  assert.match(
+    nodePermissionTypeSource,
+    new RegExp(`interface UserRoleScopeVO[\\s\\S]*?\\b${field}\\??:`),
+    `role-scope VO is missing ${field}`
+  )
+}
+for (const field of [
+  'roleWillBeAssigned',
+  'existingScopeId',
+  'existingStatus',
+  'existingRowVersion',
+  'warnings'
+]) {
+  assert.match(
+    nodePermissionTypeSource,
+    new RegExp(`interface UserRoleScopePreviewVO[\\s\\S]*?\\b${field}\\??:`),
+    `role-scope preview is missing ${field}`
+  )
+}
+
+for (const apiName of [
+  'listUserRoleScopes',
+  'previewUserRoleScope',
+  'saveUserRoleScope',
+  'updateUserRoleScope',
+  'revokeUserRoleScope',
+  'getEffectivePermissions',
+  'previewTaskCandidates'
+]) {
+  assert.match(
+    nodePermissionApiSource,
+    new RegExp(`export function ${apiName}\\b`),
+    `missing node-permission API ${apiName}`
+  )
+}
+for (const endpoint of [
+  '/role-scopes',
+  '/role-scopes/preview',
+  '/effective-permissions',
+  '/task-candidates/preview'
+]) {
+  assert.ok(nodePermissionApiSource.includes(endpoint), `missing endpoint ${endpoint}`)
+}
+assert.match(nodePermissionApiSource, /previewTaskCandidates[\s\S]*?method:\s*'GET'[\s\S]*?params:\s*query/)
+assert.match(nodePermissionApiSource, /saveUserRoleScope[\s\S]*?method:\s*'POST'/)
+assert.match(nodePermissionApiSource, /updateUserRoleScope[\s\S]*?encodeURIComponent\(scopeId\)[\s\S]*?method:\s*'PUT'/)
+assert.match(nodePermissionApiSource, /revokeUserRoleScope[\s\S]*?encodeURIComponent\(scopeId\)[\s\S]*?method:\s*'DELETE'[\s\S]*?rowVersion[\s\S]*?reason/)
+
+for (const apiName of ['getAllowedOrganizationTree', 'listAllowedOrganizationUsers']) {
+  assert.match(systemApiSource, new RegExp(`export function ${apiName}\\b`), `missing system API ${apiName}`)
+}
+assert.match(systemApiSource, /getAllowedOrganizationTree[\s\S]*?\/system\/org-scopes\/allowed-tree[\s\S]*?method:\s*'GET'/)
+assert.match(systemApiSource, /listAllowedOrganizationUsers[\s\S]*?\/system\/org-scopes\/users[\s\S]*?method:\s*'GET'[\s\S]*?orgIds/)
+
+// 权限弹窗的主配置是可重复的角色范围矩阵；同一角色允许多部门/多组，
+// 不得按人员 MDM 主部门或主组过滤授权目标。
+for (const apiName of [
+  'listUserRoleScopes',
+  'previewUserRoleScope',
+  'saveUserRoleScope',
+  'updateUserRoleScope',
+  'revokeUserRoleScope'
+]) {
+  assert.match(viewSource, new RegExp(`\\b${apiName}\\b`), `permission page missing ${apiName}`)
+}
+assert.match(viewSource, />角色范围</)
+assert.match(viewSource, />\s*新增角色范围\s*</)
+const roleScopeColumnsSource = viewSource.match(/const roleScopeColumns\s*=\s*\[[\s\S]*?\n]/)
+assert.ok(roleScopeColumnsSource, 'missing role-scope matrix columns')
+for (const column of ['角色', '范围类型', '组织', '覆盖模式', '来源', '有效期', '状态', '操作']) {
+  assert.ok(roleScopeColumnsSource[0].includes(`'${column}'`), `role-scope matrix missing column ${column}`)
+}
+for (const option of ['NORMAL_CONFIG', 'CROSS_ORG_ASSIGNMENT', 'MANUAL_ELEVATION']) {
+  assert.match(viewSource, new RegExp(`value:\\s*'${option}'`), `missing role-scope source ${option}`)
+}
+assert.match(viewSource, /roleScopeForm\.scopeType === 'GROUP'[\s\S]*?roleScopeForm\.audienceMode = 'EXACT'/)
+assert.match(viewSource, /roleScopeForm\.scopeType = 'DEPARTMENT'[\s\S]*?roleScopeForm\.audienceMode = 'SUBTREE'/)
+const roleScopeValidationSource = viewSource.match(
+  /function validateRoleScopeForm\(\)[\s\S]*?\n}/
+)
+assert.ok(roleScopeValidationSource, 'missing role-scope validation')
+assert.match(
+  roleScopeValidationSource[0],
+  /grantSource === 'CROSS_ORG_ASSIGNMENT'[\s\S]*?grantReason/,
+  'cross-organization assignment must require a reason'
+)
+assert.match(
+  roleScopeValidationSource[0],
+  /grantSource === 'MANUAL_ELEVATION'[\s\S]*?scopeType !== 'DEPARTMENT'[\s\S]*?grantReason[\s\S]*?effectiveTo/,
+  'manual elevation must require department scope, reason, and expiry'
+)
+assert.doesNotMatch(
+  roleScopeValidationSource[0],
+  /grantSource !== 'NORMAL_CONFIG'[\s\S]*?effectiveTo/,
+  'cross-organization assignments may be long-lived'
+)
+assert.match(viewSource, /previewUserRoleScope\([\s\S]*?roleScopePreview/)
+assert.match(viewSource, /saveUserRoleScope\([\s\S]*?updateUserRoleScope\(/)
+assert.match(viewSource, /updateUserRoleScope\([\s\S]*?rowVersion/)
+assert.match(viewSource, /revokeUserRoleScope\([\s\S]*?rowVersion[\s\S]*?reason/)
+assert.match(viewSource, /编辑/)
+assert.match(viewSource, /撤销/)
+assert.match(viewSource, /v-if="!externalAccount"[\s\S]*?>\s*新增角色范围\s*</)
+
+// 更新接口不允许改变角色、范围类型和组织。编辑模式下这三个业务键必须只读，
+// 新增模式 scopeId 为空时仍可正常选择。
+for (const immutableModel of [
+  'roleScopeForm.roleCode',
+  'roleScopeForm.scopeType',
+  'roleScopeForm.scopeOrgId'
+]) {
+  assert.match(
+    viewSource,
+    new RegExp(`v-model:value="${immutableModel.replace('.', '\\.')}"[\\s\\S]{0,700}?:disabled="roleScopeForm\\.scopeId != null"`),
+    `editing role scopes must lock ${immutableModel}`
+  )
+}
+
+// 既有节点授权仍保留在高级权限区域，写入范围只允许部门/组，组织树同样
+// 来自 allowed tree。外部账号不能新增，但历史矩阵和节点授权仍可撤销。
+assert.match(viewSource, />高级权限</)
+assert.match(viewSource, /previewUserNodeGrant/)
+assert.match(viewSource, /saveUserNodeGrant/)
+assert.match(viewSource, /deleteUserNodeGrant/)
+assert.match(viewSource, /ALLOW/)
+assert.match(viewSource, /DENY/)
+assert.doesNotMatch(viewSource, /value:\s*'COMPANY'/)
+assert.match(viewSource, /role-scope-table-scroll/)
+assert.match(viewSource, /grant-table-scroll/)
+
+// Candidate preview is a workflow/history compatibility contract. COMPANY is
+// retained here only; it must not leak into new role-scope types or options.
+assert.match(
+  nodePermissionTypeSource,
+  /export type TaskCandidateScopeType\s*=\s*'PERSON'\s*\|\s*'DEPARTMENT'\s*\|\s*'GROUP'\s*\|\s*'COMPANY'/,
+  'candidate preview scope compatibility must include PERSON/DEPARTMENT/GROUP/COMPANY'
+)
+
+for (const [branch, contracts] of [
+  ['PersonTaskCandidatePreviewQuery', [
+    /scopeType:\s*'PERSON'/,
+    /assigneeId:\s*string/,
+    /scopeOrgId\?:\s*never/,
+    /audienceMode\?:\s*'EXACT'/
+  ]],
+  ['DepartmentTaskCandidatePreviewQuery', [
+    /scopeType:\s*'DEPARTMENT'/,
+    /scopeOrgId:\s*string/,
+    /audienceMode:\s*RoleScopeAudienceMode/,
+    /assigneeId\?:\s*never/
+  ]],
+  ['ExactOrganizationTaskCandidatePreviewQuery', [
+    /scopeType:\s*'GROUP'\s*\|\s*'COMPANY'/,
+    /scopeOrgId:\s*string/,
+    /audienceMode\?:\s*'EXACT'/,
+    /assigneeId\?:\s*never/
+  ]]
+] as const) {
+  const branchMatch = nodePermissionTypeSource.match(
+    new RegExp(`interface ${branch}[\\s\\S]*?\\n}`)
+  )
+  assert.ok(branchMatch, `missing candidate preview branch ${branch}`)
+  for (const contract of contracts) {
+    assert.match(branchMatch[0], contract, `${branch} violates ${contract}`)
+  }
+}
+assert.match(
+  nodePermissionTypeSource,
+  /export type TaskCandidatePreviewQuery\s*=\s*\|\s*PersonTaskCandidatePreviewQuery\s*\|\s*DepartmentTaskCandidatePreviewQuery\s*\|\s*ExactOrganizationTaskCandidatePreviewQuery/,
+  'candidate preview query must be discriminated by scopeType'
+)
+
+assert.match(
+  nodePermissionTypeSource,
+  /interface AllowedOrganizationNodeVO[\s\S]*?orgFullPath\?:\s*string\s*\|\s*null/,
+  'allowed organization path must tolerate a missing MDM snapshot'
+)
+for (const field of ['scopeOrgPath', 'allowedDepartmentOrgId']) {
+  assert.match(
+    nodePermissionTypeSource,
+    new RegExp(`interface UserRoleScopeVO[\\s\\S]*?\\b${field}\\?:\\s*string\\s*\\|\\s*null`),
+    `role-scope display field ${field} must tolerate a missing snapshot`
+  )
+}

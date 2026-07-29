@@ -4,14 +4,18 @@ import { readFileSync } from 'node:fs'
 import { resolvePeriodicTaskAction } from '../src/views/periodic/periodicDisplayModel.ts'
 import { resolveSamplingTaskAction } from '../src/views/sampling/samplingDisplayModel.ts'
 
-function periodicTask(currentNode: string, allowedActions: string[]) {
-  return { currentNode, allowedActions }
+function periodicTask(currentNode: string, allowedActions: string[], physicalStatus?: string) {
+  return { currentNode, allowedActions, physicalStatus }
 }
 
 assert.equal(resolvePeriodicTaskAction(periodicTask('self_verify', [])), undefined)
 assert.equal(resolvePeriodicTaskAction(periodicTask('self_verify', ['SUBMIT'])), 'verify')
 assert.equal(resolvePeriodicTaskAction(periodicTask('admin_exception_route', ['SUBMIT_EXCEPTION'])), 'submit-exception')
 assert.equal(resolvePeriodicTaskAction(periodicTask('admin_exception_route', ['RECEIVE'])), undefined)
+assert.equal(
+  resolvePeriodicTaskAction(periodicTask('admin_exception_route', [], 'wait_verifier_receive')),
+  undefined
+)
 assert.equal(resolvePeriodicTaskAction(periodicTask('external_common_fill', ['SUBMIT'])), 'supplier-fill')
 assert.equal(resolvePeriodicTaskAction(periodicTask('external_uncommon_fill', ['SUBMIT'])), 'external-verify')
 assert.equal(resolvePeriodicTaskAction(periodicTask('send_out', ['SEND_OUT'])), undefined)
@@ -41,8 +45,11 @@ const periodicTable = readFileSync(
   'utf8'
 )
 assert.match(periodicWorkspace, /resolvePeriodicTaskAction/)
+assert.match(periodicWorkspace, /action === 'scan-receive'/)
+assert.match(periodicWorkspace, /module:\s*'periodic'/)
+assert.match(periodicWorkspace, /action:\s*'periodic-verifier-receive'/)
 assert.doesNotMatch(periodicWorkspace, /props\.role === 'verifier'|physicalStatus === 'wait_sendout_return_receive'/)
-assert.doesNotMatch(periodicWorkspace, /periodic-verifier-receive|periodic-external-send-out|periodic-send-out-return/)
+assert.doesNotMatch(periodicWorkspace, /periodic-external-send-out|periodic-send-out-return/)
 assert.match(periodicTable, /resolvePeriodicTaskAction/)
 assert.doesNotMatch(periodicTable, /allowedActions\?\.length/)
 

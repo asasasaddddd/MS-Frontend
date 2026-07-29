@@ -1,4 +1,6 @@
 import type {
+  ChangeScanAction,
+  ChangeScanInboxItem,
   FirstCheckScanAction,
   FirstCheckScanInboxItem,
   PeriodicScanAction,
@@ -6,10 +8,18 @@ import type {
   UnifiedScanInboxItem
 } from '@/types/scan'
 
+export const changeScanActions: ChangeScanAction[] = [
+  'change-verifier-receive',
+  'change-external-send-out',
+  'change-send-out-return',
+  'change-manager-take-back'
+]
+
 export const periodicScanActions: PeriodicScanAction[] = [
   'periodic-verifier-receive',
   'periodic-external-send-out',
-  'periodic-send-out-return'
+  'periodic-send-out-return',
+  'periodic-manager-take-back'
 ]
 
 const firstCheckScanActions: FirstCheckScanAction[] = [
@@ -26,7 +36,19 @@ const scanCodeByAction: Readonly<Record<string, string>> = {
   'take-back': 'TAKE_BACK',
   'periodic-verifier-receive': 'RECEIVE',
   'periodic-external-send-out': 'SEND_OUT',
-  'periodic-send-out-return': 'SEND_OUT_RETURN'
+  'periodic-send-out-return': 'SEND_OUT_RETURN',
+  'periodic-manager-take-back': 'TAKE_BACK',
+  'change-verifier-receive': 'RECEIVE',
+  'change-external-send-out': 'SEND_OUT',
+  'change-send-out-return': 'SEND_OUT_RETURN',
+  'change-manager-take-back': 'TAKE_BACK'
+}
+
+const changeNodeNameByAction: Readonly<Record<ChangeScanAction, string>> = {
+  'change-verifier-receive': '\u5f85\u68c0\u5b9a\u5458\u63a5\u6536',
+  'change-external-send-out': '\u5f85\u5916\u59d4\u9001\u51fa',
+  'change-send-out-return': '\u5f85\u5916\u59d4\u9001\u56de',
+  'change-manager-take-back': '\u5f85\u7ba1\u7406\u5458\u53d6\u56de'
 }
 
 function normalizedActionCodes(actions?: readonly string[]) {
@@ -54,6 +76,10 @@ function isFirstCheckAction(value: string): value is FirstCheckScanAction {
 
 export function isPeriodicScanAction(value: string): value is PeriodicScanAction {
   return periodicScanActions.includes(value as PeriodicScanAction)
+}
+
+export function isChangeScanAction(value: string): value is ChangeScanAction {
+  return changeScanActions.includes(value as ChangeScanAction)
 }
 
 export function normalizeFirstCheckInboxRow(
@@ -86,7 +112,8 @@ export function normalizePeriodicInboxRow(row: PeriodicScanInboxItem): UnifiedSc
   if (!row.scanned && !isUnifiedScanActionAllowed({ scanAction: action, allowedActions })) {
     return undefined
   }
-  const beforeUse = row.taskType === 'before_use'
+  const normalizedTaskType = String(row.taskType || row.sourceType || '').trim().toLowerCase()
+  const beforeUse = normalizedTaskType === 'before_use'
   const sourceType = String(row.sourceType || (beforeUse ? 'BEFORE_USE' : 'PERIODIC'))
     .trim()
     .toUpperCase()
@@ -100,6 +127,29 @@ export function normalizePeriodicInboxRow(row: PeriodicScanInboxItem): UnifiedSc
     orderNo: row.taskNo,
     taskId: row.taskId,
     currentNodeName: row.currentNodeName || (row.scanned ? '\u5df2\u626b\u7801' : '-'),
+    scanAction: action,
+    allowedActions
+  }
+}
+
+export function normalizeChangeInboxRow(row: ChangeScanInboxItem): UnifiedScanInboxItem | undefined {
+  const action = String(row.scanAction || '')
+  if (!isChangeScanAction(action)) return undefined
+  const allowedActions = normalizedActionCodes(row.allowedActions)
+  if (!row.scanned && !isUnifiedScanActionAllowed({ scanAction: action, allowedActions })) {
+    return undefined
+  }
+  return {
+    ...row,
+    id: ['change', row.orderId, row.itemId, action, row.scanCode || row.deviceCode || row.orderNo || ''].join('-'),
+    businessType: 'change',
+    sourceType: 'CHANGE',
+    sourceLabel: '\u72b6\u6001\u53d8\u66f4',
+    businessId: row.orderId,
+    orderId: row.orderId,
+    itemId: row.itemId,
+    deviceId: row.deviceId,
+    currentNodeName: row.currentNodeName || (row.scanned ? '\u5df2\u626b\u7801' : changeNodeNameByAction[action]),
     scanAction: action,
     allowedActions
   }

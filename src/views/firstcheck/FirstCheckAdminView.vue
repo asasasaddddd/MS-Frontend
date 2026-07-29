@@ -1,22 +1,26 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getFirstCheckDetail } from '@/api/firstcheck'
+import { listUnifiedScanInbox } from '@/api/scan'
 import { listWorkflowTasks } from '@/api/workflow'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
 import { useSessionStore } from '@/stores/session'
 import type { FirstCheckAdminRow, FirstCheckOrder } from '@/types/firstcheck'
+import type { UnifiedScanInboxItem } from '@/types/scan'
 import type { WorkflowTask } from '@/types/workflow'
 import { getWorkflowNodeName, isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
+import { getPendingFirstCheckTakeBackRows } from '@/views/workspaceTodoModel'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import FirstCheckCategoryDialog from '@/views/firstcheck/components/FirstCheckCategoryDialog.vue'
 import FirstCheckHistoryPanel from '@/views/firstcheck/components/FirstCheckHistoryPanel.vue'
 
-type StatusFilter = 'all' | 'manager_classify' | 'manager_revise'
+type StatusFilter = 'all' | 'manager_classify' | 'manager_revise' | 'take_back'
 
 const route = useRoute()
+const router = useRouter()
 const session = useSessionStore()
 const loading = ref(false)
 const rows = ref<FirstCheckAdminRow[]>([])
@@ -58,7 +62,8 @@ function matchesRouteOrder(task: WorkflowTask) {
 const statusOptions = [
   { label: '当前状态筛选', value: 'all' },
   { label: '待分类', value: 'manager_classify' },
-  { label: '退回待修改', value: 'manager_revise' }
+  { label: '退回待修改', value: 'manager_revise' },
+  { label: '待管理员取回', value: 'take_back' }
 ]
 
 const filteredRows = computed(() => {
@@ -71,6 +76,9 @@ const filteredRows = computed(() => {
     const matchesKeyword =
       !text ||
       (order.orderNo || '').includes(text) ||
+      (row.deviceCode || '').includes(text) ||
+      (row.scanCode || '').includes(text) ||
+      (row.deviceName || '').includes(text) ||
       (order.deviceName || '').includes(text) ||
       (order.materialCode || '').includes(text)
     return matchesStatus && matchesKeyword
@@ -81,6 +89,7 @@ const columns = [
   { title: '当前状态', dataIndex: 'statusLabel', key: 'statusLabel', width: 120 },
   { title: '首检编号', dataIndex: ['order', 'orderNo'], key: 'orderNo', width: 160 },
   { title: '申请时间', dataIndex: ['order', 'applyTime'], key: 'applyTime', width: 180 },
+  { title: '设备编号', dataIndex: ['order', 'deviceCode'], key: 'deviceCode', width: 150 },
   { title: '设备名称', dataIndex: ['order', 'deviceName'], key: 'deviceName', width: 150 },
   { title: '数量', dataIndex: ['order', 'quantity'], key: 'quantity', width: 86 },
   { title: '物料编码', dataIndex: ['order', 'materialCode'], key: 'materialCode', width: 150 },
@@ -126,6 +135,60 @@ function toRow(task: WorkflowTask, order: FirstCheckOrder): FirstCheckAdminRow {
   }
 }
 
+function matchesRouteScanOrder(row: UnifiedScanInboxItem) {
+  const orderId = routeOrderId.value
+  return !orderId || String(row.orderId || row.businessId || '') === orderId
+}
+
+function toTakeBackRow(row: UnifiedScanInboxItem): FirstCheckAdminRow {
+  const orderId = row.orderId ?? row.businessId ?? row.id
+  const deviceCode = row.deviceCode || row.scanCode
+  return {
+    key: `firstcheck-take-back-${row.id}`,
+    taskId: '',
+    taskRowVersion: '',
+    allowedActions: row.allowedActions,
+    nodeCode: 'take_back',
+    nodeName: row.currentNodeName || '待管理员取回',
+    statusLabel: '待管理员取回',
+    statusColor: 'orange',
+    isPhysicalScan: true,
+    scanAction: String(row.scanAction),
+    scanCode: row.scanCode,
+    deviceCode,
+    deviceName: row.deviceName,
+    materialCode: row.materialCode,
+    useDeptName: row.useDeptName,
+    lineNo: row.lineNo,
+    order: {
+      id: orderId,
+      orderNo: row.orderNo,
+      deviceCode,
+      deviceName: row.deviceName,
+      materialCode: row.materialCode,
+      materialName: row.materialCode,
+      applyDeptName: row.useDeptName,
+      applyTime: row.applyTime,
+      quantity: 1,
+      currentNodeName: row.currentNodeName || '待管理员取回',
+      scanStatus: row.scanStatus
+    }
+  }
+}
+
+function rowSortTime(row: FirstCheckAdminRow) {
+  const value = row.order.applyTime
+  if (!value) return 0
+  const parsed = new Date(value).getTime()
+  return Number.isFinite(parsed) ? parsed : 0
+}
+
+function sortRowsByTime(rows: FirstCheckAdminRow[]) {
+  return rows.sort((left, right) =>
+    rowSortTime(right) - rowSortTime(left) || String(right.key).localeCompare(String(left.key))
+  )
+}
+
 function resetFilter() {
   statusFilter.value = 'all'
   keyword.value = ''
@@ -133,6 +196,17 @@ function resetFilter() {
 
 function openDetail(row: FirstCheckAdminRow) {
   activeRow.value = row
+  if (row.isPhysicalScan) {
+    router.push({
+      path: '/scan',
+      query: {
+        module: 'firstcheck',
+        action: 'take-back',
+        orderId: String(row.order.id)
+      }
+    })
+    return
+  }
   if (row.allowedActions.includes('SUBMIT') || row.allowedActions.includes('RESUBMIT')) {
     categoryOpen.value = true
     return
@@ -149,24 +223,39 @@ function openDetail(row: FirstCheckAdminRow) {
  * @throws {ApiError} 工作流任务列表请求失败时抛出。
  */
 async function fetchTaskRows(): Promise<{ rows: FirstCheckAdminRow[]; tasks: WorkflowTask[] }> {
-  const tasks = await listWorkflowTasks('FIRST_CHECK')
+  const [workflowResult, scanResult] = await Promise.allSettled([
+    listWorkflowTasks('FIRST_CHECK'),
+    listUnifiedScanInbox()
+  ])
+  if (workflowResult.status === 'rejected' && scanResult.status === 'rejected') {
+    throw workflowResult.reason
+  }
+
+  const tasks = workflowResult.status === 'fulfilled' ? workflowResult.value : []
   const adminNodeSet = new Set<string>(workflowNodeGroups.firstcheck.admin)
   const firstCheckTasks = tasks.filter((task) => {
     const pending = isPendingWorkflowTask(task)
     return pending && matchesBusinessType(task.businessType, 'firstcheck') && adminNodeSet.has(task.nodeCode) && matchesRouteOrder(task)
   })
 
-  const details = await Promise.allSettled(
-    firstCheckTasks.map(async (task) => ({
-      task,
-      order: await getFirstCheckDetail(task.businessId, task.taskId)
-    }))
-  )
+  const details = firstCheckTasks.length > 0
+    ? await Promise.allSettled(
+        firstCheckTasks.map(async (task) => ({
+          task,
+          order: await getFirstCheckDetail(task.businessId, task.taskId)
+        }))
+      )
+    : []
 
   const taskRows = details
     .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: FirstCheckOrder }> => item.status === 'fulfilled')
     .map((item) => toRow(item.value.task, item.value.order))
-  return { rows: taskRows, tasks: firstCheckTasks }
+  const takeBackRows = scanResult.status === 'fulfilled'
+    ? getPendingFirstCheckTakeBackRows(scanResult.value)
+        .filter(matchesRouteScanOrder)
+        .map((row) => toTakeBackRow(row))
+    : []
+  return { rows: sortRowsByTime([...taskRows, ...takeBackRows]), tasks: firstCheckTasks }
 }
 
 /**
@@ -227,7 +316,7 @@ onMounted(loadRows)
         :data-source="filteredRows"
         :loading="loading"
         :pagination="{ pageSize: 10, showSizeChanger: false }"
-        :scroll="{ x: 1320 }"
+        :scroll="{ x: 1470 }"
         row-key="key"
         size="middle"
       >
@@ -241,20 +330,23 @@ onMounted(loadRows)
           <template v-else-if="column.key === 'orderNo'">
             {{ display(record.order.orderNo) }}
           </template>
+          <template v-else-if="column.key === 'deviceCode'">
+            {{ display(record.deviceCode || record.order.deviceCode) }}
+          </template>
           <template v-else-if="column.key === 'deviceName'">
-            {{ display(record.order.deviceName) }}
+            {{ display(record.deviceName || record.order.deviceName) }}
           </template>
           <template v-else-if="column.key === 'quantity'">
             {{ display(record.order.quantity) }}
           </template>
           <template v-else-if="column.key === 'materialCode'">
-            {{ display(record.order.materialCode) }}
+            {{ display(record.materialCode || record.order.materialCode) }}
           </template>
           <template v-else-if="column.key === 'materialName'">
             {{ display(record.order.materialName) }}
           </template>
           <template v-else-if="column.key === 'applyDeptName'">
-            {{ display(record.order.applyDeptName) }}
+            {{ display(record.useDeptName || record.order.applyDeptName) }}
           </template>
           <template v-else-if="column.key === 'action'">
             <a-button type="link" class="button-link" @click="openDetail(record)">处理</a-button>

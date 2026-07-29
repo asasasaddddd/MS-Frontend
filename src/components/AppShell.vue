@@ -183,7 +183,7 @@ onBeforeUnmount(() => {
       </a-layout-header>
 
       <a-layout-content class="app-content">
-        <router-view />
+        <router-view :key="route.fullPath" />
       </a-layout-content>
     </a-layout>
   </a-layout>

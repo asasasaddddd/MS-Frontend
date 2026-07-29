@@ -20,7 +20,8 @@ const PERIODIC_NODE_CODES = new Set<PeriodicNodeCode>([
   'verifier_scrap_disposal',
   'external_uncommon_fill',
   'manager_forward_confirm',
-  'confirmer_confirm'
+  'confirmer_confirm',
+  'admin_take_back'
 ])
 
 /** 将统一任务节点收窄为周检权威节点，拒绝跨业务和历史节点。 */
@@ -45,6 +46,7 @@ const periodicEndpoints = {
   verificationRecord: '/periodic/self-verify',
   managerForwardConfirm: '/periodic/manager-forward-confirm',
   confirmerConfirm: '/periodic/confirmer-confirm',
+  managerTakeBack: '/periodic/manager-take-back',
   exceptionChangeSubmit: '/periodic/exception-change/submit',
   supplierFillInfo: '/periodic/external-common-fill',
   verifierFillInfo: '/periodic/external-uncommon-fill',
@@ -87,7 +89,8 @@ export function periodicNodeName(value?: string) {
     verifier_scrap_disposal: '外委检定员报废处置',
     external_uncommon_fill: '外委检定员填写否通用设备信息',
     manager_forward_confirm: '管理员转办确认员',
-    confirmer_confirm: '确认员确认'
+    confirmer_confirm: '确认员确认',
+    admin_take_back: '管理员取回'
   }
   return value ? map[value] || value : '-'
 }

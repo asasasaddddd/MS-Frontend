@@ -1,5 +1,6 @@
 import { request } from '@/api/request'
 import type { PageResult } from '@/types/common'
+import type { AllowedOrganizationNodeVO } from '@/types/nodePermission'
 
 export interface SysUserVO {
   id?: number
@@ -10,6 +11,10 @@ export interface SysUserVO {
   phone?: string
   deptId?: string
   deptName?: string
+  groupId?: string
+  groupName?: string
+  jobFullName?: string
+  positionDesc?: string
   role?: string
   roles?: string[]
   status?: string
@@ -119,5 +124,22 @@ export function assignUserRoles(employeeId: string, roleCodes: string[]) {
     url: `/system/users/${encodeURIComponent(employeeId)}/roles`,
     method: 'PUT',
     data: { roleCodes }
+  })
+}
+
+export function getAllowedOrganizationTree() {
+  return request<AllowedOrganizationNodeVO[]>({
+    url: '/system/org-scopes/allowed-tree',
+    method: 'GET'
+  })
+}
+
+export function listAllowedOrganizationUsers(orgIds: string[] = []) {
+  return request<SysUserVO[]>({
+    url: '/system/org-scopes/users',
+    method: 'GET',
+    params: {
+      orgIds: orgIds.length ? orgIds.join(',') : undefined
+    }
   })
 }

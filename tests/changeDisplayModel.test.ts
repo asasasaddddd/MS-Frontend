@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 
 import {
   changeStatusName,
+  changeTypeMetas,
   changeTypeName,
   changeTypeTitle,
   formatCycleMonth,
@@ -14,7 +15,14 @@ import { buildChangeSubmitRequest } from '../src/api/changeContract.ts'
 assert.equal(changeTypeName('seal'), '封存')
 assert.equal(changeTypeName('cycle'), '检定周期调整')
 assert.equal(changeTypeTitle('precheck'), '用前检定')
+assert.equal(changeTypeName('defer'), '缓检')
+assert.equal(changeTypeTitle('defer'), '缓检')
 assert.equal(normalizeChangeType('scrap'), 'scrap')
+assert.deepEqual(
+  changeTypeMetas.map(({ value }) => value),
+  ['seal', 'enable', 'transfer', 'category', 'cycle', 'scrap', 'precheck'],
+  '缓检只能从周检发起，状态变更手工申请入口不得出现 defer'
+)
 
 assert.equal(normalizeCategory('A'), 'A类')
 assert.equal(normalizeCategory('B类'), 'B类')

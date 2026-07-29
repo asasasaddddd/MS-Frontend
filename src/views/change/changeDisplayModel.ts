@@ -1,6 +1,7 @@
 import type { ChangeItemSubmitRequest, ChangeItemVO, ChangeOrderVO, ChangeType } from '@/types/change'
 import type { DeviceVO } from '@/types/device'
 import type { EntityId } from '@/types/periodic'
+import { resolveDeviceCurrentStatus } from '../device/deviceCurrentStatusModel.ts'
 
 export interface ChangeTypeMeta {
   value: ChangeType
@@ -27,12 +28,16 @@ export const CHANGE_APPROVE_ACTION = 'APPROVE_REJECT'
 /** 状态变更检定节点的统一操作编码。 */
 export const CHANGE_VERIFY_ACTION = 'SUBMIT_REJECT'
 
+/** 管理员处理退回修订节点的统一操作编码。 */
+export const CHANGE_REVISE_ACTION = 'RESUBMIT'
+
 /** 判断后端是否允许当前身份执行指定节点操作。 */
 export function hasChangeAction(row: ChangeTaskRow, action: string) {
   return row.allowedActions.includes(action)
 }
 
-export const changeTypeMetas: ChangeTypeMeta[] = [
+/** 所有后端状态变更类型的展示元数据，包括只能由其他业务发起的类型。 */
+export const changeTypeDisplayMetas: ChangeTypeMeta[] = [
   { value: 'seal', label: '封存', title: '设备封存', applyTitle: '设备封存申请', primaryField: '封存原因', color: 'red' },
   { value: 'enable', label: '启用', title: '设备启用', applyTitle: '设备启用申请', primaryField: '启用原因', color: 'green' },
   { value: 'transfer', label: '设备转移', title: '设备转移', applyTitle: '设备转移申请', primaryField: '转移原因', color: 'blue' },
@@ -53,8 +58,12 @@ export const changeTypeMetas: ChangeTypeMeta[] = [
     color: 'orange'
   },
   { value: 'scrap', label: '非正常报废', title: '非正常报废', applyTitle: '非正常报废申请', primaryField: '报废原因', color: 'red' },
-  { value: 'precheck', label: '用前检定', title: '用前检定', applyTitle: '用前检定申请', primaryField: '检定原因', color: 'cyan' }
+  { value: 'precheck', label: '用前检定', title: '用前检定', applyTitle: '用前检定申请', primaryField: '检定原因', color: 'cyan' },
+  { value: 'defer', label: '缓检', title: '缓检', applyTitle: '缓检申请', primaryField: '缓检原因', color: 'orange' }
 ]
+
+/** 状态变更页面允许管理员手工发起的类型；缓检只能从周检流程发起。 */
+export const changeTypeMetas = changeTypeDisplayMetas.filter(({ value }) => value !== 'defer')
 
 export function normalizeChangeType(value?: string): ChangeType | string | undefined {
   return value
@@ -62,7 +71,7 @@ export function normalizeChangeType(value?: string): ChangeType | string | undef
 
 export function getChangeTypeMeta(value?: string) {
   const normalized = normalizeChangeType(value)
-  return changeTypeMetas.find((item) => item.value === normalized)
+  return changeTypeDisplayMetas.find((item) => item.value === normalized)
 }
 
 export function display(value: unknown) {
@@ -117,16 +126,15 @@ export function haveUniformOriginalCategory(devices: Array<Pick<DeviceVO, 'manag
 }
 
 export function deviceStatusName(value?: string) {
-  const map: Record<string, string> = {
-    in_use: '在用',
-    sealed: '封存',
-    pending_enable: '待启用',
-    scrapped: '已报废',
-    repairing: '维修中',
-    delayed: '缓检中',
-    pending_scrap: '待报废'
-  }
-  return value ? map[value] || value : '-'
+  return resolveDeviceCurrentStatus({ deviceStatus: value }).text
+}
+
+export function currentDeviceStatusName(device: DeviceVO) {
+  return resolveDeviceCurrentStatus(device).text
+}
+
+export function currentDeviceStatusColor(device: DeviceVO) {
+  return resolveDeviceCurrentStatus(device).color
 }
 
 export function verificationMethodName(value?: string) {
@@ -170,6 +178,7 @@ export function changeStatusName(value?: string) {
 export function changeNodeName(value?: string) {
   const map: Record<string, string> = {
     submit: '变更申请',
+    manager_revise: '管理员退回修订',
     dept_leader_approve: '部门主管审批',
     measure_leader_review: '计量领导审核',
     responsible_engineer_review: '责任工程师审核',

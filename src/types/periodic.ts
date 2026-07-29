@@ -17,6 +17,7 @@ export type PeriodicNodeCode =
   | 'external_uncommon_fill'
   | 'manager_forward_confirm'
   | 'confirmer_confirm'
+  | 'admin_take_back'
 
 export type PeriodicTaskStatus =
   | 'pending'
@@ -92,6 +93,8 @@ export interface PeriodicTaskVO {
   currentNodeName?: string
   physicalStatus?: string
   physicalStatusName?: string
+  scanAction?: string
+  isPhysicalScan?: boolean
   labelStatus?: string
   labelStatusName?: string
   labelRecordId?: EntityId
@@ -136,6 +139,8 @@ export interface PeriodicDisplayRow {
   currentNodeName: string
   taskStatus: string
   taskStatusName: string
+  physicalStatus: string
+  physicalStatusName: string
   deviceCode: string
   deviceName: string
   materialCode: string

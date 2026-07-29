@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
+import {
+  parsePeriodicNodeCode,
+  periodicEndpoint,
+  periodicNodeName
+} from '../src/api/periodicContract.ts'
 import { buildPeriodicExceptionChangeRequest } from '../src/views/periodic/periodicExceptionModel.ts'
 
 const apiSource = readFileSync(new URL('../src/api/periodic.ts', import.meta.url), 'utf8')
@@ -9,6 +14,10 @@ const typeSource = readFileSync(new URL('../src/types/periodic.ts', import.meta.
 const storeSource = readFileSync(new URL('../src/stores/periodic.ts', import.meta.url), 'utf8')
 const workspaceSource = readFileSync(
   new URL('../src/views/periodic/components/PeriodicTaskWorkspace.vue', import.meta.url),
+  'utf8'
+)
+const detailSource = readFileSync(
+  new URL('../src/views/periodic/components/PeriodicDetailDialog.vue', import.meta.url),
   'utf8'
 )
 const todoSource = readFileSync(new URL('../src/views/WorkspaceTodoView.vue', import.meta.url), 'utf8')
@@ -37,7 +46,15 @@ assert.match(storeSource, /fetchTask\(periodicTaskId: EntityId, workflowTaskId: 
 assert.match(storeSource, /getPeriodicTask\(periodicTaskId, workflowTaskId\)/)
 assert.match(workspaceSource, /getPeriodicTask\(task\.businessId, task\.taskId, signal\)/)
 assert.match(workspaceSource, /getPeriodicTask\(task\.id, task\.workflowTaskId/)
+assert.match(workspaceSource, /action === 'scan-receive'/)
+assert.match(workspaceSource, /action === 'scan-take-back'/)
+assert.match(workspaceSource, /action:\s*'periodic-manager-take-back'/)
+assert.match(workspaceSource, /mergePeriodicTaskPhysicalActions/)
+assert.doesNotMatch(workspaceSource, /function toPhysicalPeriodicTask/)
+assert.match(detailSource, /row\.physicalStatusName/)
 assert.match(todoSource, /getPeriodicTask\(task\.businessId, task\.taskId, signal\)/)
+assert.match(todoSource, /mergePeriodicTaskPhysicalActions/)
+assert.doesNotMatch(todoSource, /function toPeriodicPhysicalTask/)
 
 const nodeTypeBlock = typeSource.match(
   /export type PeriodicNodeCode =([\s\S]*?)\r?\n\r?\nexport type PeriodicTaskStatus/
@@ -58,7 +75,8 @@ const authoritativeNodeCodes = [
   'verifier_scrap_disposal',
   'external_uncommon_fill',
   'manager_forward_confirm',
-  'confirmer_confirm'
+  'confirmer_confirm',
+  'admin_take_back'
 ]
 for (const nodeCode of authoritativeNodeCodes) {
   assert.match(nodeTypeBlock, new RegExp(`'${nodeCode}'`))
@@ -82,6 +100,10 @@ for (const oldNodeCode of [
 assert.match(contractSource, /parsePeriodicNodeCode/)
 assert.match(contractSource, /admin_exception_route/)
 assert.doesNotMatch(contractSource, /^\s*(?:plan_confirm|verifier_receive|verification_record|supplier_fill_info|verifier_fill_info|exception_disposal):/m)
+assert.equal(parsePeriodicNodeCode('admin_take_back'), 'admin_take_back')
+assert.equal(periodicNodeName('admin_take_back'), '管理员取回')
+assert.equal(periodicEndpoint('managerTakeBack'), '/periodic/manager-take-back')
+assert.doesNotMatch(workspaceSource, /String\(task\.currentNode\)\s*===\s*'admin_take_back'/)
 
 assert.doesNotMatch(apiSource, /exceptionDisposePeriodic|PeriodicExceptionDisposeRequest|exceptionDispose/)
 assert.doesNotMatch(typeSource, /PeriodicExceptionDisposeRequest/)
@@ -89,6 +111,10 @@ assert.doesNotMatch(exceptionModelSource, /buildPeriodicExceptionDisposeRequest|
 assert.doesNotMatch(workspaceSource, /exceptionDisposePeriodic|buildPeriodicExceptionDisposeRequest|canDisposePeriodicException|confirmExceptionDispose/)
 assert.match(apiSource, /submitPeriodicExceptionChange\(data: PeriodicExceptionChangeSubmitRequest\)/)
 assert.match(typeSource, /interface PeriodicExceptionChangeSubmitRequest/)
+assert.match(apiSource, /function managerTakeBackPeriodic\(data: PeriodicScanRequest\)/)
+assert.match(apiSource, /periodicEndpoint\('managerTakeBack'\)/)
+assert.match(workflowDefinitionSource, /code:\s*'admin_take_back'/)
+assert.match(workflowDefinitionSource, /admin:\s*\[[^\]]*'admin_take_back'/s)
 
 const exceptionRequest = buildPeriodicExceptionChangeRequest(
   {

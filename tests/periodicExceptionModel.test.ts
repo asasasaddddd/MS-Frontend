@@ -55,9 +55,9 @@ const defer = buildPeriodicExceptionChangeRequest(task, applicant, {
   deferReason: '现场暂不具备送检条件',
   scrapType: 'damaged'
 })
-assert.equal(defer.changeType, 'precheck')
+assert.equal(defer.changeType, 'defer')
 assert.equal(defer.items[0].verificationReason, '现场暂不具备送检条件')
-assert.equal(defer.items[0].precheckRequired, 1)
+assert.equal('precheckRequired' in defer.items[0], false)
 assert.equal(periodicExceptionHandlingType('defer'), 'defer')
 
 const category = buildPeriodicExceptionChangeRequest(task, applicant, {

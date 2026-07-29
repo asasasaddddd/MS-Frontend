@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { SelectProps } from 'ant-design-vue'
 import { getFirstCheckDetail } from '@/api/firstcheck'
+import { listUnifiedScanInbox } from '@/api/scan'
 import { getChangeOrderDetail } from '@/api/change'
 import { getPeriodicTask } from '@/api/periodic'
 import { parsePeriodicNodeCode } from '@/api/periodicContract'
@@ -18,23 +19,34 @@ import type { SamplingTaskVO } from '@/types/sampling'
 import type { ProductSupportOrderVO } from '@/types/productSupport'
 import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { ChangeOrderVO } from '@/types/change'
+import type { UnifiedScanInboxItem } from '@/types/scan'
 import { useSessionStore } from '@/stores/session'
 import {
   isPendingWorkflowTask,
   matchesBusinessType
 } from '@/workflows/metrologyWorkflow'
-import { buildPeriodicPlanTodoGroups } from '@/views/periodic/periodicDisplayModel'
+import {
+  buildPeriodicPlanTodoGroups,
+  mergePeriodicTaskPhysicalActions
+} from '@/views/periodic/periodicDisplayModel'
 import { changeTypeName } from '@/views/change/changeDisplayModel'
 import {
+  countTodoItemsWithPhysicalActions,
+  countFirstCheckTodoItems,
+  countUniqueBusinessTasks,
   dedupeTodoEntriesByKey,
   filterTasksWithLoadedDetails,
   filterVisibleTodoEntries,
+  getPendingFirstCheckTakeBackRows,
   getChangeTaskRoute,
+  getWorkspaceFixedTodoRoute,
+  getWorkspaceRoleTodoPath,
   getWorkspaceLaunchActions,
   sumWorkspaceTodoCounts,
   uniqueTasksByBusinessId,
   visibleTodoTypeValues,
   workspaceTodoBusinessType,
+  workspaceTodoTypeFromQuery,
   type WorkspaceTodoType
 } from '@/views/workspaceTodoModel'
 
@@ -49,6 +61,7 @@ interface TodoDefinition {
   count: number
   unit: string
   color: TodoColor
+  alwaysVisible?: boolean
   roles: RoleCode[]
   routeByRole: Partial<Record<RoleCode, string>>
   query?: Record<string, string>
@@ -58,7 +71,7 @@ const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
 const activeBucket = ref<'todo' | 'history'>('todo')
-const selectedType = ref<TodoType>('all')
+const selectedType = ref<TodoType>(workspaceTodoTypeFromQuery(route.query.type))
 const keyword = ref('')
 const periodicTasks = ref<PeriodicTaskVO[]>([])
 const periodicHistoryTasks = ref<PeriodicTaskVO[]>([])
@@ -68,6 +81,7 @@ const productSupportTasks = ref<ProductSupportOrderVO[]>([])
 const productSupportHistoryTasks = ref<ProductSupportOrderVO[]>([])
 const firstCheckOrders = ref<Record<string, FirstCheckOrder>>({})
 const changeOrders = ref<Record<string, ChangeOrderVO>>({})
+const scanInboxRows = ref<UnifiedScanInboxItem[]>([])
 
 const roleCode = computed(() => session.user?.roleCode as RoleCode | undefined)
 const workflowIdentity = computed(() => {
@@ -96,14 +110,10 @@ const {
   views: ['todo', 'handled'],
   immediate: false
 })
-const actionableWorkflowTasks = computed(() => workflowTasks.value.filter(
-  (task) => hasWorkflowAction(task, task.operationCode)
-))
 const roleLabel = computed(() => {
   const role = session.user?.roleCode || ''
   return roleNameMap[role] || session.user?.roleName || role || '-'
 })
-const isVerifier = computed(() => roleCode.value === 'VERIFIER_SELF' || roleCode.value === 'VERIFIER_EXTERNAL')
 const launchActions = computed(() => getWorkspaceLaunchActions(roleCode.value))
 
 const filterOptions: SelectProps['options'] = [
@@ -115,68 +125,55 @@ const filterOptions: SelectProps['options'] = [
   { label: '产品配套', value: 'productSupport' }
 ]
 
-const periodicRouteByRole: Partial<Record<RoleCode, string>> = {
-  MEASURE_ADMIN: '/periodic/admin',
-  VERIFIER_SELF: '/periodic/verifier',
-  VERIFIER_EXTERNAL: '/periodic/verifier-external',
-  RESPONSIBLE_ENGINEER: '/periodic/responsible-engineer',
-  EXTERNAL_OPERATOR: '/periodic/external-operator',
-  CONFIRMER: '/periodic/confirmer'
-}
-
-const samplingRouteByRole: Partial<Record<RoleCode, string>> = {
-  PLANNER: '/sampling/plan',
-  MEASURE_ADMIN: '/sampling/admin',
-  VERIFIER_SELF: '/sampling/verifier',
-  CONFIRMER: '/sampling/confirmer'
-}
-
 const productSupportRouteByRole: Partial<Record<RoleCode, string>> = {
   VERIFIER_SELF: '/product-support/verifier',
   VERIFIER_EXTERNAL: '/product-support/verifier'
 }
 
-const firstCheckRouteByRole: Partial<Record<RoleCode, string>> = {
-  MEASURE_ADMIN: '/firstcheck/admin',
-  DEPT_LEADER: '/firstcheck/leader',
-  RESPONSIBLE_ENGINEER: '/firstcheck/engineer',
-  VERIFIER_SELF: '/firstcheck/verifier',
-  VERIFIER_EXTERNAL: '/firstcheck/verifier',
-  EXTERNAL_OPERATOR: '/scan'
-}
-
 const firstCheckTodoEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
-  const path = currentRole ? firstCheckRouteByRole[currentRole] : undefined
-  if (!currentRole || !path) return []
+  if (!currentRole) return []
+  const routeTarget = getWorkspaceFixedTodoRoute('firstcheck', currentRole)
 
-  const tasks = filterTasksWithLoadedDetails(
-    uniqueTasksByBusinessId(actionableWorkflowTasks.value
-      .filter((task) => isPendingWorkflowTask(task))
-      .filter((task) => matchesBusinessType(task.businessType, 'firstcheck'))),
-    firstCheckOrders.value
-  )
-  if (tasks.length === 0) return []
+  const tasks = uniqueTasksByBusinessId(workflowTasks.value
+    .filter((task) => isPendingWorkflowTask(task))
+    .filter((task) => matchesBusinessType(task.businessType, 'firstcheck')))
+  const taskCount = countUniqueBusinessTasks(tasks)
+  const firstCheckTakeBackRows = getPendingFirstCheckTakeBackRows(scanInboxRows.value)
+  const takeBackCount = firstCheckTakeBackRows.length
+  const totalFirstCheckTodoCount = countFirstCheckTodoItems(taskCount, firstCheckTakeBackRows)
+  const waitingReceiveCount = tasks.filter(
+    (task) => !hasWorkflowAction(task, task.operationCode)
+  ).length
+  const workflowDetailTitle = taskCount === 0
+    ? '当前共 0 张首检单待处理'
+    : waitingReceiveCount > 0
+      ? `当前共 ${taskCount} 张首检单待处理，其中 ${waitingReceiveCount} 张待接收`
+      : `当前共 ${taskCount} 张首检单待处理`
+  const detailTitle = takeBackCount > 0
+    ? `${workflowDetailTitle}，另有 ${takeBackCount} 台待取回`
+    : workflowDetailTitle
 
   return [{
     key: 'firstcheck-todo-summary',
     type: 'firstcheck' as const,
     title: '首次检定',
-    detailTitle: `当前共 ${tasks.length} 张首检单待处理`,
-    count: tasks.length,
-    unit: '单',
+    detailTitle,
+    count: totalFirstCheckTodoCount,
+    unit: '项',
     color: 'orange' as TodoColor,
+    alwaysVisible: true,
     roles: [currentRole],
-    routeByRole: { [currentRole]: path },
+    routeByRole: { [currentRole]: routeTarget.path },
     query: currentRole === 'EXTERNAL_OPERATOR'
       ? { module: 'firstcheck', action: 'sendout', view: 'list' }
-      : undefined
+      : routeTarget.query
   }]
 })
 
 const firstCheckHistoryEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
-  const path = currentRole ? firstCheckRouteByRole[currentRole] : undefined
+  const path = getWorkspaceRoleTodoPath('firstcheck', currentRole)
   if (!currentRole || !path || currentRole === 'EXTERNAL_OPERATOR') return []
 
   return filterTasksWithLoadedDetails(
@@ -205,27 +202,26 @@ const firstCheckHistoryEntries = computed<TodoDefinition[]>(() => {
 
 const changeTodoEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
-  const path = getChangeTaskRoute(currentRole)
-  if (!currentRole || !path) return []
+  if (!currentRole) return []
+  const routeTarget = getWorkspaceFixedTodoRoute('change', currentRole)
 
-  const tasks = filterTasksWithLoadedDetails(
-    uniqueTasksByBusinessId(actionableWorkflowTasks.value
-      .filter((task) => isPendingWorkflowTask(task))
-      .filter((task) => matchesBusinessType(task.businessType, 'change'))),
-    changeOrders.value
-  )
-  if (tasks.length === 0) return []
+  const tasks = uniqueTasksByBusinessId(workflowTasks.value
+    .filter((task) => isPendingWorkflowTask(task))
+    .filter((task) => matchesBusinessType(task.businessType, 'change')))
+  const taskCount = countUniqueBusinessTasks(tasks)
 
   return [{
     key: 'change-todo-summary',
     type: 'change' as const,
     title: '状态变更',
-    detailTitle: `当前共 ${tasks.length} 张状态变更单待处理`,
-    count: tasks.length,
+    detailTitle: `当前共 ${taskCount} 张状态变更单待处理`,
+    count: taskCount,
     unit: '单',
     color: 'blue' as TodoColor,
+    alwaysVisible: true,
     roles: [currentRole],
-    routeByRole: { [currentRole]: path }
+    routeByRole: { [currentRole]: routeTarget.path },
+    query: routeTarget.query
   }]
 })
 
@@ -281,34 +277,46 @@ function buildPeriodicPlanSubtitle(tasks: PeriodicTaskVO[]) {
 
 const periodicTodoEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
-  const path = currentRole ? periodicRouteByRole[currentRole] : undefined
-  if (!currentRole || !path) return []
+  if (!currentRole) return []
+  const routeTarget = getWorkspaceFixedTodoRoute('periodic', currentRole)
 
-  return buildPeriodicPlanTodoGroups(periodicTasks.value)
-    .map(({ planId, tasks, deviceCount }) => {
-      const color: TodoColor = tasks.some((task) =>
-        task.taskStatus === 'exception' || task.currentNode === 'verifier_scrap_disposal')
-        ? 'red'
-        : 'orange'
-      return {
-        key: `periodic-${planId}`,
-        type: 'periodic' as const,
-        title: `周检单 ${derivePeriodicPlanLabel(planId, tasks)}`,
-        detailTitle: buildPeriodicPlanSubtitle(tasks),
-        count: deviceCount,
-        unit: '台',
-        color,
-        roles: [currentRole],
-        routeByRole: { [currentRole]: path },
-        query: planId.startsWith('task-') ? undefined : { planId }
-      }
-    })
-    .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
+  const workflowPeriodicTasks = workflowTasks.value
+    .filter((task) => isPendingWorkflowTask(task))
+    .filter((task) => matchesBusinessType(task.businessType, 'periodic'))
+  const workflowDeviceCount = countUniqueBusinessTasks(workflowPeriodicTasks)
+  const physicalDeviceCount = countTodoItemsWithPhysicalActions(
+    workflowPeriodicTasks,
+    scanInboxRows.value,
+    'periodic'
+  )
+  const groups = buildPeriodicPlanTodoGroups(periodicTasks.value)
+  const detailDeviceCount = groups.reduce((sum, group) => sum + group.deviceCount, 0)
+  const deviceCount = Math.max(detailDeviceCount, workflowDeviceCount, physicalDeviceCount)
+  const color: TodoColor = periodicTasks.value.some((task) =>
+    task.taskStatus === 'exception' || task.currentNode === 'verifier_scrap_disposal')
+    ? 'red'
+    : 'orange'
+
+  return [{
+    key: 'periodic-todo-summary',
+    type: 'periodic' as const,
+    title: '周检计划',
+    detailTitle: groups.length === 0
+      ? '当前共 0 张周检单待处理'
+      : `当前共 ${groups.length} 张周检单、${deviceCount} 台设备待处理`,
+    count: deviceCount,
+    unit: '台',
+    color,
+    alwaysVisible: true,
+    roles: [currentRole],
+    routeByRole: { [currentRole]: routeTarget.path },
+    query: routeTarget.query
+  }]
 })
 
 const periodicHistoryEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
-  const path = currentRole ? periodicRouteByRole[currentRole] : undefined
+  const path = getWorkspaceRoleTodoPath('periodic', currentRole)
   if (!currentRole || !path) return []
   const handledTasks = periodicHistoryTasks.value
 
@@ -356,9 +364,13 @@ function buildSamplingPlanSubtitle(tasks: SamplingTaskVO[]) {
 
 const samplingTodoEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
-  const path = currentRole ? samplingRouteByRole[currentRole] : undefined
-  if (!currentRole || !path || currentRole === 'PLANNER') return []
+  if (!currentRole) return []
+  const routeTarget = getWorkspaceFixedTodoRoute('sampling', currentRole)
 
+  const workflowSamplingTasks = workflowTasks.value
+    .filter((task) => isPendingWorkflowTask(task))
+    .filter((task) => matchesBusinessType(task.businessType, 'sampling'))
+  const workflowDeviceCount = countUniqueBusinessTasks(workflowSamplingTasks)
   const groups = new Map<string, SamplingTaskVO[]>()
   samplingTasks.value.forEach((task) => {
     const key = samplingPlanGroupKey(task)
@@ -367,30 +379,33 @@ const samplingTodoEntries = computed<TodoDefinition[]>(() => {
     groups.set(key, list)
   })
 
-  return Array.from(groups.entries())
-    .map(([planId, tasks]) => {
-      const color: TodoColor = tasks.some((task) => task.taskStatus === 'rejected' || task.taskStatus === 'cancelled')
-        ? 'red'
-        : 'orange'
-      return {
-        key: `sampling-${planId}`,
-        type: 'sampling' as const,
-        title: `C类抽检计划 ${deriveSamplingPlanLabel(planId, tasks)}`,
-        detailTitle: buildSamplingPlanSubtitle(tasks),
-        count: tasks.length,
-        unit: '台',
-        color,
-        roles: [currentRole],
-        routeByRole: { [currentRole]: path },
-        query: planId.startsWith('task-') ? undefined : { planId }
-      }
-    })
-    .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
+  const detailDeviceCount = Array.from(groups.values())
+    .reduce((sum, tasks) => sum + tasks.length, 0)
+  const deviceCount = Math.max(detailDeviceCount, workflowDeviceCount)
+  const color: TodoColor = samplingTasks.value.some(
+    (task) => task.taskStatus === 'rejected' || task.taskStatus === 'cancelled'
+  ) ? 'red' : 'orange'
+
+  return [{
+    key: 'sampling-todo-summary',
+    type: 'sampling' as const,
+    title: 'C类物资抽检',
+    detailTitle: groups.size === 0
+      ? '当前共 0 张 C 类抽检单待处理'
+      : `当前共 ${groups.size} 张C类抽检单、${deviceCount} 台设备待处理`,
+    count: deviceCount,
+    unit: '台',
+    color,
+    alwaysVisible: true,
+    roles: [currentRole],
+    routeByRole: { [currentRole]: routeTarget.path },
+    query: routeTarget.query
+  }]
 })
 
 const samplingHistoryEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
-  const path = currentRole ? samplingRouteByRole[currentRole] : undefined
+  const path = getWorkspaceRoleTodoPath('sampling', currentRole)
   if (!currentRole || !path || currentRole === 'PLANNER') return []
 
   const groups = new Map<string, SamplingTaskVO[]>()
@@ -547,6 +562,7 @@ function clearWorkspaceSummary() {
   productSupportHistoryTasks.value = []
   firstCheckOrders.value = {}
   changeOrders.value = {}
+  scanInboxRows.value = []
 }
 
 /** 判断异步请求结果是否仍属于当前激活角色和最新加载代次。 */
@@ -560,12 +576,13 @@ async function loadWorkflowSummary() {
   clearWorkspaceSummary()
   if (!requestedRole) return
 
-  try {
-    await refreshWorkflowTasks()
-  } catch {
-    return
-  }
+  const [workflowResult, scanInboxResult] = await Promise.allSettled([
+    refreshWorkflowTasks(),
+    listUnifiedScanInbox()
+  ])
   if (!isCurrentWorkspaceLoad(loadId, requestedRole)) return
+  scanInboxRows.value = scanInboxResult.status === 'fulfilled' ? scanInboxResult.value : []
+  if (workflowResult.status === 'rejected') return
 
   const allTasks = [...workflowTasks.value, ...workflowHistoryTasks.value]
   const details = await loadWorkflowDetails<object>(allTasks, async (task, signal) => {
@@ -593,8 +610,12 @@ async function loadWorkflowSummary() {
     .map((task) => detailByTaskId.get(String(task.taskId)) as WorkflowBoundDetail<T> | undefined)
     .filter((detail): detail is WorkflowBoundDetail<T> => Boolean(detail))
 
-  periodicTasks.value = detailsFor<PeriodicTaskVO>(
-    workflowTasks.value.filter((task) => matchesBusinessType(task.businessType, 'periodic'))
+  const workflowPeriodicTodoTasks = workflowTasks.value.filter((task) =>
+    matchesBusinessType(task.businessType, 'periodic')
+  )
+  periodicTasks.value = mergePeriodicTaskPhysicalActions(
+    detailsFor<PeriodicTaskVO>(workflowPeriodicTodoTasks),
+    scanInboxRows.value
   ).map((task) => ({ ...task, currentNode: parsePeriodicNodeCode(task.currentNode) }))
   periodicHistoryTasks.value = detailsFor<PeriodicTaskVO>(
     workflowHistoryTasks.value.filter((task) => matchesBusinessType(task.businessType, 'periodic'))
@@ -631,6 +652,13 @@ function openLaunch(path: string) {
 watch(roleCode, () => {
   void loadWorkflowSummary()
 }, { immediate: true })
+
+watch(
+  () => route.query.type,
+  (type) => {
+    selectedType.value = workspaceTodoTypeFromQuery(type)
+  }
+)
 </script>
 
 <template>
@@ -661,7 +689,7 @@ watch(roleCode, () => {
         <h2>流程任务</h2>
       </template>
       <template #extra>
-        <a-tag v-if="isVerifier && activeBucket === 'todo'" class="count-pill orange">{{ pendingTotal }} 项待办</a-tag>
+        <a-tag v-if="activeBucket === 'todo'" class="count-pill orange">{{ pendingTotal }} 项待办</a-tag>
       </template>
 
       <a-tabs v-model:active-key="activeBucket" class="workspace-task-tabs" @change="resetFilter">

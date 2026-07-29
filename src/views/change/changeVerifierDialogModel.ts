@@ -1,7 +1,7 @@
 import type { ChangeOrderVO, ChangeType, ChangeVerifierHandleRequest } from '@/types/change'
 import type { EntityId } from '@/types/periodic'
 
-export type ChangeVerifierResult = 'qualified' | 'unqualified' | 'scrap' | 'repair'
+export type ChangeVerifierResult = 'qualified' | 'scrap' | 'repair'
 
 export interface ChangeVerifierDialogConfig {
   type: ChangeType
@@ -11,7 +11,7 @@ export interface ChangeVerifierDialogConfig {
   reasonPlaceholder: string
   showApplicationMeta: boolean
   showVerification: boolean
-  showNeedSend: boolean
+  validUntilRequired: boolean
   showCategoryTransition?: boolean
   showCycleTransition?: boolean
   showNewCycle?: boolean
@@ -19,7 +19,6 @@ export interface ChangeVerifierDialogConfig {
 
 export interface ChangeVerifierFormState {
   reason: string
-  needSend: boolean
   verificationDate: string
   validUntil: string
   result: ChangeVerifierResult
@@ -33,7 +32,7 @@ export interface ChangeVerifierFormState {
 const fullForm = {
   showApplicationMeta: true,
   showVerification: true,
-  showNeedSend: true
+  validUntilRequired: true
 } as const
 
 const configs: Record<Exclude<ChangeType, 'transfer'>, ChangeVerifierDialogConfig> = {
@@ -53,7 +52,7 @@ const configs: Record<Exclude<ChangeType, 'transfer'>, ChangeVerifierDialogConfi
     reasonPlaceholder: '请填写封存原因及说明',
     showApplicationMeta: false,
     showVerification: false,
-    showNeedSend: false
+    validUntilRequired: false
   },
   scrap: {
     type: 'scrap',
@@ -63,7 +62,7 @@ const configs: Record<Exclude<ChangeType, 'transfer'>, ChangeVerifierDialogConfi
     reasonPlaceholder: '请填写非正常报废原因及说明',
     showApplicationMeta: false,
     showVerification: false,
-    showNeedSend: false
+    validUntilRequired: false
   },
   category: {
     type: 'category',
@@ -91,6 +90,16 @@ const configs: Record<Exclude<ChangeType, 'transfer'>, ChangeVerifierDialogConfi
     reasonLabel: '用前检定原因',
     reasonPlaceholder: '请填写用前检定原因及说明',
     ...fullForm
+  },
+  defer: {
+    type: 'defer',
+    title: '缓检确认',
+    sectionTitle: '缓检信息',
+    reasonLabel: '缓检原因',
+    reasonPlaceholder: '请填写缓检原因及说明',
+    showApplicationMeta: false,
+    showVerification: false,
+    validUntilRequired: false
   }
 }
 
@@ -105,7 +114,6 @@ const periodicScrapReturn: ChangeVerifierDialogConfig = {
 
 export const verifierResultOptions = [
   { label: '合格', value: 'qualified' },
-  { label: '不合格', value: 'unqualified' },
   { label: '报废', value: 'scrap' },
   { label: '维修', value: 'repair' }
 ] as const
@@ -113,9 +121,16 @@ export const verifierResultOptions = [
 export function resolveChangeVerifierDialog(order?: ChangeOrderVO | null): ChangeVerifierDialogConfig {
   const type = order?.changeType as ChangeType | undefined
   const isPeriodicScrapReturn = type === 'scrap' && order?.items?.some((item) => item.scrapType === 'normal')
-  if (isPeriodicScrapReturn) return periodicScrapReturn
-  if (type && type !== 'transfer' && configs[type]) return configs[type]
-  return configs.precheck
+  const baseConfig = isPeriodicScrapReturn
+    ? periodicScrapReturn
+    : type && type !== 'transfer' && configs[type]
+      ? configs[type]
+      : configs.precheck
+  const items = order?.items || []
+  const oneTimeVerification = items.length > 0 && items.every((item) => item.confirmInterval === '一次检定')
+  return oneTimeVerification && baseConfig.showVerification
+    ? { ...baseConfig, validUntilRequired: false, showNewCycle: false }
+    : baseConfig
 }
 
 export function changeVerifierReason(order?: ChangeOrderVO | null) {
@@ -131,6 +146,7 @@ export function changeVerifierReason(order?: ChangeOrderVO | null) {
     case 'scrap':
       return item?.scrapReason || order.reason || ''
     case 'precheck':
+    case 'defer':
       return item?.verificationReason || order.reason || ''
     default:
       return order?.reason || ''
@@ -141,7 +157,7 @@ export function validateChangeVerifierForm(config: ChangeVerifierDialogConfig, f
   if (!form.reason.trim()) return `请填写${config.reasonLabel}`
   if (!config.showVerification) return ''
   if (!form.verificationDate) return '请选择检定日期'
-  if (!form.validUntil) return '请选择有效期'
+  if (config.validUntilRequired && !form.validUntil) return '请选择有效期'
   if (!form.result) return '请选择结果判定'
   if (config.showNewCycle && !form.newCycleMonth) return '请选择新检定周期'
   if ((form.result === 'scrap' || form.result === 'repair') && !form.responsibleEngineerId) {
@@ -157,19 +173,19 @@ export function buildChangeVerifierHandleRequest(
   if (order.taskId === undefined || order.rowVersion === undefined) {
     throw new Error('状态变更任务身份不完整，请刷新后重试')
   }
+  const config = resolveChangeVerifierDialog(order)
   return {
     orderId: order.id,
     taskId: order.taskId,
     rowVersion: order.rowVersion,
     verificationResult: form.result,
     verificationDate: form.verificationDate || undefined,
-    validUntil: form.validUntil || undefined,
+    ...(config.validUntilRequired && form.validUntil ? { validUntil: form.validUntil } : {}),
     certificateAttachmentGroupId: form.certificateAttachmentGroupId,
     reason: form.reason.trim(),
-    sendOutRequired: form.needSend ? 1 : 0,
     responsibleEngineerId: form.responsibleEngineerId,
     responsibleEngineerName: form.responsibleEngineerName,
-    newCycleMonth: form.newCycleMonth,
+    ...(config.showNewCycle && form.newCycleMonth ? { newCycleMonth: form.newCycleMonth } : {}),
     opinion: form.opinion.trim() || undefined
   }
 }

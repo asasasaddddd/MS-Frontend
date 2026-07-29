@@ -21,8 +21,11 @@ function formatCreatedAt(value?: string) {
 }
 
 async function openNotification(item: TodoNotification) {
-  if (!item.read) await todoNotifications.markRead(item.id)
-  await router.push(todoNotificationRoute(item, session.user?.roleCode))
+  const target = todoNotificationRoute(item, session.user?.roleCode)
+  await router.push(target)
+  if (!item.read) {
+    void todoNotifications.markRead(item.id).catch(() => undefined)
+  }
 }
 
 async function markAllRead() {
@@ -44,32 +47,36 @@ async function markAllRead() {
         </header>
 
         <a-spin :spinning="loading">
-          <div v-if="items.length > 0" class="notification-list">
-            <button
-              v-for="item in items"
-              :key="String(item.id)"
-              type="button"
-              :class="['notification-item', { unread: !item.read }]"
-              @click="openNotification(item)"
-            >
-              <span class="unread-dot"></span>
-              <span class="notification-copy">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.content || `共 ${item.itemCount || 1} 条待办` }}</span>
-                <small>{{ formatCreatedAt(item.createdAt) }}</small>
-              </span>
-            </button>
+          <div class="notification-content-frame">
+            <div v-show="items.length > 0" class="notification-list">
+              <button
+                v-for="item in items"
+                :key="String(item.id)"
+                type="button"
+                :class="['notification-item', { unread: !item.read }]"
+                @click="openNotification(item)"
+              >
+                <span class="unread-dot"></span>
+                <span class="notification-copy">
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.content || `共 ${item.itemCount || 1} 条待办` }}</span>
+                  <small>{{ formatCreatedAt(item.createdAt) }}</small>
+                </span>
+              </button>
+            </div>
+            <a-empty v-show="items.length === 0" class="notification-empty" description="暂无待办消息" />
           </div>
-          <a-empty v-else class="notification-empty" description="暂无待办消息" :image="null" />
         </a-spin>
       </section>
     </template>
 
-    <a-badge :count="unreadCount" :overflow-count="99" :offset="[-2, 4]">
-      <a-button class="notification-bell" type="text" aria-label="待办消息">
-        <BellOutlined />
-      </a-button>
-    </a-badge>
+    <span class="notification-bell-trigger">
+      <a-badge :count="unreadCount" :overflow-count="99" :offset="[-2, 4]">
+        <a-button class="notification-bell" type="text" aria-label="待办消息">
+          <BellOutlined />
+        </a-button>
+      </a-badge>
+    </span>
   </a-popover>
 </template>
 
@@ -83,6 +90,10 @@ async function markAllRead() {
   border-radius: 8px;
   color: #344054;
   font-size: 18px;
+}
+
+.notification-bell-trigger {
+  display: inline-flex;
 }
 
 .notification-panel {
@@ -118,6 +129,10 @@ async function markAllRead() {
 .notification-list {
   max-height: 420px;
   overflow: auto;
+}
+
+.notification-content-frame {
+  min-height: 88px;
 }
 
 .notification-item {

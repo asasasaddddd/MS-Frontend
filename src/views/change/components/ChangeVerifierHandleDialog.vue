@@ -50,7 +50,6 @@ const {
 
 const form = reactive<ChangeVerifierFormState>({
   reason: '',
-  needSend: false,
   verificationDate: '',
   validUntil: '',
   result: 'qualified',
@@ -115,15 +114,16 @@ function targetCycleMonth() {
 
 function syncValidUntil() {
   if (!config.value.showVerification) return
+  if (!config.value.validUntilRequired) {
+    form.validUntil = ''
+    if (!config.value.showNewCycle) form.newCycleMonth = undefined
+    return
+  }
   form.validUntil = calculateValidUntil(form.verificationDate, targetCycleMonth())
 }
 
 function close() {
   emit('update:open', false)
-}
-
-function toggleNeedSend() {
-  form.needSend = !form.needSend
 }
 
 function selectEngineer(employeeId?: string) {
@@ -178,20 +178,23 @@ watch(
 )
 
 watch(
-  () => props.open,
-  async (open) => {
+  [() => props.open, () => props.order?.id, () => props.order?.changeType],
+  async ([open]) => {
     if (!open) return
     const currentItem = item.value
     form.reason = changeVerifierReason(props.order)
-    form.needSend = currentItem?.sendOutRequired === 1
     form.verificationDate = localDate()
     form.result = 'qualified'
     form.responsibleEngineerId = currentItem?.responsibleEngineerId
     form.responsibleEngineerName = currentItem?.responsibleEngineerName
-    form.newCycleMonth = currentItem?.newCycleMonth || currentItem?.oldCycleMonth
+    form.newCycleMonth = config.value.showNewCycle
+      ? currentItem?.newCycleMonth || currentItem?.oldCycleMonth
+      : undefined
     form.opinion = ''
     form.certificateAttachmentGroupId = currentItem?.certificateAttachmentGroupId
-    form.validUntil = currentItem?.newValidUntil || calculateValidUntil(form.verificationDate, targetCycleMonth())
+    form.validUntil = config.value.validUntilRequired
+      ? currentItem?.newValidUntil || calculateValidUntil(form.verificationDate, targetCycleMonth())
+      : ''
     try {
       await loadProductionDictionaries()
     } catch (error) {
@@ -216,13 +219,6 @@ watch(
         <h1>{{ config.title }}</h1>
         <div class="modal-header-actions">
           <a-button @click="close">返回</a-button>
-          <a-button
-            v-if="config.showNeedSend"
-            :class="['need-send-button', { active: form.needSend }]"
-            @click="toggleNeedSend"
-          >
-            {{ form.needSend ? '已标记送检' : '需送检' }}
-          </a-button>
           <a-button type="primary" :loading="submitting" @click="submit">提交</a-button>
         </div>
       </div>
@@ -313,8 +309,8 @@ watch(
             <a-input v-model:value="form.verificationDate" type="date" />
           </div>
           <div class="form-row">
-            <label>有效期 <span class="required">*</span></label>
-            <a-input v-model:value="form.validUntil" type="date" />
+            <label>有效期 <span v-if="config.validUntilRequired" class="required">*</span></label>
+            <a-input v-model:value="form.validUntil" type="date" :placeholder="config.validUntilRequired ? '' : '一次检定无需填写'" />
           </div>
           <div v-if="config.showNewCycle" class="form-row">
             <label>新检定周期 <span class="required">*</span></label>
@@ -524,18 +520,6 @@ watch(
 .transition-arrow {
   color: #9ca3af;
   font-size: 16px;
-}
-
-.need-send-button {
-  border-color: #fedf89;
-  background: #fffaeb;
-  color: #b54708;
-}
-
-.need-send-button.active {
-  border-color: #175cd3;
-  background: #eef5ff;
-  color: #175cd3;
 }
 
 .modal-body :deep(.ant-input),

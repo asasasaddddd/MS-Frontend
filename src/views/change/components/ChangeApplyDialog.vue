@@ -4,7 +4,7 @@ import { message } from 'ant-design-vue'
 import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
 import type { AttachmentId } from '@/api/attachment'
 import { useProductionDictionaries } from '@/composables/useProductionDictionaries'
-import type { ChangeItemSubmitRequest, ChangeSubmitRequest, ChangeType } from '@/types/change'
+import type { ChangeItemSubmitRequest, ChangeOrderVO, ChangeSubmitRequest, ChangeType } from '@/types/change'
 import type { DeviceVO } from '@/types/device'
 import { useSessionStore } from '@/stores/session'
 import {
@@ -16,19 +16,21 @@ import {
   formatCycleMonth,
   normalizeCategory,
   normalizeCategoryCode,
-  todayIsoDate
+  todayIsoDate,
+  verificationMethodName
 } from '@/views/change/changeDisplayModel'
 
 const props = defineProps<{
   open: boolean
   type?: ChangeType
   devices: DeviceVO[]
+  order?: ChangeOrderVO | null
   submitting?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  submit: [payload: ChangeSubmitRequest]
+  submit: [payload: ChangeSubmitRequest & { opinion?: string }]
 }>()
 
 const session = useSessionStore()
@@ -49,6 +51,8 @@ const form = reactive({
   transferReason: '',
   categoryTargets: {} as Record<string, string | undefined>,
   newCycleMonth: undefined as number | undefined,
+  precheckRequired: undefined as number | undefined,
+  revisionOpinion: '',
   adjustmentReason: '',
   scrapType: 'other',
   scrapReason: '',
@@ -56,7 +60,7 @@ const form = reactive({
   attachmentGroupId: undefined as AttachmentId | undefined
 })
 
-const title = computed(() => changeTypeApplyTitle(props.type))
+const title = computed(() => props.order ? `${changeTypeApplyTitle(props.type)}修订` : changeTypeApplyTitle(props.type))
 const canSubmit = computed(() => Boolean(props.type) && props.devices.length > 0 && !props.submitting)
 const firstDevice = computed(() => props.devices[0])
 const currentCategory = computed(() => normalizeCategory(firstDevice.value?.manageCategory))
@@ -94,21 +98,36 @@ watch(
 
 function resetForm() {
   const now = new Date()
-  form.remark = ''
+  const firstItem = props.order?.items?.[0]
+  form.remark = props.order?.remark || ''
   form.applyDate = todayIsoDate()
   form.applyDateTime = `${todayIsoDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-  form.sealReason = ''
-  form.enableReason = ''
-  form.transferToDeptId = ''
-  form.transferToDeptName = undefined
-  form.transferReason = ''
-  form.categoryTargets = Object.fromEntries(props.devices.map((device) => [deviceRowKey(device), undefined]))
-  form.newCycleMonth = undefined
-  form.adjustmentReason = ''
-  form.scrapType = 'other'
-  form.scrapReason = ''
-  form.verificationReason = ''
-  form.attachmentGroupId = undefined
+  form.sealReason = firstItem?.sealReason || props.order?.reason || ''
+  form.enableReason = firstItem?.enableReason || props.order?.reason || ''
+  form.transferToDeptId = firstItem?.transferToDeptId || ''
+  form.transferToDeptName = firstItem?.transferToDeptName
+  form.transferReason = firstItem?.transferReason || props.order?.reason || ''
+  form.categoryTargets = Object.fromEntries(props.devices.map((device) => [
+    deviceRowKey(device),
+    revisionItemForDevice(device)?.newCategory
+  ]))
+  form.newCycleMonth = firstItem?.newCycleMonth
+  form.precheckRequired = props.type === 'category' || props.type === 'cycle'
+    ? firstItem?.precheckRequired ?? 0
+    : undefined
+  form.revisionOpinion = props.order ? '已按退回意见修订并重新提交' : ''
+  form.adjustmentReason = firstItem?.adjustmentReason || props.order?.reason || ''
+  form.scrapType = firstItem?.scrapType || 'other'
+  form.scrapReason = firstItem?.scrapReason || props.order?.reason || ''
+  form.verificationReason = firstItem?.verificationReason || props.order?.reason || ''
+  form.attachmentGroupId = props.order?.attachmentGroupId
+}
+
+function revisionItemForDevice(device: DeviceVO) {
+  return props.order?.items?.find((item) =>
+    (item.deviceId !== undefined && String(item.deviceId) === String(device.id)) ||
+    (item.deviceCode && item.deviceCode === device.deviceCode)
+  )
 }
 
 function close() {
@@ -150,6 +169,8 @@ function buildItem(device: DeviceVO): ChangeItemSubmitRequest | null {
   if (props.type === 'category') {
     return buildBaseChangeItem(device, {
       newCategory: normalizeCategoryCode(form.categoryTargets[deviceRowKey(device)]),
+      newVerificationMethod: device.verificationMethod,
+      precheckRequired: form.precheckRequired,
       adjustmentReason: form.adjustmentReason,
       remark: form.remark
     })
@@ -157,6 +178,8 @@ function buildItem(device: DeviceVO): ChangeItemSubmitRequest | null {
   if (props.type === 'cycle') {
     return buildBaseChangeItem(device, {
       newCycleMonth: form.newCycleMonth,
+      newVerificationMethod: device.verificationMethod,
+      precheckRequired: form.precheckRequired,
       adjustmentReason: form.adjustmentReason,
       remark: form.remark
     })
@@ -173,7 +196,7 @@ function buildItem(device: DeviceVO): ChangeItemSubmitRequest | null {
     return buildBaseChangeItem(device, {
       verificationReason: form.verificationReason,
       precheckRequired: 1,
-      sendOutRequired: 0,
+      newVerificationMethod: device.verificationMethod,
       remark: form.remark
     })
   }
@@ -203,18 +226,23 @@ function validate() {
         return false
       }
     }
-    return true
+    return required(form.precheckRequired, '请选择是否检定') && required(form.adjustmentReason, '请填写管理类别调整原因')
   }
   if (props.type === 'cycle') {
-    return required(form.newCycleMonth, '请选择调整后检定周期') && required(form.adjustmentReason, '请填写检定周期调整原因')
+    return required(form.newCycleMonth, '请选择调整后检定周期') &&
+      required(form.precheckRequired, '请选择是否检定') &&
+      required(form.adjustmentReason, '请填写检定周期调整原因')
   }
   if (props.type === 'scrap') return required(form.scrapReason, '请填写报废原因')
-  if (props.type === 'precheck') return required(form.verificationReason, '请填写用前检定原因')
+  if (props.type === 'precheck') {
+    return required(form.verificationReason, '请填写用前检定原因')
+  }
   return true
 }
 
 function submit() {
   if (!validate() || !props.type) return
+  if (props.order && !required(form.revisionOpinion, '请填写修订重提意见')) return
   const items = props.devices.map(buildItem).filter((item): item is ChangeItemSubmitRequest => Boolean(item))
   emit('submit', {
     changeType: props.type,
@@ -223,6 +251,7 @@ function submit() {
     reason: resolvePrimaryReason(),
     remark: form.remark,
     attachmentGroupId: form.attachmentGroupId,
+    opinion: form.revisionOpinion.trim() || undefined,
     items
   })
 }
@@ -312,7 +341,17 @@ function resolvePrimaryReason() {
                 </div>
               </div>
             </a-form-item>
+            <a-form-item label="调整原因" required>
+              <a-textarea v-model:value="form.adjustmentReason" placeholder="请填写管理类别调整原因" :rows="4" />
+            </a-form-item>
           </template>
+
+          <a-form-item v-if="type === 'category' || type === 'cycle'" label="是否检定" required>
+            <a-radio-group v-model:value="form.precheckRequired">
+              <a-radio :value="1">是，进入检定员处理</a-radio>
+              <a-radio :value="0">否，审批后直接落账</a-radio>
+            </a-radio-group>
+          </a-form-item>
 
           <template v-if="type === 'scrap'">
             <a-form-item label="报废类型">
@@ -356,6 +395,14 @@ function resolvePrimaryReason() {
           </template>
 
           <template v-if="type === 'precheck'">
+            <a-form-item label="检定方式">
+              <a-input
+                :value="verificationMethodName(firstDevice?.verificationMethod)"
+                size="large"
+                readonly
+              />
+              <p class="field-help">检定方式取自设备台账，申请时不可修改</p>
+            </a-form-item>
             <a-form-item label="检定原因" required>
               <a-textarea v-model:value="form.verificationReason" placeholder="请填写需要用前检定的原因说明" :rows="4" />
             </a-form-item>
@@ -375,6 +422,10 @@ function resolvePrimaryReason() {
               />
               <span>支持 pdf、doc、jpg，最多 10MB</span>
             </div>
+          </a-form-item>
+
+          <a-form-item v-if="order" label="修订重提意见" required>
+            <a-textarea v-model:value="form.revisionOpinion" placeholder="请说明本次修订内容" :rows="3" />
           </a-form-item>
         </a-form>
       </main>

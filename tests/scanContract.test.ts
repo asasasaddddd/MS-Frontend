@@ -146,6 +146,118 @@ const periodicRows = [
     allowedActions: [],
     scanned: true,
     scanTime: '2026-07-26T10:30:00'
+  },
+  {
+    taskId: '2006',
+    planId: '1000',
+    taskNo: 'ZJ-2006',
+    taskType: 'periodic',
+    scanAction: 'periodic-manager-take-back',
+    scanScene: 'periodic_take_back',
+    scanStatus: 'wait_manager_take_back',
+    allowedActions: ['TAKE_BACK'],
+    scanned: false
+  },
+  {
+    taskId: '2007',
+    planId: '1001',
+    taskNo: 'YQ-2007',
+    taskType: 'before_use',
+    sourceType: 'BEFORE_USE',
+    scanAction: 'periodic-verifier-receive',
+    scanScene: 'periodic_receive',
+    scanStatus: 'wait_verifier_receive',
+    allowedActions: ['RECEIVE'],
+    scanned: false
+  },
+  {
+    taskId: '2008',
+    planId: '1001',
+    taskNo: 'YQ-2008',
+    taskType: 'before_use',
+    sourceType: 'BEFORE_USE',
+    scanAction: 'periodic-external-send-out',
+    scanScene: 'periodic_send_out',
+    scanStatus: 'wait_external_receive',
+    allowedActions: ['SEND_OUT'],
+    scanned: false
+  },
+  {
+    taskId: '2009',
+    planId: '1001',
+    taskNo: 'YQ-2009',
+    sourceType: 'BEFORE_USE',
+    scanAction: 'periodic-manager-take-back',
+    scanScene: 'periodic_take_back',
+    scanStatus: 'wait_manager_take_back',
+    allowedActions: ['TAKE_BACK'],
+    scanned: false
+  }
+]
+
+const changeRows = [
+  {
+    orderId: '3001',
+    itemId: '3101',
+    orderNo: 'BG-3001',
+    changeType: 'category',
+    scanStatus: 'pending',
+    scanAction: 'change-verifier-receive',
+    scanScene: 'change_receive',
+    scanCode: 'JL-3001',
+    deviceId: '3201',
+    deviceCode: 'JL-3001',
+    deviceName: '\u72b6\u6001\u53d8\u66f4\u8bbe\u59071',
+    allowedActions: ['RECEIVE'],
+    scanned: false
+  },
+  {
+    orderId: '3002',
+    itemId: '3102',
+    orderNo: 'BG-3002',
+    changeType: 'cycle',
+    currentNodeName: '\u5f85\u5916\u59d4\u9001\u51fa',
+    scanStatus: 'pending',
+    scanAction: 'change-external-send-out',
+    scanScene: 'change_send_out',
+    scanCode: 'JL-3002',
+    deviceId: '3202',
+    deviceCode: 'JL-3002',
+    deviceName: '\u72b6\u6001\u53d8\u66f4\u8bbe\u59072',
+    allowedActions: ['SEND_OUT'],
+    scanned: false
+  },
+  {
+    orderId: '3003',
+    itemId: '3103',
+    orderNo: 'BG-3003',
+    changeType: 'category',
+    currentNodeName: '\u5f85\u5916\u59d4\u9001\u56de',
+    scanStatus: 'pending',
+    scanAction: 'change-send-out-return',
+    scanScene: 'change_send_out_return',
+    scanCode: 'JL-3003',
+    deviceId: '3203',
+    deviceCode: 'JL-3003',
+    deviceName: '\u72b6\u6001\u53d8\u66f4\u8bbe\u59073',
+    allowedActions: ['SEND_OUT_RETURN'],
+    scanned: false
+  },
+  {
+    orderId: '3004',
+    itemId: '3104',
+    orderNo: 'BG-3004',
+    changeType: 'cycle',
+    currentNodeName: '\u5f85\u7ba1\u7406\u5458\u53d6\u56de',
+    scanStatus: 'pending',
+    scanAction: 'change-manager-take-back',
+    scanScene: 'change_take_back',
+    scanCode: 'JL-3004',
+    deviceId: '3204',
+    deviceCode: 'JL-3004',
+    deviceName: '\u72b6\u6001\u53d8\u66f4\u8bbe\u59074',
+    allowedActions: ['TAKE_BACK'],
+    scanned: false
   }
 ]
 
@@ -153,7 +265,10 @@ resetScanTestDoubles()
 setScanRequestHandler((config) => {
   if (config.url === '/scan/firstcheck/inbox') return firstCheckRows
   if (config.url === '/periodic/scan/inbox') return periodicRows
+  if (config.url === '/change/scan-inbox') return changeRows
   if (config.url === '/scan/firstcheck/receive' && config.method === 'POST') return {}
+  if (config.url === '/periodic/manager-take-back' && config.method === 'POST') return undefined
+  if (String(config.url).startsWith('/change/') && config.method === 'POST') return undefined
   throw new Error(`unexpected request: ${String(config.url)}`)
 })
 
@@ -165,7 +280,7 @@ assert.equal(scanRequestCalls.some((call) => call.url === '/workflow/tasks'), fa
 assert.equal(scanRequestCalls.some((call) => call.url === '/scan/business/records'), false)
 assert.deepEqual(
   scanRequestCalls.map((call) => call.url).sort(),
-  ['/periodic/scan/inbox', '/scan/firstcheck/inbox']
+  ['/change/scan-inbox', '/periodic/scan/inbox', '/scan/firstcheck/inbox']
 )
 assert.equal(scanRequestCalls.every((call) => call.signal === controller.signal), true)
 
@@ -178,7 +293,15 @@ assert.deepEqual(
     'take-back',
     'periodic-verifier-receive',
     'periodic-external-send-out',
-    'periodic-send-out-return'
+    'periodic-send-out-return',
+    'periodic-manager-take-back',
+    'periodic-verifier-receive',
+    'periodic-external-send-out',
+    'periodic-manager-take-back',
+    'change-verifier-receive',
+    'change-external-send-out',
+    'change-send-out-return',
+    'change-manager-take-back'
   ]
 )
 assert.equal(rows.some((row) => row.orderId === 1005), false)
@@ -201,23 +324,107 @@ assert.deepEqual(periodicHistory?.allowedActions, [])
 assert.equal(periodicHistory?.scanTime, '2026-07-26T10:30:00')
 assert.equal(periodicHistory?.sourceType, 'PERIODIC')
 
+const beforeUseRows = rows.filter((row) => row.sourceType === 'BEFORE_USE')
+assert.deepEqual(beforeUseRows.map((row) => row.taskId), ['2007', '2008', '2009'])
+assert.equal(beforeUseRows.every((row) => row.sourceLabel === '用前检定'), true)
+assert.equal(beforeUseRows.some((row) => row.scanAction === 'periodic-manager-take-back'), true)
+assert.equal(scan.scanActionName('periodic-external-send-out'), '外委送出')
+
+const periodicTakeBack = rows.find((row) => row.taskId === '2006')!
+assert.equal(periodicTakeBack.scanAction, 'periodic-manager-take-back')
+assert.equal(periodicTakeBack.scanScene, 'periodic_take_back')
+await scan.submitUnifiedScan(periodicTakeBack, { scanCode: 'JL-2006', opinion: 'taken back' })
+const periodicTakeBackSubmit = scanRequestCalls.find(
+  (call) => call.url === '/periodic/manager-take-back'
+)
+assert.equal(periodicTakeBackSubmit?.data.taskId, '2006')
+assert.equal(periodicTakeBackSubmit?.data.scanCode, 'JL-2006')
+assert.equal(periodicTakeBackSubmit?.data.scanContent, 'JL-2006')
+
+const normalizedChangeRows = rows.filter((row) => row.businessType === 'change')
+assert.deepEqual(
+  normalizedChangeRows.map((row) => row.scanAction),
+  [
+    'change-verifier-receive',
+    'change-external-send-out',
+    'change-send-out-return',
+    'change-manager-take-back'
+  ]
+)
+assert.equal(normalizedChangeRows.every((row) => row.sourceType === 'CHANGE'), true)
+assert.equal(normalizedChangeRows.every((row) => row.sourceLabel === '\u72b6\u6001\u53d8\u66f4'), true)
+assert.equal(normalizedChangeRows[0]?.currentNodeName, '\u5f85\u68c0\u5b9a\u5458\u63a5\u6536')
+assert.deepEqual(
+  normalizedChangeRows.map((row) => [row.orderId, row.itemId, row.deviceId]),
+  changeRows.map((row) => [row.orderId, row.itemId, row.deviceId])
+)
+
+for (const row of normalizedChangeRows) {
+  await scan.submitUnifiedScan(row, {
+    scanCode: ` ${row.deviceCode} `,
+    opinion: 'physical handover'
+  })
+}
+const changeSubmitCalls = scanRequestCalls.filter(
+  (call) => String(call.url).startsWith('/change/') && call.method === 'POST'
+)
+assert.deepEqual(
+  changeSubmitCalls.map((call) => call.url),
+  [
+    '/change/verifier-receive',
+    '/change/external-send-out',
+    '/change/send-out-return',
+    '/change/manager-take-back'
+  ]
+)
+assert.deepEqual(
+  changeSubmitCalls.map((call) => [call.data.orderId, call.data.itemId, call.data.deviceId]),
+  changeRows.map((row) => [row.orderId, row.itemId, row.deviceId])
+)
+assert.equal(changeSubmitCalls.every((call) => call.data.scanCode === call.data.scanCode.trim()), true)
+
 const unauthorizedRow = {
   ...rows.find((row) => row.orderId === largeFirstCheckOrderId)!,
   allowedActions: ['SEND_OUT']
 }
+const callsBeforeUnauthorizedSubmit = scanRequestCalls.length
 await assert.rejects(
   scan.submitUnifiedScan(unauthorizedRow, { scanCode: 'FC-1001' }),
   /not authorized|unauthorized|无权|权限/i
 )
+assert.equal(scanRequestCalls.length, callsBeforeUnauthorizedSubmit)
 
 const largeIdRow = rows.find((row) => row.orderId === largeFirstCheckOrderId)!
-await scan.submitUnifiedScan(largeIdRow, { scanCode: 'FC-1001' })
+await scan.submitUnifiedScan(largeIdRow, { scanCode: ' FC-1001 ' })
 const largeIdSubmit = scanRequestCalls.find((call) => call.url === '/scan/firstcheck/receive')
 assert.equal(largeIdSubmit?.data.orderId, largeFirstCheckOrderId)
+assert.equal(largeIdSubmit?.data.scanCode, 'FC-1001')
+
+const inboxFixtures = new Map([
+  ['/scan/firstcheck/inbox', firstCheckRows.slice(0, 1)],
+  ['/periodic/scan/inbox', periodicRows.slice(0, 1)],
+  ['/change/scan-inbox', changeRows.slice(0, 1)]
+])
+const businessTypeByInbox = new Map([
+  ['/scan/firstcheck/inbox', 'firstcheck'],
+  ['/periodic/scan/inbox', 'periodic'],
+  ['/change/scan-inbox', 'change']
+])
+for (const failedUrl of inboxFixtures.keys()) {
+  resetScanTestDoubles()
+  setScanRequestHandler((config) => {
+    if (config.url === failedUrl) throw new Error(`inbox unavailable: ${failedUrl}`)
+    return inboxFixtures.get(String(config.url)) || []
+  })
+  const remainingRows = await scan.listUnifiedScanInbox()
+  assert.equal(remainingRows.some((row) => row.businessType === businessTypeByInbox.get(failedUrl)), false)
+  assert.equal(new Set(remainingRows.map((row) => row.businessType)).size, 2)
+}
 
 const scanSource = readFileSync(new URL('../src/api/scan.ts', import.meta.url), 'utf8')
 assert.doesNotMatch(scanSource, /queryWorkflowTasks|\/workflow\/tasks/)
 assert.doesNotMatch(scanSource, /getPeriodicTask|listBusinessScanRecords\(/)
+assert.match(scanSource, /row\.scanAction === 'periodic-manager-take-back'/)
 
 const scanTypesSource = readFileSync(new URL('../src/types/scan.ts', import.meta.url), 'utf8')
 assert.doesNotMatch(scanTypesSource, /orderId\??:\s*number/)
@@ -226,3 +433,7 @@ assert.match(scanTypesSource, /orderId:\s*ScanEntityId/)
 const scanViewSource = readFileSync(new URL('../src/views/scan/DeviceScanView.vue', import.meta.url), 'utf8')
 assert.match(scanViewSource, /listUnifiedScanInbox\(controller\.signal\)/)
 assert.match(scanViewSource, /rowsController\?\.abort\(\)/)
+assert.match(scanViewSource, /routeRequestKey/)
+assert.match(scanViewSource, /watch\(\s*\[workflowIdentity, routeRequestKey\]/)
+assert.match(scanViewSource, /onActivated\(/)
+assert.doesNotMatch(scanViewSource, /VERIFIER_SELF|VERIFIER_EXTERNAL|MEASURE_ADMIN|EXTERNAL_OPERATOR/)

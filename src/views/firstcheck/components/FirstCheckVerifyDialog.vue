@@ -16,10 +16,10 @@ import {
   resizeQualifiedDeviceRows,
   type QualifiedFirstCheckDeviceRow
 } from '@/views/firstcheck/firstCheckQualifiedDeviceModel'
+import { deriveVerificationResult } from '@/views/firstcheck/firstCheckVerificationResultModel'
 import type {
   DeviceCodeReservation,
   FirstCheckOrder,
-  VerificationResult,
   VerifierVerifyAndAssignRequest
 } from '@/types/firstcheck'
 
@@ -57,7 +57,6 @@ const {
 } = useProductionDictionaries()
 
 const form = reactive({
-  verificationResult: 'qualified' as VerificationResult,
   qualifiedQuantity: undefined as number | undefined,
   unqualifiedQuantity: 0,
   confirmerId: undefined as string | undefined,
@@ -179,7 +178,6 @@ function clearReservation() {
 
 function resetForm(order?: FirstCheckOrder) {
   resetting = true
-  form.verificationResult = (order?.verificationResult as VerificationResult) || 'qualified'
   form.qualifiedQuantity = order?.qualifiedQuantity ?? order?.quantity ?? undefined
   form.unqualifiedQuantity = order?.unqualifiedQuantity ?? 0
   form.confirmerId = order?.confirmerId
@@ -292,14 +290,15 @@ function optionalText(value: string) {
 
 function buildPayload(order: FirstCheckOrder): VerifierVerifyAndAssignRequest {
   const qualifiedQuantity = Number(form.qualifiedQuantity || 0)
+  const unqualifiedQuantity = Number(form.unqualifiedQuantity || 0)
   return {
     orderId: order.id,
     taskId: props.taskId!,
     taskRowVersion: props.taskRowVersion!,
     reservationId: qualifiedQuantity > 0 ? reservation.value?.reservationId : undefined,
-    verificationResult: form.verificationResult,
-    qualifiedQuantity: Number(form.qualifiedQuantity || 0),
-    unqualifiedQuantity: Number(form.unqualifiedQuantity || 0),
+    verificationResult: deriveVerificationResult(qualifiedQuantity, unqualifiedQuantity),
+    qualifiedQuantity,
+    unqualifiedQuantity,
     confirmerId: requiresConfirmer.value ? form.confirmerId : undefined,
     deviceName: optionalText(form.deviceName),
     modelSpec: optionalText(form.modelSpec),
@@ -470,7 +469,7 @@ onUnmounted(stopReservationClock)
         </div>
         <div class="dialog-title-actions">
           <a-button @click="close">取消</a-button>
-          <a-button type="primary" :loading="submitting" :disabled="!reservationReady" @click="submit">
+          <a-button type="primary" :loading="submitting" :disabled="Number(form.qualifiedQuantity || 0) > 0 && !reservationReady" @click="submit">
             提交检定并赋码
           </a-button>
         </div>
@@ -508,18 +507,7 @@ onUnmounted(stopReservationClock)
           <a-tag class="tag orange">待填写</a-tag>
         </div>
         <div class="form-grid cols-4">
-          <label>
-            <span>检定结果</span>
-            <a-select
-              v-model:value="form.verificationResult"
-              :options="[
-                { label: '合格', value: 'qualified' },
-                { label: '不合格', value: 'unqualified' },
-                { label: '部分合格', value: 'partial' }
-              ]"
-            />
-          </label>
-          <label><span>合格数量</span><a-input-number v-model:value="form.qualifiedQuantity" :min="1" style="width:100%" /></label>
+          <label><span>合格数量</span><a-input-number v-model:value="form.qualifiedQuantity" :min="0" style="width:100%" /></label>
           <label><span>不合格数量</span><a-input-number v-model:value="form.unqualifiedQuantity" :min="0" style="width:100%" /></label>
           <label v-if="requiresConfirmer">
             <span>确认员</span>
@@ -660,7 +648,7 @@ onUnmounted(stopReservationClock)
             <h2>合格设备逐台信息</h2>
             <span class="panel-subtitle">{{ reservationLabel }}</span>
           </div>
-          <a-button type="primary" ghost :loading="reserving" @click="generateDeviceCodes">
+          <a-button v-if="Number(form.qualifiedQuantity || 0) > 0" type="primary" ghost :loading="reserving" @click="generateDeviceCodes">
             {{ reservation ? '重新生成计量编号' : '生成计量编号' }}
           </a-button>
         </div>

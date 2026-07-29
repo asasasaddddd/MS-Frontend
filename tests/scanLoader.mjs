@@ -3,9 +3,16 @@ import { resolve as resolvePath } from 'node:path'
 
 const root = resolvePath(new URL('..', import.meta.url).pathname.slice(1))
 const doublesUrl = pathToFileURL(resolvePath(root, 'tests/scanTestDoubles.ts')).href
+const requestUrl = pathToFileURL(resolvePath(root, 'src/api/request.ts')).href
+
+function isRequestModule(specifier) {
+  return specifier === '@/api/request'
+    || specifier === requestUrl
+    || specifier.replaceAll('\\', '/').endsWith('/src/api/request.ts')
+}
 
 export async function resolve(specifier, context, nextResolve) {
-  if (specifier === '@/api/request' || specifier === '@/api/periodic' || specifier === '@/api/workflow') {
+  if (isRequestModule(specifier)) {
     return { url: doublesUrl, shortCircuit: true }
   }
 

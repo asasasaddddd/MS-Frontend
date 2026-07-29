@@ -6,10 +6,27 @@ export type PeriodicScanAction =
   | 'periodic-verifier-receive'
   | 'periodic-external-send-out'
   | 'periodic-send-out-return'
+  | 'periodic-manager-take-back'
 
-export type PeriodicScanScene = 'periodic_receive' | 'periodic_send_out' | 'periodic_send_out_return'
+export type PeriodicScanScene =
+  | 'periodic_receive'
+  | 'periodic_send_out'
+  | 'periodic_send_out_return'
+  | 'periodic_take_back'
 
-export type UnifiedScanAction = FirstCheckScanAction | PeriodicScanAction | string
+export type ChangeScanAction =
+  | 'change-verifier-receive'
+  | 'change-external-send-out'
+  | 'change-send-out-return'
+  | 'change-manager-take-back'
+
+export type ChangeScanScene =
+  | 'change_receive'
+  | 'change_send_out'
+  | 'change_send_out_return'
+  | 'change_take_back'
+
+export type UnifiedScanAction = FirstCheckScanAction | PeriodicScanAction | ChangeScanAction | string
 export type UnifiedScanBusinessType = 'firstcheck' | 'periodic' | 'change' | string
 
 export interface FirstCheckScanInboxItem {
@@ -53,6 +70,27 @@ export interface PeriodicScanInboxItem {
   allowedActions?: string[]
 }
 
+export interface ChangeScanInboxItem {
+  orderId: ScanEntityId
+  itemId: ScanEntityId
+  orderNo?: string
+  changeType?: string
+  currentNodeName?: string
+  scanStatus?: string
+  scanAction: ChangeScanAction | string
+  scanScene?: ChangeScanScene | string
+  scanCode?: string
+  deviceId: ScanEntityId
+  deviceCode?: string
+  deviceName?: string
+  materialCode?: string
+  useDeptName?: string
+  applyTime?: string
+  scanned?: boolean
+  scanTime?: string
+  allowedActions?: string[]
+}
+
 export interface UnifiedScanInboxItem {
   id: string
   businessType: UnifiedScanBusinessType
@@ -60,7 +98,9 @@ export interface UnifiedScanInboxItem {
   sourceLabel: string
   businessId?: ScanEntityId
   orderId?: ScanEntityId
+  itemId?: ScanEntityId
   taskId?: ScanEntityId
+  deviceId?: ScanEntityId
   orderNo?: string
   taskNo?: string
   lineNo?: number
@@ -86,6 +126,16 @@ export interface FirstCheckScanRequest {
   scanLocation?: string
   clientType?: string
   terminalCode?: string
+  opinion?: string
+}
+
+export interface ChangeScanRequest {
+  orderId: ScanEntityId
+  itemId: ScanEntityId
+  deviceId: ScanEntityId
+  scanCode: string
+  scanContent?: string
+  scanLocation?: string
   opinion?: string
 }
 

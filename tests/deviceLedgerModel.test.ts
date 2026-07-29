@@ -55,3 +55,12 @@ assert.equal(row.statusText, '在用')
 assert.equal(row.cycleText, '12个月')
 assert.equal(row.overdue, true)
 assert.equal(row.mandatoryText, '否')
+
+const periodicRow = mapDeviceLedgerRow({
+  ...device,
+  verificationStatus: 'periodic_check',
+  sourceType: 'periodic',
+  sourceOrderId: '2001'
+})
+assert.equal(periodicRow.statusText, '周检中')
+assert.equal(periodicRow.statusColor, 'blue')

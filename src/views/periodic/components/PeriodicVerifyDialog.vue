@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { listUsersByDeptAndRole, type SysUserVO } from '../../../api/system'
 import AttachmentListButton from '../../../components/AttachmentListButton.vue'
@@ -26,8 +26,6 @@ const emit = defineEmits<{
 const certificateAttachmentGroupId = ref<EntityId>()
 const responsibleEngineers = ref<SysUserVO[]>([])
 const loadingEngineers = ref(false)
-const engineerSelectOpen = ref(false)
-const engineerSelectRef = ref<{ focus?: () => void } | null>(null)
 
 const form = reactive({
   verificationTime: '',
@@ -49,6 +47,10 @@ const selectedEngineer = computed(() =>
   responsibleEngineers.value.find((user) => user.employeeId === form.responsibleEngineerId)
 )
 
+const needsResponsibleEngineer = computed(() =>
+  form.result === 'unqualified' && form.nonconformingDisposal === 'scrap'
+)
+
 const verifierDisplay = computed(() => {
   const id = props.task?.assignedVerifierId
   const name = props.task?.assignedVerifierName
@@ -66,7 +68,8 @@ const verificationMethodDisplay = computed(() => {
 const canSubmit = computed(() => {
   if (!props.task || !form.verificationTime) return false
   if (form.result !== 'unqualified') return true
-  return Boolean(form.nonconformingDisposal && form.responsibleEngineerId)
+  if (!form.nonconformingDisposal) return false
+  return !needsResponsibleEngineer.value || Boolean(form.responsibleEngineerId)
 })
 
 function today() {
@@ -100,12 +103,6 @@ function syncValidUntil() {
 
 function close() {
   emit('update:open', false)
-}
-
-function openEngineerDirectory() {
-  if (form.result !== 'unqualified') return
-  engineerSelectOpen.value = true
-  nextTick(() => engineerSelectRef.value?.focus?.())
 }
 
 async function loadResponsibleEngineers() {
@@ -143,7 +140,7 @@ function submit() {
   }
   const unqualified = form.result === 'unqualified'
   const disposal = unqualified ? form.nonconformingDisposal : undefined
-  const engineer = unqualified ? selectedEngineer.value : undefined
+  const engineer = disposal === 'scrap' ? selectedEngineer.value : undefined
   emit('submit', {
     periodicTaskId: props.task.id,
     taskId: props.task.workflowTaskId,
@@ -155,8 +152,6 @@ function submit() {
     opinion: form.opinion,
     certificateAttachmentGroupId: certificateAttachmentGroupId.value,
     nonconformingDisposal: disposal,
-    repairUserId: disposal === 'repair' ? engineer?.employeeId : undefined,
-    repairUserName: disposal === 'repair' ? engineer?.employeeName : undefined,
     scrapEngineerId: disposal === 'scrap' ? engineer?.employeeId : undefined,
     scrapEngineerName: disposal === 'scrap' ? engineer?.employeeName : undefined
   })
@@ -177,18 +172,29 @@ watch(
 )
 
 watch(
+  () => form.nonconformingDisposal,
+  async (disposal) => {
+    if (disposal !== 'scrap') {
+      form.responsibleEngineerId = undefined
+      return
+    }
+    form.responsibleEngineerId = props.task?.responsibleEngineerId
+    await loadResponsibleEngineers()
+  }
+)
+
+watch(
   () => props.open,
-  async (open) => {
+  (open) => {
     if (!open) return
     certificateAttachmentGroupId.value = undefined
     form.verificationTime = today()
     form.newValidUntil = calculateValidUntil(form.verificationTime, props.task?.verificationCycleMonth)
     form.result = 'qualified'
     form.nonconformingDisposal = undefined
-    form.responsibleEngineerId = props.task?.responsibleEngineerId
+    form.responsibleEngineerId = undefined
     form.opinion = ''
-    engineerSelectOpen.value = false
-    await loadResponsibleEngineers()
+    responsibleEngineers.value = []
   }
 )
 </script>
@@ -289,22 +295,16 @@ watch(
               ]"
             />
           </label>
-          <label>
+          <label v-if="needsResponsibleEngineer">
             <span>责任工程师</span>
-            <div class="inline-row">
-              <a-select
-                ref="engineerSelectRef"
-                v-model:value="form.responsibleEngineerId"
-                v-model:open="engineerSelectOpen"
-                :disabled="form.result !== 'unqualified'"
-                :loading="loadingEngineers"
-                :options="engineerOptions"
-                placeholder="请选择"
-                show-search
-                option-filter-prop="label"
-              />
-              <a-button :disabled="form.result !== 'unqualified'" @click="openEngineerDirectory">数据目录</a-button>
-            </div>
+            <a-select
+              v-model:value="form.responsibleEngineerId"
+              :loading="loadingEngineers"
+              :options="engineerOptions"
+              placeholder="请选择"
+              show-search
+              option-filter-prop="label"
+            />
           </label>
           <label class="span-4"><span>检定意见</span><a-textarea v-model:value="form.opinion" :rows="3" placeholder="填写检定意见" /></label>
           <label>

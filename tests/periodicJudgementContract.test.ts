@@ -109,6 +109,10 @@ const workspaceSource = readFileSync(
   new URL('../src/views/periodic/components/PeriodicTaskWorkspace.vue', import.meta.url),
   'utf8'
 )
+const detailSource = readFileSync(
+  new URL('../src/views/periodic/components/PeriodicDetailDialog.vue', import.meta.url),
+  'utf8'
+)
 assert.match(workspaceSource, /PeriodicJudgementDialog/)
 assert.match(workspaceSource, /PeriodicScrapDisposalDialog/)
 assert.match(workspaceSource, /submitPeriodicJudgement/)
@@ -117,6 +121,9 @@ assert.match(workspaceSource, /getPeriodicTask/)
 assert.match(workspaceSource, /loadAuthoritativeTask/)
 assert.doesNotMatch(workspaceSource, /PeriodicResponsibleJudgeDialog|PeriodicSecondJudgeDialog/)
 assert.doesNotMatch(workspaceSource, /responsibleSecondJudgePeriodic|secondJudgePeriodic/)
+assert.match(detailSource, /PeriodicJudgementHistory/)
+assert.match(detailSource, /task\.judgementRecords/)
+assert.match(detailSource, /responsibleEngineerName/)
 
 const apiSource = readFileSync(new URL('../src/api/periodic.ts', import.meta.url), 'utf8')
 assert.match(apiSource, /function submitPeriodicJudgement[\s\S]*periodicEndpoint\('judgements'\)[\s\S]*method:\s*'POST'/)

@@ -164,6 +164,14 @@ export function submitPeriodicJudgement(data: PeriodicJudgementRequest) {
   })
 }
 
+export function managerTakeBackPeriodic(data: PeriodicScanRequest) {
+  return request<void>({
+    url: periodicEndpoint('managerTakeBack'),
+    method: 'POST',
+    data: buildPeriodicScanRequest(data)
+  })
+}
+
 /**
  * 提交外委检定员的周检报废处置意见。
  *

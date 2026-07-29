@@ -167,7 +167,7 @@ watch(
               <strong>{{ stage.count }} {{ stage.countUnitLabel }}</strong>
             </a-tag>
           </div>
-          <a-empty v-else class="dimension-empty" description="暂无当前待办状态" :image="null" />
+          <a-empty v-else class="dimension-empty" description="暂无当前待办状态" :image="false" />
         </a-card>
       </div>
 

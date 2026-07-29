@@ -28,9 +28,37 @@ const productSupportHistory = blockBetween(workspace, 'const productSupportHisto
 const pendingTotal = blockBetween(workspace, 'const pendingTotal', 'const visibleFilterOptions')
 
 assert.match(model, /export function filterTasksWithLoadedDetails/)
-assert.match(firstCheckTodo, /filterTasksWithLoadedDetails/)
+assert.doesNotMatch(
+  workspace,
+  /actionableWorkflowTasks/,
+  '总待办必须展示全部候选待办；未扫码等条件门禁只能控制操作按钮，不能隐藏待办入口'
+)
+assert.match(
+  firstCheckTodo,
+  /uniqueTasksByBusinessId\(workflowTasks\.value/,
+  '首检待办入口必须直接基于统一候选待办，包含 allowedActions 为空的待接收任务'
+)
+assert.match(firstCheckTodo, /countUniqueBusinessTasks\(tasks\)/)
+assert.match(firstCheckTodo, /getPendingFirstCheckTakeBackRows\(scanInboxRows\.value\)/)
+assert.match(firstCheckTodo, /countFirstCheckTodoItems\(taskCount,\s*firstCheckTakeBackRows\)/)
+assert.doesNotMatch(firstCheckTodo, /if \(tasks\.length === 0\) return \[\]/)
+assert.match(firstCheckTodo, /alwaysVisible:\s*true/)
+assert.doesNotMatch(changeTodo, /if \(tasks\.length === 0\) return \[\]/)
+assert.match(changeTodo, /countUniqueBusinessTasks\(tasks\)/)
+assert.match(changeTodo, /alwaysVisible:\s*true/)
+assert.match(periodicTodo, /key:\s*'periodic-todo-summary'/)
+assert.match(periodicTodo, /countUniqueBusinessTasks\(workflowPeriodicTasks\)/)
+assert.match(periodicTodo, /alwaysVisible:\s*true/)
+assert.match(samplingTodo, /key:\s*'sampling-todo-summary'/)
+assert.match(samplingTodo, /countUniqueBusinessTasks\(workflowSamplingTasks\)/)
+assert.match(samplingTodo, /alwaysVisible:\s*true/)
+for (const block of [firstCheckTodo, periodicTodo, changeTodo, samplingTodo]) {
+  assert.match(block, /getWorkspaceFixedTodoRoute/)
+  assert.doesNotMatch(block, /!path/)
+}
+assert.doesNotMatch(firstCheckTodo, /filterTasksWithLoadedDetails/)
 assert.match(firstCheckHistory, /filterTasksWithLoadedDetails/)
-assert.match(changeTodo, /filterTasksWithLoadedDetails/)
+assert.doesNotMatch(changeTodo, /filterTasksWithLoadedDetails/)
 assert.match(changeHistory, /filterTasksWithLoadedDetails/)
 assert.doesNotMatch(workspace, /matchesWorkflowTaskRole|changeNodeCodesByRole/)
 
@@ -44,6 +72,8 @@ assert.doesNotMatch(samplingHistory, /pendingIds/)
 assert.doesNotMatch(productSupportHistory, /pendingIds/)
 assert.match(pendingTotal, /permittedTodos\.value/)
 assert.doesNotMatch(pendingTotal, /History|history/)
+assert.doesNotMatch(workspace, /const isVerifier = computed/)
+assert.match(workspace, /v-if="activeBucket === 'todo'" class="count-pill orange"/)
 
 assert.match(workspace, /watch\(\s*roleCode,/)
 assert.match(workspace, /clearWorkspaceSummary\(\)/)

@@ -1,6 +1,10 @@
 import type { DeviceVO } from '@/types/device'
+import {
+  resolveDeviceCurrentStatus,
+  type DeviceCurrentStatusColor
+} from './deviceCurrentStatusModel.ts'
 
-export type LedgerTagColor = 'red' | 'orange' | 'green' | 'blue' | 'default'
+export type LedgerTagColor = DeviceCurrentStatusColor
 
 export interface DeviceLedgerRow {
   key: string
@@ -50,17 +54,7 @@ export function deviceCategoryColor(value?: string): LedgerTagColor {
 }
 
 export function deviceStatusText(value?: string) {
-  const map: Record<string, string> = {
-    in_use: '在用',
-    sealed: '封存',
-    scrapped: '已报废',
-    repairing: '维修中',
-    delayed: '缓检中',
-    pending_enable: '待启用',
-    pending_scrap: '待报废',
-    disabled: '停用'
-  }
-  return value ? map[value] || value : '-'
+  return resolveDeviceCurrentStatus({ deviceStatus: value }).text
 }
 
 const deviceStatusAliases: Record<string, string[]> = {
@@ -92,11 +86,15 @@ export function matchesDeviceStatus(value?: string, selectedStatus = 'all') {
 }
 
 export function deviceStatusColor(value?: string): LedgerTagColor {
-  const text = normalizeDeviceStatus(value)
-  if (text.includes('scrap') || text.includes('disabled')) return 'red'
-  if (text.includes('seal') || text.includes('delay') || text.includes('repair') || text.includes('pending')) return 'orange'
-  if (text.includes('in_use')) return 'green'
-  return 'default'
+  return resolveDeviceCurrentStatus({ deviceStatus: value }).color
+}
+
+export function currentDeviceStatusText(device: DeviceVO) {
+  return resolveDeviceCurrentStatus(device).text
+}
+
+export function currentDeviceStatusColor(device: DeviceVO): LedgerTagColor {
+  return resolveDeviceCurrentStatus(device).color
 }
 
 export function verificationMethodText(value?: string) {
@@ -142,8 +140,8 @@ export function mapDeviceLedgerRow(device: DeviceVO, today?: string): DeviceLedg
     manufacturer: displayValue(device.manufacturer),
     categoryText: deviceCategoryText(device.manageCategory),
     categoryColor: deviceCategoryColor(device.manageCategory),
-    statusText: deviceStatusText(device.deviceStatus),
-    statusColor: deviceStatusColor(device.deviceStatus),
+    statusText: currentDeviceStatusText(device),
+    statusColor: currentDeviceStatusColor(device),
     mandatoryText: mandatoryText(device.isMandatory),
     methodText: verificationMethodText(device.verificationMethod),
     cycleText: formatCycle(device.verificationCycleMonth),

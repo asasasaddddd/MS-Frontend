@@ -2,7 +2,167 @@ export type NodeGrantEffect = 'ALLOW' | 'DENY'
 
 export type NodeScopeType = 'GROUP' | 'DEPARTMENT' | 'COMPANY'
 
+export type NodeGrantScopeType = 'GROUP' | 'DEPARTMENT'
+
 export type NodeGrantSource = 'NORMAL_CONFIG' | 'MANUAL_ELEVATION'
+
+export type RoleScopeType = 'DEPARTMENT' | 'GROUP'
+
+export type RoleScopeAudienceMode = 'EXACT' | 'SUBTREE'
+
+export type RoleScopeGrantSource =
+  | 'NORMAL_CONFIG'
+  | 'CROSS_ORG_ASSIGNMENT'
+  | 'MANUAL_ELEVATION'
+
+export type RoleScopeRecordGrantSource = RoleScopeGrantSource | 'MIGRATION'
+
+export type TaskCandidateScopeType = 'PERSON' | 'DEPARTMENT' | 'GROUP' | 'COMPANY'
+
+export const ROLE_SCOPE_TYPE_OPTIONS = [
+  { label: '部门', value: 'DEPARTMENT' },
+  { label: '组', value: 'GROUP' }
+] as const satisfies ReadonlyArray<{ label: string; value: RoleScopeType }>
+
+export interface AllowedOrganizationNodeVO {
+  orgId: string
+  orgName?: string | null
+  orgFullPath?: string | null
+  orgType: RoleScopeType
+  parentOrgId?: string | null
+  allowedDepartmentOrgId: string
+  children: AllowedOrganizationNodeVO[]
+}
+
+export interface UserRoleScopeRequest {
+  roleCode: string
+  scopeType: RoleScopeType
+  scopeOrgId: string
+  audienceMode: RoleScopeAudienceMode
+  grantSource: RoleScopeGrantSource
+  effectiveFrom?: string
+  effectiveTo?: string
+  grantReason?: string
+  rowVersion?: string | number
+}
+
+export interface UserRoleScopeVO {
+  id: string | number
+  userId: string
+  userName?: string | null
+  roleCode: string
+  roleName?: string | null
+  scopeType: RoleScopeType
+  scopeOrgId: string
+  scopeOrgName?: string | null
+  scopeOrgPath?: string | null
+  allowedDepartmentOrgId?: string | null
+  audienceMode: RoleScopeAudienceMode
+  grantSource: RoleScopeRecordGrantSource
+  effectiveFrom?: string | null
+  effectiveTo?: string | null
+  grantReason?: string | null
+  grantedBy?: string | null
+  status: string
+  revokedBy?: string | null
+  revokedAt?: string | null
+  revokeReason?: string | null
+  rowVersion: string | number
+  createdAt?: string | null
+  updatedAt?: string | null
+}
+
+export interface UserRoleScopePreviewVO {
+  userId: string
+  userName?: string | null
+  roleCode: string
+  roleName?: string | null
+  scopeType: RoleScopeType
+  scopeOrgId: string
+  scopeOrgName?: string | null
+  scopeOrgPath?: string | null
+  allowedDepartmentOrgId?: string | null
+  audienceMode: RoleScopeAudienceMode
+  grantSource: RoleScopeGrantSource
+  effectiveFrom?: string | null
+  effectiveTo?: string | null
+  grantReason?: string | null
+  roleWillBeAssigned: boolean
+  existingScopeId?: string | number | null
+  existingStatus?: string | null
+  existingRowVersion?: string | number | null
+  warnings: string[]
+}
+
+export interface EffectivePermissionItemVO {
+  roleCode: string
+  permissionCode: string
+  scopeType: NodeScopeType
+  scopeOrgId: string
+  audienceMode: RoleScopeAudienceMode
+  decision: string
+  source: string
+  matchedRoleScopeId?: string | number | null
+  matchedGrantId?: string | number | null
+}
+
+export interface EffectivePermissionVO {
+  userId: string
+  userName?: string | null
+  evaluatedAt: string
+  roleScopes: UserRoleScopeVO[]
+  nodeGrants: NodeGrantVO[]
+  permissions: EffectivePermissionItemVO[]
+}
+
+export interface TaskCandidatePreviewQueryBase {
+  businessType: string
+  nodeCode: string
+  operationCode: string
+  permissionCode: string
+  requiredRoleCode: string
+  occurredAt?: string
+}
+
+export interface PersonTaskCandidatePreviewQuery extends TaskCandidatePreviewQueryBase {
+  scopeType: 'PERSON'
+  assigneeId: string
+  scopeOrgId?: never
+  audienceMode?: 'EXACT'
+}
+
+export interface DepartmentTaskCandidatePreviewQuery extends TaskCandidatePreviewQueryBase {
+  scopeType: 'DEPARTMENT'
+  scopeOrgId: string
+  audienceMode: RoleScopeAudienceMode
+  assigneeId?: never
+}
+
+export interface ExactOrganizationTaskCandidatePreviewQuery extends TaskCandidatePreviewQueryBase {
+  scopeType: 'GROUP' | 'COMPANY'
+  scopeOrgId: string
+  audienceMode?: 'EXACT'
+  assigneeId?: never
+}
+
+export type TaskCandidatePreviewQuery =
+  | PersonTaskCandidatePreviewQuery
+  | DepartmentTaskCandidatePreviewQuery
+  | ExactOrganizationTaskCandidatePreviewQuery
+
+export interface TaskCandidateVO {
+  userId: string
+  userName?: string | null
+  requiredRoleCode: string
+  permissionCode: string
+  matchedGrantId?: string | number | null
+  matchedRoleScopeId?: string | number | null
+  matchedScopeType?: string | null
+  matchedScopeOrgId?: string | null
+  grantSource?: string | null
+  matchSource: string
+  matchReason: string
+}
 
 export interface OrganizationSelectionInput {
   orgId?: string
@@ -28,12 +188,6 @@ export interface ScopeOrganizationTreeNode {
   children?: ScopeOrganizationTreeNode[]
 }
 
-export interface UserOrgRelationSelectionInput {
-  orgId?: string
-  relationType?: string
-  status?: string
-}
-
 export interface NodeOperationItemVO {
   operationCode: string
   operationName?: string
@@ -56,29 +210,28 @@ export interface NodeOperationVO {
 export interface NodeScopeGrantRequest {
   roleCode: string
   permissionCode: string
-  scopeType: NodeScopeType
+  scopeType: NodeGrantScopeType
   scopeOrgId: string
   effect: NodeGrantEffect
   grantSource: NodeGrantSource
   effectiveFrom?: string
   effectiveTo?: string
   grantReason?: string
-  companyElevationConfirmed?: boolean
 }
 
 export interface NodeScopeGrantDraft {
   roleCode: string
   permissionCode: string
-  scopeType: NodeScopeType
+  scopeType: NodeGrantScopeType
   scopeOrgId: string
   effect: NodeGrantEffect
   effectiveFrom?: string
   effectiveTo?: string
   grantReason?: string
-  companyElevationConfirmed?: boolean
 }
 
-export interface NodeGrantVO extends NodeScopeGrantRequest {
+export interface NodeGrantVO extends Omit<NodeScopeGrantRequest, 'scopeType'> {
+  scopeType: NodeScopeType
   id?: string | number
   grantId?: string | number
   userId?: string
@@ -107,7 +260,7 @@ export interface NodeScopeGrantPreviewVO {
   operationCode: string
   operationName: string
   permissionCode: string
-  scopeType: NodeScopeType
+  scopeType: NodeGrantScopeType
   scopeOrgId: string
   scopeOrgName: string
   scopeOrgPath: string
@@ -233,26 +386,13 @@ export function buildNodeGrantRoleChange(roleCode: string) {
   }
 }
 
-export function getActiveGroupOrgIds(relations: UserOrgRelationSelectionInput[]) {
-  const groupIds = new Set<string>()
-  for (const relation of relations || []) {
-    const relationType = String(relation.relationType || '').trim().toUpperCase()
-    const status = String(relation.status || '').trim().toLowerCase()
-    if (!relation.orgId || relationType !== 'GROUP') continue
-    if (['disabled', 'inactive', '0', '停用', '禁用'].includes(status)) continue
-    groupIds.add(relation.orgId)
-  }
-  return groupIds
-}
-
 export function buildScopeOrganizationTree(
   organizations: OrganizationTreeInput[],
-  targetType?: NodeScopeType,
-  allowedGroupIds: Set<string> = new Set()
+  targetType?: NodeScopeType
 ): ScopeOrganizationTreeNode[] {
   const nodes: ScopeOrganizationTreeNode[] = []
   for (const org of organizations || []) {
-    const children = buildScopeOrganizationTree(org.children || [], targetType, allowedGroupIds)
+    const children = buildScopeOrganizationTree(org.children || [], targetType)
     const orgType = normalizeOrganizationType(org.orgType || org.orgCate)
     if (!org.orgId || !orgType || !isSelectableOrganization(org)) {
       nodes.push(...children)
@@ -260,9 +400,7 @@ export function buildScopeOrganizationTree(
     }
 
     const targetSelectable = targetType == null || orgType === targetType
-    const selectable = targetType === 'GROUP'
-      ? targetSelectable && allowedGroupIds.has(org.orgId)
-      : targetSelectable
+    const selectable = targetSelectable
     if (targetType === 'GROUP' && !selectable && children.length === 0) continue
 
     const name = org.orgSimpleCName || org.orgFullCName || org.orgId
@@ -309,8 +447,7 @@ function sameNodeScopeGrantRequest(
     'grantSource',
     'effectiveFrom',
     'effectiveTo',
-    'grantReason',
-    'companyElevationConfirmed'
+    'grantReason'
   ]
   return fields.every((field) => left[field] === right[field])
 }
@@ -404,17 +541,19 @@ export function validateNodeScopeGrantDraft(draft: NodeScopeGrantDraft) {
   if (!draft.permissionCode) errors.push('请选择操作')
   if (!draft.scopeOrgId) errors.push('请选择授权组织')
 
-  if (draft.scopeType !== 'GROUP') {
-    if (!draft.grantReason?.trim()) errors.push('部门/公司提权必须填写原因')
-    if (!draft.effectiveTo) errors.push('部门/公司提权必须设置失效时间')
-  }
-  if (draft.scopeType === 'COMPANY' && !draft.companyElevationConfirmed) {
-    errors.push('公司提权必须明确确认风险')
+  if (draft.scopeType !== 'GROUP' && draft.scopeType !== 'DEPARTMENT') {
+    errors.push('请选择有效授权范围')
+  } else if (draft.scopeType === 'DEPARTMENT') {
+    if (!draft.grantReason?.trim()) errors.push('部门提权必须填写原因')
+    if (!draft.effectiveTo) errors.push('部门提权必须设置失效时间')
   }
   return errors
 }
 
 export function buildNodeScopeGrantRequest(draft: NodeScopeGrantDraft): NodeScopeGrantRequest {
+  if (draft.scopeType !== 'GROUP' && draft.scopeType !== 'DEPARTMENT') {
+    throw new Error('scopeType must be GROUP or DEPARTMENT')
+  }
   const request: NodeScopeGrantRequest = {
     roleCode: draft.roleCode,
     permissionCode: draft.permissionCode,
@@ -427,8 +566,5 @@ export function buildNodeScopeGrantRequest(draft: NodeScopeGrantDraft): NodeScop
   if (draft.effectiveFrom) request.effectiveFrom = draft.effectiveFrom
   if (draft.effectiveTo) request.effectiveTo = draft.effectiveTo
   if (draft.grantReason?.trim()) request.grantReason = draft.grantReason.trim()
-  if (draft.scopeType === 'COMPANY') {
-    request.companyElevationConfirmed = Boolean(draft.companyElevationConfirmed)
-  }
   return request
 }

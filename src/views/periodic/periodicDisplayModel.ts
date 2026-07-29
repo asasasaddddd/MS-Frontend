@@ -1,9 +1,14 @@
 import type { EntityId, PeriodicDisplayRow, PeriodicTaskVO } from '../../types/periodic'
+import type { UnifiedScanInboxItem } from '../../types/scan'
 
 export type PeriodicTableRole = 'admin' | 'verifier' | 'confirmer' | 'externalOperator'
 export type PeriodicTagColor = 'blue' | 'cyan' | 'orange' | 'green' | 'red'
 export type PeriodicTaskAction =
   | 'submit-exception'
+  | 'scan-receive'
+  | 'scan-send-out'
+  | 'scan-send-out-return'
+  | 'scan-take-back'
   | 'verify'
   | 'supplier-fill'
   | 'external-verify'
@@ -55,7 +60,7 @@ export function getPeriodicJudgementDisplay(nodeCode?: string) {
   return nodeCode ? periodicJudgementDisplays[nodeCode] : undefined
 }
 
-type PeriodicActionTask = Pick<PeriodicTaskVO, 'currentNode' | 'allowedActions'>
+type PeriodicActionTask = Pick<PeriodicTaskVO, 'currentNode' | 'allowedActions' | 'physicalStatus' | 'scanAction'>
 
 const periodicNodeActionMap: Readonly<Record<string, { code: string; action: PeriodicTaskAction }>> = {
   admin_exception_route: { code: 'SUBMIT_EXCEPTION', action: 'submit-exception' },
@@ -69,13 +74,142 @@ const periodicNodeActionMap: Readonly<Record<string, { code: string; action: Per
   verifier_scrap_disposal: { code: 'SUBMIT', action: 'scrap-disposal' },
   external_uncommon_fill: { code: 'SUBMIT', action: 'external-verify' },
   manager_forward_confirm: { code: 'SUBMIT', action: 'manager-forward' },
-  confirmer_confirm: { code: 'APPROVE_REJECT', action: 'confirm' }
+  confirmer_confirm: { code: 'APPROVE_REJECT', action: 'confirm' },
+  admin_take_back: { code: 'TAKE_BACK', action: 'scan-take-back' }
+}
+
+const periodicScanActionMap: Readonly<Record<string, { code: string; action: PeriodicTaskAction }>> = {
+  'periodic-verifier-receive': { code: 'RECEIVE', action: 'scan-receive' },
+  'periodic-external-send-out': { code: 'SEND_OUT', action: 'scan-send-out' },
+  'periodic-send-out-return': { code: 'SEND_OUT_RETURN', action: 'scan-send-out-return' },
+  'periodic-manager-take-back': { code: 'TAKE_BACK', action: 'scan-take-back' }
+}
+
+const periodicPhysicalProjectionMap: Readonly<Record<string, {
+  currentNode: NonNullable<PeriodicTaskVO['currentNode']>
+  physicalStatus: string
+  priority: number
+}>> = {
+  'periodic-verifier-receive': {
+    currentNode: 'admin_exception_route',
+    physicalStatus: 'wait_verifier_receive',
+    priority: 1
+  },
+  'periodic-external-send-out': {
+    currentNode: 'external_common_fill',
+    physicalStatus: 'wait_external_receive',
+    priority: 2
+  },
+  'periodic-send-out-return': {
+    currentNode: 'external_uncommon_fill',
+    physicalStatus: 'wait_sendout_return_receive',
+    priority: 3
+  },
+  'periodic-manager-take-back': {
+    currentNode: 'admin_take_back',
+    physicalStatus: 'wait_manager_take_back',
+    priority: 4
+  }
+}
+
+function uniqueActionCodes(...groups: readonly (readonly string[] | undefined)[]) {
+  return Array.from(new Set(
+    groups.flatMap((actions) => actions || []).map((action) => String(action).toUpperCase())
+  ))
+}
+
+function pendingPeriodicPhysicalProjection(row: UnifiedScanInboxItem) {
+  if (String(row.businessType || '').toLowerCase() !== 'periodic' || row.scanned === true) return undefined
+  const scanAction = String(row.scanAction || '')
+  const action = periodicScanActionMap[scanAction]
+  const projection = periodicPhysicalProjectionMap[scanAction]
+  if (!action || !projection) return undefined
+  const allowedActions = uniqueActionCodes(row.allowedActions)
+  if (!allowedActions.includes(action.code)) return undefined
+  return { scanAction, allowedActions, ...projection }
+}
+
+export function toPeriodicPhysicalTask(row: UnifiedScanInboxItem): PeriodicTaskVO | undefined {
+  const projection = pendingPeriodicPhysicalProjection(row)
+  const taskId = row.taskId ?? row.id
+  if (!projection || taskId === undefined || taskId === null || taskId === '') return undefined
+  return {
+    id: taskId,
+    planId: row.businessId,
+    taskNo: row.taskNo || row.orderNo,
+    currentNode: projection.currentNode,
+    currentNodeName: row.currentNodeName,
+    physicalStatus: projection.physicalStatus,
+    physicalStatusName: row.currentNodeName,
+    taskStatus: 'pending',
+    allowedActions: projection.allowedActions,
+    scanAction: projection.scanAction,
+    isPhysicalScan: true,
+    deviceCode: row.deviceCode || row.scanCode,
+    deviceName: row.deviceName,
+    materialCode: row.materialCode,
+    deptName: row.useDeptName
+  }
+}
+
+export function mergePeriodicTaskPhysicalActions(
+  tasks: readonly PeriodicTaskVO[],
+  scanRows: readonly UnifiedScanInboxItem[]
+) {
+  const mergedTasks: PeriodicTaskVO[] = tasks.map((task) => ({
+    ...task,
+    allowedActions: uniqueActionCodes(task.allowedActions)
+  }))
+  const taskIndex = new Map(mergedTasks.map((task, index) => [String(task.id), index]))
+
+  scanRows.forEach((row) => {
+    const physicalTask = toPeriodicPhysicalTask(row)
+    if (!physicalTask) return
+    const key = String(physicalTask.id)
+    const existingIndex = taskIndex.get(key)
+    if (existingIndex === undefined) {
+      taskIndex.set(key, mergedTasks.length)
+      mergedTasks.push(physicalTask)
+      return
+    }
+
+    const existing = mergedTasks[existingIndex]
+    if (!existing) return
+    const existingPriority = periodicPhysicalProjectionMap[String(existing.scanAction || '')]?.priority || 0
+    const physicalPriority = periodicPhysicalProjectionMap[String(physicalTask.scanAction || '')]?.priority || 0
+    const activePhysicalTask = physicalPriority >= existingPriority ? physicalTask : existing
+    mergedTasks[existingIndex] = {
+      ...existing,
+      planId: existing.planId ?? physicalTask.planId,
+      taskNo: existing.taskNo ?? physicalTask.taskNo,
+      physicalStatus: activePhysicalTask.physicalStatus,
+      physicalStatusName: activePhysicalTask.physicalStatusName,
+      scanAction: activePhysicalTask.scanAction,
+      isPhysicalScan: true,
+      allowedActions: uniqueActionCodes(existing.allowedActions, physicalTask.allowedActions),
+      deviceCode: existing.deviceCode ?? physicalTask.deviceCode,
+      deviceName: existing.deviceName ?? physicalTask.deviceName,
+      materialCode: existing.materialCode ?? physicalTask.materialCode,
+      deptName: existing.deptName ?? physicalTask.deptName
+    }
+  })
+
+  return mergedTasks
 }
 
 export function resolvePeriodicTaskAction(task: PeriodicActionTask): PeriodicTaskAction | undefined {
   const allowed = new Set((task.allowedActions || []).map((action) => String(action).toUpperCase()))
+  const scanMapping = periodicScanActionMap[String(task.scanAction || '')]
+  if (scanMapping && allowed.has(scanMapping.code)) return scanMapping.action
   const mapping = periodicNodeActionMap[String(task.currentNode || '')]
-  return mapping && allowed.has(mapping.code) ? mapping.action : undefined
+  if (mapping && allowed.has(mapping.code)) return mapping.action
+  return undefined
+}
+
+export function periodicScanRouteAction(action: PeriodicTaskAction) {
+  const match = Object.entries(periodicScanActionMap)
+    .find(([, config]) => config.action === action)
+  return match?.[0]
 }
 
 export function displayValue(value: unknown) {
@@ -141,7 +275,8 @@ function nodeDisplayName(value?: string) {
     verifier_scrap_disposal: '外委检定员报废处置',
     external_uncommon_fill: '外委检定员填写否通用设备信息',
     manager_forward_confirm: '管理员转办确认员',
-    confirmer_confirm: '确认员判定'
+    confirmer_confirm: '确认员判定',
+    admin_take_back: '管理员取回'
   }
   return value ? map[value] || value : '-'
 }
@@ -161,6 +296,20 @@ function statusDisplayName(value?: string) {
   return value ? map[value] || value : '-'
 }
 
+function physicalStatusDisplayName(value?: string) {
+  const map: Record<string, string> = {
+    wait_verifier_receive: '待接收',
+    verifier_received: '检定员已接收',
+    wait_external_receive: '待外扩接收',
+    external_received: '外扩已接收',
+    wait_sendout_return_receive: '待外委送回接收',
+    sendout_return_received: '外委送回已接收',
+    wait_manager_take_back: '待管理员取回',
+    taken_back: '已取回'
+  }
+  return value ? map[value] || value : '-'
+}
+
 /**
  * 返回周检节点或任务状态对应的标签颜色。
  *
@@ -173,6 +322,7 @@ export function periodicTagColor(nodeOrStatus?: string): PeriodicTagColor {
   if (
     [
       'admin_exception_route',
+      'admin_take_back',
       'external_common_fill',
       'external_uncommon_fill',
       'manager_forward_confirm',
@@ -193,8 +343,16 @@ export function periodicTagColor(nodeOrStatus?: string): PeriodicTagColor {
   return 'blue'
 }
 
-export function mapPeriodicTaskRow(task: PeriodicTaskVO, _role?: PeriodicTableRole): PeriodicDisplayRowWithMeta {
-  const currentNodeName = task.currentNodeName || nodeDisplayName(task.currentNode)
+export function mapPeriodicTaskRow(task: PeriodicTaskVO, role?: PeriodicTableRole): PeriodicDisplayRowWithMeta {
+  const physicalStatusName = task.physicalStatus === 'wait_verifier_receive'
+    ? '待接收'
+    : task.physicalStatusName || physicalStatusDisplayName(task.physicalStatus)
+  const verifierHandover = role === 'verifier'
+    && task.currentNode === 'admin_exception_route'
+    && task.physicalStatus === 'wait_verifier_receive'
+  const currentNodeName = verifierHandover
+    ? physicalStatusName
+    : task.currentNodeName || nodeDisplayName(task.currentNode)
   const taskStatusName = task.taskStatusName || statusDisplayName(task.taskStatus)
   return {
     taskId: task.id,
@@ -204,6 +362,8 @@ export function mapPeriodicTaskRow(task: PeriodicTaskVO, _role?: PeriodicTableRo
     currentNodeName,
     taskStatus: displayValue(task.taskStatus),
     taskStatusName,
+    physicalStatus: displayValue(task.physicalStatus),
+    physicalStatusName,
     deviceCode: displayValue(task.deviceCode),
     deviceName: displayValue(task.deviceName),
     materialCode: displayValue(task.materialCode),

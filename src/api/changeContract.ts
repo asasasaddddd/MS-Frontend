@@ -1,6 +1,7 @@
 import type {
   ChangeApproveRequest,
   ChangeRejectRequest,
+  ChangeReviseRequest,
   ChangeSubmitRequest,
   ChangeVerifierHandleRequest
 } from '@/types/change'
@@ -9,6 +10,7 @@ const changeEndpoints = {
   submit: '/change/submit',
   approve: '/change/approve',
   reject: '/change/reject',
+  revise: '/change/revise',
   verifierHandle: '/change/verifier-handle',
   detail: '/change/detail',
   myOrders: '/change/my-orders'
@@ -64,6 +66,14 @@ export function buildChangeApproveRequest(input: ChangeApproveRequest): ChangeAp
 /** 构造状态变更驳回请求并完整保留统一任务身份。 */
 export function buildChangeRejectRequest(input: ChangeRejectRequest): ChangeRejectRequest {
   return { ...input }
+}
+
+/** 构造管理员退回修订请求，并保留统一任务身份与完整设备明细。 */
+export function buildChangeReviseRequest(input: ChangeReviseRequest): ChangeReviseRequest {
+  return {
+    ...input,
+    items: input.items.map((item) => ({ ...item }))
+  }
 }
 
 /** 构造状态变更检定请求并完整保留统一任务身份。 */

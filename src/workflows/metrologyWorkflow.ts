@@ -34,11 +34,13 @@ export const periodicNodes: WorkflowNode[] = [
   { code: 'verifier_scrap_disposal', name: '外委检定员报废处置', module: 'periodic', roles: ['VERIFIER_EXTERNAL'], api: 'POST /api/periodic/scrap-disposal' },
   { code: 'external_uncommon_fill', name: '外委检定员填写否通用设备信息', module: 'periodic', roles: ['VERIFIER_EXTERNAL'], api: 'POST /api/periodic/external-uncommon-fill' },
   { code: 'manager_forward_confirm', name: '管理员转办确认员', module: 'periodic', roles: ['MEASURE_ADMIN'], api: 'POST /api/periodic/manager-forward-confirm' },
-  { code: 'confirmer_confirm', name: '确认员判定', module: 'periodic', roles: ['CONFIRMER'], api: 'POST /api/periodic/confirmer-confirm' }
+  { code: 'confirmer_confirm', name: '确认员判定', module: 'periodic', roles: ['CONFIRMER'], api: 'POST /api/periodic/confirmer-confirm' },
+  { code: 'admin_take_back', name: '管理员取回', module: 'periodic', roles: ['MEASURE_ADMIN'], api: 'POST /api/periodic/manager-take-back' }
 ]
 
 export const changeNodes: WorkflowNode[] = [
   { code: 'submit', name: '变更申请', module: 'change', roles: ['MEASURE_ADMIN'], api: 'POST /api/change/submit' },
+  { code: 'manager_revise', name: '管理员修订', module: 'change', roles: ['MEASURE_ADMIN'], api: 'RESUBMIT POST /api/change/revise' },
   { code: 'dept_leader_approve', name: '部门审批', module: 'change', roles: ['DEPT_LEADER'], api: 'POST /api/change/approve' },
   { code: 'measure_leader_review', name: '计量领导审批', module: 'change', roles: ['MEASURE_LEADER'], api: 'POST /api/change/approve' },
   { code: 'responsible_engineer_review', name: '责任工程师审核', module: 'change', roles: ['RESPONSIBLE_ENGINEER'], api: 'POST /api/change/approve' },
@@ -76,7 +78,7 @@ export const workflowNodeGroups = {
     externalOperator: []
   },
   periodic: {
-    admin: ['admin_exception_route', 'manager_forward_confirm'],
+    admin: ['admin_exception_route', 'manager_forward_confirm', 'admin_take_back'],
     selfVerifier: ['self_verify'],
     externalVerifier: [
       'external_uncommon_fill',
@@ -95,7 +97,7 @@ export const workflowNodeGroups = {
   change: {
     apply: ['submit'],
     approval: ['dept_leader_approve', 'measure_leader_review', 'responsible_engineer_review', 'receive_dept_leader_confirm'],
-    receiveAdmin: ['receive_admin_confirm'],
+    receiveAdmin: ['manager_revise', 'receive_admin_confirm'],
     verifier: ['verifier_handle']
   }
 } as const

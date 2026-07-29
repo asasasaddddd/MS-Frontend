@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
@@ -61,6 +61,7 @@ const routeQuery = computed<ScanRouteQuery>(() => ({
   orderId: queryValue('orderId'),
   view: queryValue('view')
 }))
+const routeRequestKey = computed(() => JSON.stringify(routeQuery.value))
 const routeRows = computed(() => rows.value.filter((row) => matchesScanRouteList(row, routeQuery.value)))
 
 const filteredAllRows = computed(() => {
@@ -134,6 +135,7 @@ function displayCode(row: UnifiedScanInboxItem) {
 
 function scanHint(row?: UnifiedScanInboxItem) {
   if (!row) return ''
+  if (row.businessType === 'change') return '\u72b6\u6001\u53d8\u66f4\u626b\u7801\u8bf7\u6838\u5bf9\u8bbe\u5907\u8ba1\u91cf\u7f16\u53f7\uff0c\u5b8c\u6210\u540e\u6d41\u7a0b\u81ea\u52a8\u8fdb\u5165\u4e0b\u4e00\u8282\u70b9\u3002'
   if (row.businessType === 'periodic') return '周检扫码统一扫描设备计量编号。扫码成功后，流程会自动进入下一节点。'
   if (row.scanAction === 'take-back') return '首检赋码后取回：请扫描单台合格设备的计量编号。'
   return '首检赋码前流转：请扫描首检临时码、首检单号或后端允许的临时编码。'
@@ -254,10 +256,16 @@ async function submitScan() {
   }
 }
 
-watch(workflowIdentity, () => {
+watch([workflowIdentity, routeRequestKey], () => {
+  routeFocused.value = false
   rows.value = []
   void loadRows()
 }, { immediate: true })
+
+onActivated(() => {
+  routeFocused.value = false
+  void loadRows()
+})
 
 onBeforeUnmount(() => rowsController?.abort())
 </script>
