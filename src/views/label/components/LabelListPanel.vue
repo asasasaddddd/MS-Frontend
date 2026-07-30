@@ -201,9 +201,9 @@ function saveLabelPdf(blob: Blob, row: LabelPrintRecord) {
 
 async function printRows(targets: LabelPrintRecord[]) {
   for (const row of targets) {
+    await printLabelRecord(row.id)
     const pdf = await downloadLabelPdf(row.id)
     saveLabelPdf(pdf, row)
-    await printLabelRecord(row.id)
   }
   return true
 }

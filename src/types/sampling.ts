@@ -9,8 +9,23 @@ export type SamplingNodeCode =
 
 export type SamplingTaskStatus = 'pending' | 'processing' | 'completed' | 'rejected' | 'cancelled' | string
 export type SamplingResult = 'qualified' | 'unqualified'
+export type SamplingCountResult = 'normal' | 'lost' | 'damaged' | 'other'
 export type SamplingAdminResult = 'normal' | 'seal' | 'missing' | 'scrap' | 'abnormal_scrap' | string
 export type SamplingDisposalType = 'repair' | 'scrap' | string
+
+/** 后端权威判定的 C 类五年抽检候选设备。 */
+export interface SamplingEligibleDevice {
+  deviceId: SamplingEntityId
+  deviceCode?: string
+  deviceName?: string
+  modelSpec?: string
+  deptId?: string
+  deptName?: string
+  validUntil?: string
+  overdueYears?: number
+  eligible?: boolean
+  dataQualityReason?: string
+}
 
 export interface SamplingCreatePlanRequest {
   planName?: string
@@ -29,6 +44,8 @@ export interface SamplingAdminConfirmRequest {
   samplingTaskId: SamplingEntityId
   taskId: SamplingEntityId
   rowVersion: SamplingEntityId
+  countResult: SamplingCountResult
+  abnormalReason?: string
   opinion?: string
 }
 
@@ -104,6 +121,9 @@ export interface SamplingTaskVO {
   result?: SamplingResult | string
   nonconformingReason?: string
   disposalType?: SamplingDisposalType
+  countResult?: SamplingCountResult
+  countReason?: string
+  relatedChangeOrderId?: SamplingEntityId
   remark?: string
   labelStatus?: string
   labelRecordId?: SamplingEntityId

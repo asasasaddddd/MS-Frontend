@@ -68,8 +68,41 @@ const columns = [
   { title: '变更类型', key: 'changeType', width: 130 },
   { title: '当前节点', key: 'nodeName', width: 170 },
   { title: '当前状态', key: 'status', width: 120 },
+  { title: '扫码状态', key: 'scanStatus', width: 120 },
+  { title: '接收签字', key: 'receiveSignature', width: 190 },
   { title: '操作', key: 'action', fixed: 'right', width: 90 }
 ]
+
+function isTransferOrder(order: ChangeOrderVO) {
+  return order.changeType === 'transfer'
+}
+
+function transferReceiptReady(order: ChangeOrderVO) {
+  if (!isTransferOrder(order)) return true
+  const items = order.items || []
+  return items.length > 0 && items.every((item) =>
+    item.physicalStatus === 'transfer_received'
+    && Boolean(item.lastScanRecordId)
+    && item.lastScanScene === 'change_transfer_receive'
+    && Boolean(item.lastScanUserId)
+  )
+}
+
+function transferScanStatus(order: ChangeOrderVO) {
+  if (!isTransferOrder(order)) return '-'
+  const items = order.items || []
+  const received = items.filter((item) => item.physicalStatus === 'transfer_received' && item.lastScanRecordId).length
+  if (items.length > 0 && received === items.length) return '已扫码'
+  return received > 0 ? `部分扫码 ${received}/${items.length}` : '待扫码'
+}
+
+function transferReceiptSignature(order: ChangeOrderVO) {
+  if (!isTransferOrder(order)) return '-'
+  const signatures = (order.items || [])
+    .filter((item) => item.lastScanUserId)
+    .map((item) => `${item.lastScanUserId} / ${formatDateTime(item.lastScanTime)}`)
+  return signatures.length > 0 ? Array.from(new Set(signatures)).join('；') : '待接收人扫码签字'
+}
 
 function toRow(task: WorkflowTask, order: ChangeOrderVO): ChangeTaskRow {
   const actionableOrder: ChangeOrderVO = {
@@ -117,6 +150,10 @@ function openOrder(row: ChangeTaskRow) {
       responsibleEngineerName: item.responsibleEngineerName
     }))
     reviseOpen.value = true
+    return
+  }
+  if (!transferReceiptReady(row.order)) {
+    message.warning('设备转移实物尚未全部扫码接收，不能确认完成')
     return
   }
   if (!hasChangeAction(row, CHANGE_APPROVE_ACTION)) {
@@ -282,11 +319,14 @@ onMounted(loadRows)
           <template v-else-if="column.key === 'status'">
             <a-tag :class="['tag', statusTagColor(record.order.status)]">{{ changeStatusName(record.order.status) }}</a-tag>
           </template>
+          <template v-else-if="column.key === 'scanStatus'">{{ transferScanStatus(record.order) }}</template>
+          <template v-else-if="column.key === 'receiveSignature'">{{ transferReceiptSignature(record.order) }}</template>
           <template v-else-if="column.key === 'action'">
             <a-button
               v-if="hasChangeAction(record, CHANGE_APPROVE_ACTION) || hasChangeAction(record, CHANGE_REVISE_ACTION)"
               type="link"
               class="button-link"
+              :disabled="!transferReceiptReady(record.order)"
               @click="openOrder(record)"
             >处理</a-button>
             <span v-else>-</span>

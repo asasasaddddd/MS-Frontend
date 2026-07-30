@@ -642,7 +642,7 @@ async function submitExceptionChange(payload: PeriodicExceptionChangeSubmitReque
   exceptionChangeSubmitting.value = true
   try {
     const orderId = await submitPeriodicExceptionChange(payload)
-    message.success(`状态变更申请已提交：${orderId}`)
+    message.success(`异常分流已提交：${orderId}`)
     exceptionOpen.value = false
     exceptionTasks.value = []
     activeTask.value = null
@@ -650,7 +650,7 @@ async function submitExceptionChange(payload: PeriodicExceptionChangeSubmitReque
     selectedTasks.value = []
     await loadData()
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '状态变更申请提交失败')
+    message.error(error instanceof Error ? error.message : '周检异常分流提交失败')
   } finally {
     exceptionChangeSubmitting.value = false
   }

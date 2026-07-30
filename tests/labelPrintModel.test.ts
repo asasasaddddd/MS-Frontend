@@ -55,3 +55,8 @@ assert.match(labelViewSource, /record\.sourceDetail\?\.businessNo/)
 assert.match(labelViewSource, /row\.sourceDetail\?\.purchaseOrderNo/)
 assert.match(labelViewSource, /row\.sourceDetail\?\.hasAttachment \? '有附件' : '无附件'/)
 assert.doesNotMatch(labelViewSource, /确认打印并流转/)
+assert.match(
+  labelViewSource,
+  /await printLabelRecord\(row\.id\)[\s\S]*await downloadLabelPdf\(row\.id\)/,
+  '必须先登记真实打印并取得最终签名，再下载最新标签PDF'
+)

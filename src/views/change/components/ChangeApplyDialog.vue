@@ -51,7 +51,6 @@ const form = reactive({
   transferReason: '',
   categoryTargets: {} as Record<string, string | undefined>,
   newCycleMonth: undefined as number | undefined,
-  precheckRequired: undefined as number | undefined,
   revisionOpinion: '',
   adjustmentReason: '',
   scrapType: 'other',
@@ -112,9 +111,6 @@ function resetForm() {
     revisionItemForDevice(device)?.newCategory
   ]))
   form.newCycleMonth = firstItem?.newCycleMonth
-  form.precheckRequired = props.type === 'category' || props.type === 'cycle'
-    ? firstItem?.precheckRequired ?? 0
-    : undefined
   form.revisionOpinion = props.order ? '已按退回意见修订并重新提交' : ''
   form.adjustmentReason = firstItem?.adjustmentReason || props.order?.reason || ''
   form.scrapType = firstItem?.scrapType || 'other'
@@ -170,7 +166,6 @@ function buildItem(device: DeviceVO): ChangeItemSubmitRequest | null {
     return buildBaseChangeItem(device, {
       newCategory: normalizeCategoryCode(form.categoryTargets[deviceRowKey(device)]),
       newVerificationMethod: device.verificationMethod,
-      precheckRequired: form.precheckRequired,
       adjustmentReason: form.adjustmentReason,
       remark: form.remark
     })
@@ -179,7 +174,6 @@ function buildItem(device: DeviceVO): ChangeItemSubmitRequest | null {
     return buildBaseChangeItem(device, {
       newCycleMonth: form.newCycleMonth,
       newVerificationMethod: device.verificationMethod,
-      precheckRequired: form.precheckRequired,
       adjustmentReason: form.adjustmentReason,
       remark: form.remark
     })
@@ -226,11 +220,10 @@ function validate() {
         return false
       }
     }
-    return required(form.precheckRequired, '请选择是否检定') && required(form.adjustmentReason, '请填写管理类别调整原因')
+    return required(form.adjustmentReason, '请填写管理类别调整原因')
   }
   if (props.type === 'cycle') {
     return required(form.newCycleMonth, '请选择调整后检定周期') &&
-      required(form.precheckRequired, '请选择是否检定') &&
       required(form.adjustmentReason, '请填写检定周期调整原因')
   }
   if (props.type === 'scrap') return required(form.scrapReason, '请填写报废原因')
@@ -345,13 +338,6 @@ function resolvePrimaryReason() {
               <a-textarea v-model:value="form.adjustmentReason" placeholder="请填写管理类别调整原因" :rows="4" />
             </a-form-item>
           </template>
-
-          <a-form-item v-if="type === 'category' || type === 'cycle'" label="是否检定" required>
-            <a-radio-group v-model:value="form.precheckRequired">
-              <a-radio :value="1">是，进入检定员处理</a-radio>
-              <a-radio :value="0">否，审批后直接落账</a-radio>
-            </a-radio-group>
-          </a-form-item>
 
           <template v-if="type === 'scrap'">
             <a-form-item label="报废类型">

@@ -2,11 +2,20 @@ import { request } from '@/api/request'
 import type {
   SamplingAdminConfirmRequest,
   SamplingCreatePlanRequest,
+  SamplingEligibleDevice,
   SamplingEntityId,
   SamplingPlanVO,
   SamplingTaskVO,
   SamplingVerificationSubmitRequest
 } from '@/types/sampling'
+
+export function listSamplingEligibleDevices(deptId?: string) {
+  return request<SamplingEligibleDevice[]>({
+    url: '/sampling/eligible-devices',
+    method: 'GET',
+    params: deptId ? { deptId } : undefined
+  })
+}
 
 export function createSamplingPlan(data: SamplingCreatePlanRequest) {
   return request<SamplingEntityId>({

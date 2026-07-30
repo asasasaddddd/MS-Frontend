@@ -50,6 +50,7 @@ const {
 
 const form = reactive<ChangeVerifierFormState>({
   reason: '',
+  verificationRequired: undefined,
   verificationDate: '',
   validUntil: '',
   result: 'qualified',
@@ -83,6 +84,11 @@ const categoryBefore = computed(() => normalizeCategory(item.value?.oldCategory)
 const categoryAfter = computed(() => normalizeCategory(item.value?.newCategory))
 const cycleBefore = computed(() => formatCycleMonth(item.value?.oldCycleMonth))
 const cycleAfter = computed(() => formatCycleMonth(item.value?.newCycleMonth))
+const verificationSelected = computed(() =>
+  config.value.showVerificationDecision
+    ? form.verificationRequired === 1
+    : config.value.showVerification
+)
 
 function localDate() {
   const now = new Date()
@@ -113,7 +119,10 @@ function targetCycleMonth() {
 }
 
 function syncValidUntil() {
-  if (!config.value.showVerification) return
+  if (!verificationSelected.value) {
+    form.validUntil = ''
+    return
+  }
   if (!config.value.validUntilRequired) {
     form.validUntil = ''
     if (!config.value.showNewCycle) form.newCycleMonth = undefined
@@ -168,7 +177,7 @@ async function loadEngineers() {
 }
 
 watch(
-  () => [form.verificationDate, form.newCycleMonth],
+  () => [form.verificationRequired, form.verificationDate, form.newCycleMonth],
   () => syncValidUntil()
 )
 
@@ -183,12 +192,17 @@ watch(
     if (!open) return
     const currentItem = item.value
     form.reason = changeVerifierReason(props.order)
+    form.verificationRequired = config.value.showVerificationDecision
+      ? undefined
+      : config.value.showVerification
+        ? 1
+        : 0
     form.verificationDate = localDate()
     form.result = 'qualified'
     form.responsibleEngineerId = currentItem?.responsibleEngineerId
     form.responsibleEngineerName = currentItem?.responsibleEngineerName
     form.newCycleMonth = config.value.showNewCycle
-      ? currentItem?.newCycleMonth || currentItem?.oldCycleMonth
+      ? currentItem?.newCycleMonth
       : undefined
     form.opinion = ''
     form.certificateAttachmentGroupId = currentItem?.certificateAttachmentGroupId
@@ -265,6 +279,15 @@ watch(
           <a-textarea v-model:value="form.reason" :rows="3" :placeholder="config.reasonPlaceholder" />
         </div>
 
+        <div v-if="config.showVerificationDecision" class="form-row">
+          <label>是否检定 <span class="required">*</span></label>
+          <a-radio-group v-model:value="form.verificationRequired">
+            <a-radio :value="1">需要检定</a-radio>
+            <a-radio :value="0">不需要检定</a-radio>
+          </a-radio-group>
+          <span class="decision-hint">实物接收后由检定员根据现场情况决定，未检定时不提交检定字段。</span>
+        </div>
+
         <template v-if="config.showApplicationMeta">
           <div class="form-row">
             <label>申请时间</label>
@@ -274,6 +297,7 @@ watch(
             <label>附件</label>
             <div class="upload-area">
               <AttachmentUploadButton
+                v-if="verificationSelected"
                 v-model="form.certificateAttachmentGroupId"
                 business-type="CHANGE_VERIFIER"
                 :business-id="order.id"
@@ -301,7 +325,7 @@ watch(
         </template>
       </section>
 
-      <section v-if="config.showVerification" class="modal-section">
+      <section v-if="verificationSelected" class="modal-section">
         <h3>检定信息</h3>
         <div class="form-inline">
           <div class="form-row">

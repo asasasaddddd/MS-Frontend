@@ -65,16 +65,10 @@ const attachmentGroupId = computed(() => firstOrder.value?.attachmentGroupId)
 const primaryFields = computed(() => {
   const type = changeType.value
   if (type === 'category') {
-    return [
-      { label: '调整后管理类别', value: aggregateItemValue((item) => normalizeCategory(item.newCategory)), required: true },
-      { label: '是否检定', value: aggregateItemValue((item) => (item.precheckRequired === 1 ? '是' : '否')) }
-    ]
+    return [{ label: '调整后管理类别', value: aggregateItemValue((item) => normalizeCategory(item.newCategory)), required: true }]
   }
   if (type === 'cycle') {
-    return [
-      { label: '调整后检定周期', value: aggregateItemValue((item) => formatCycleMonth(item.newCycleMonth)), required: true },
-      { label: '是否检定', value: aggregateItemValue((item) => (item.precheckRequired === 1 ? '是' : '否')) }
-    ]
+    return [{ label: '调整后检定周期', value: aggregateItemValue((item) => formatCycleMonth(item.newCycleMonth)), required: true }]
   }
   if (type === 'seal') {
     return [{ label: '封存原因', value: aggregateItemValue((item, order) => item.sealReason || order.reason), required: true }]

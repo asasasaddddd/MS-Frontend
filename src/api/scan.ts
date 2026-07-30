@@ -67,7 +67,9 @@ export function scanActionName(value?: string) {
     'change-verifier-receive': '\u68c0\u5b9a\u5458\u626b\u7801\u63a5\u6536',
     'change-external-send-out': '\u5916\u59d4\u9001\u51fa',
     'change-send-out-return': '\u5916\u59d4\u9001\u56de',
-    'change-manager-take-back': '\u7ba1\u7406\u5458\u53d6\u56de'
+    'change-manager-take-back': '\u7ba1\u7406\u5458\u53d6\u56de',
+    'change-scrap-inbound': '\u62a5\u5e9f\u5b9e\u7269\u5165\u5e93',
+    'change-transfer-receive': '\u8f6c\u79fb\u63a5\u6536'
   }
   return value ? map[value] || '\u672a\u77e5\u64cd\u4f5c' : '-'
 }
@@ -189,6 +191,14 @@ export function managerTakeBackChangeDevice(data: ChangeScanRequest) {
   return request<void>({ url: '/change/manager-take-back', method: 'POST', data: buildChangeScanRequest(data) })
 }
 
+export function scrapInboundChangeDevice(data: ChangeScanRequest) {
+  return request<void>({ url: '/change/scrap-inbound', method: 'POST', data: buildChangeScanRequest(data) })
+}
+
+export function transferReceiveChangeDevice(data: ChangeScanRequest) {
+  return request<void>({ url: '/change/transfer-receive', method: 'POST', data: buildChangeScanRequest(data) })
+}
+
 export function submitFirstCheckScan(action: string, data: FirstCheckScanRequest) {
   if (action === 'receive') return receiveFirstCheckDevice(data)
   if (action === 'sendout') return sendoutFirstCheckDevice(data)
@@ -232,6 +242,8 @@ export function submitUnifiedScan(row: UnifiedScanInboxItem, payload: UnifiedSca
       orderId: row.orderId,
       itemId: row.itemId,
       deviceId: row.deviceId,
+      taskId: row.taskId,
+      rowVersion: row.rowVersion,
       scanCode: payload.scanCode,
       opinion: payload.opinion
     }
@@ -239,6 +251,8 @@ export function submitUnifiedScan(row: UnifiedScanInboxItem, payload: UnifiedSca
     if (row.scanAction === 'change-external-send-out') return externalSendOutChangeDevice(requestPayload)
     if (row.scanAction === 'change-send-out-return') return sendOutReturnChangeDevice(requestPayload)
     if (row.scanAction === 'change-manager-take-back') return managerTakeBackChangeDevice(requestPayload)
+    if (row.scanAction === 'change-scrap-inbound') return scrapInboundChangeDevice(requestPayload)
+    if (row.scanAction === 'change-transfer-receive') return transferReceiveChangeDevice(requestPayload)
     return Promise.reject(new Error(`Unsupported change scan action: ${row.scanAction}`))
   }
   return Promise.reject(new Error(`Unsupported scan business type: ${row.businessType}`))

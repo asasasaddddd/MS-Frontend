@@ -14,7 +14,7 @@ const revision = {
   remark: '管理员修订',
   attachmentGroupId: '2080000000000000003',
   opinion: '已按退回意见修订',
-  items: [{ deviceId: '2080000000000000004', precheckRequired: 1 }]
+  items: [{ deviceId: '2080000000000000004' }]
 }
 
 assert.equal(changeContract.changeEndpoint('revise' as never), '/change/revise')
@@ -60,18 +60,18 @@ assert.match(adminSource, /items:\s*payload\.items/)
 assert.match(adminSource, /opinion:\s*payload\.opinion/)
 assert.match(adminSource, /originalDeviceIds[\s\S]*revisedDeviceIds/)
 
-assert.match(applyDialogSource, /precheckRequired:\s*(?:undefined as )?number \| undefined/)
+assert.doesNotMatch(applyDialogSource, /precheckRequired:\s*(?:undefined as )?number \| undefined/)
 assert.doesNotMatch(applyDialogSource, /verificationMethod:\s*undefined as string \| undefined/)
 assert.match(applyDialogSource, /revisionOpinion:/)
 assert.match(
   applyDialogSource,
-  /props\.type === 'category'[\s\S]*?newVerificationMethod:\s*device\.verificationMethod[\s\S]*?precheckRequired:\s*form\.precheckRequired/
+  /props\.type === 'category'[\s\S]*?newVerificationMethod:\s*device\.verificationMethod/
 )
 assert.match(
   applyDialogSource,
-  /props\.type === 'cycle'[\s\S]*?newVerificationMethod:\s*device\.verificationMethod[\s\S]*?precheckRequired:\s*form\.precheckRequired/
+  /props\.type === 'cycle'[\s\S]*?newVerificationMethod:\s*device\.verificationMethod/
 )
-assert.match(applyDialogSource, /type === 'category' \|\| type === 'cycle'[\s\S]*?是否检定/)
+assert.doesNotMatch(applyDialogSource, /type === 'category' \|\| type === 'cycle'[\s\S]*?是否检定/)
 assert.match(
   applyDialogSource,
   /props\.type === 'precheck'[\s\S]*?newVerificationMethod:\s*device\.verificationMethod/
@@ -80,7 +80,4 @@ assert.doesNotMatch(applyDialogSource, /props\.type === 'precheck'[\s\S]*?sendOu
 assert.doesNotMatch(applyDialogSource, /type === 'precheck'[\s\S]*?v-model:value="form\.verificationMethod"/)
 
 assert.doesNotMatch(approvalDialogSource, /sendOutRequired|sendOutUnit/)
-assert.match(
-  approvalDialogSource,
-  /type === 'category'[\s\S]*?precheckRequired[\s\S]*?type === 'cycle'[\s\S]*?precheckRequired/
-)
+assert.doesNotMatch(approvalDialogSource, /precheckRequired/)

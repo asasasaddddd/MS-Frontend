@@ -19,12 +19,16 @@ export type ChangeScanAction =
   | 'change-external-send-out'
   | 'change-send-out-return'
   | 'change-manager-take-back'
+  | 'change-scrap-inbound'
+  | 'change-transfer-receive'
 
 export type ChangeScanScene =
   | 'change_receive'
   | 'change_send_out'
   | 'change_send_out_return'
   | 'change_take_back'
+  | 'change_scrap_inbound'
+  | 'change_transfer_receive'
 
 export type UnifiedScanAction = FirstCheckScanAction | PeriodicScanAction | ChangeScanAction | string
 export type UnifiedScanBusinessType = 'firstcheck' | 'periodic' | 'change' | string
@@ -73,6 +77,8 @@ export interface PeriodicScanInboxItem {
 export interface ChangeScanInboxItem {
   orderId: ScanEntityId
   itemId: ScanEntityId
+  taskId?: ScanEntityId
+  rowVersion?: ScanEntityId
   orderNo?: string
   changeType?: string
   currentNodeName?: string
@@ -100,6 +106,7 @@ export interface UnifiedScanInboxItem {
   orderId?: ScanEntityId
   itemId?: ScanEntityId
   taskId?: ScanEntityId
+  rowVersion?: ScanEntityId
   deviceId?: ScanEntityId
   orderNo?: string
   taskNo?: string
@@ -133,6 +140,8 @@ export interface ChangeScanRequest {
   orderId: ScanEntityId
   itemId: ScanEntityId
   deviceId: ScanEntityId
+  taskId?: ScanEntityId
+  rowVersion?: ScanEntityId
   scanCode: string
   scanContent?: string
   scanLocation?: string

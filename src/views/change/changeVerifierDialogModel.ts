@@ -11,6 +11,7 @@ export interface ChangeVerifierDialogConfig {
   reasonPlaceholder: string
   showApplicationMeta: boolean
   showVerification: boolean
+  showVerificationDecision?: boolean
   validUntilRequired: boolean
   showCategoryTransition?: boolean
   showCycleTransition?: boolean
@@ -19,6 +20,7 @@ export interface ChangeVerifierDialogConfig {
 
 export interface ChangeVerifierFormState {
   reason: string
+  verificationRequired?: 0 | 1
   verificationDate: string
   validUntil: string
   result: ChangeVerifierResult
@@ -35,7 +37,7 @@ const fullForm = {
   validUntilRequired: true
 } as const
 
-const configs: Record<Exclude<ChangeType, 'transfer'>, ChangeVerifierDialogConfig> = {
+const configs: Record<ChangeType, ChangeVerifierDialogConfig> = {
   enable: {
     type: 'enable',
     title: '启用信息填写',
@@ -54,10 +56,20 @@ const configs: Record<Exclude<ChangeType, 'transfer'>, ChangeVerifierDialogConfi
     showVerification: false,
     validUntilRequired: false
   },
+  transfer: {
+    type: 'transfer',
+    title: '设备转移接收确认',
+    sectionTitle: '设备转移接收信息',
+    reasonLabel: '接收意见',
+    reasonPlaceholder: '请填写设备转移接收意见',
+    showApplicationMeta: false,
+    showVerification: false,
+    validUntilRequired: false
+  },
   scrap: {
     type: 'scrap',
-    title: '非正常报废确认',
-    sectionTitle: '非正常报废信息',
+    title: '确认报废 / 实物入库',
+    sectionTitle: '确认报废 / 实物入库信息',
     reasonLabel: '报废原因',
     reasonPlaceholder: '请填写非正常报废原因及说明',
     showApplicationMeta: false,
@@ -70,9 +82,11 @@ const configs: Record<Exclude<ChangeType, 'transfer'>, ChangeVerifierDialogConfi
     sectionTitle: '管理类别调整信息',
     reasonLabel: '调整原因',
     reasonPlaceholder: '请填写管理类别调整原因及说明',
+    ...fullForm,
     showCategoryTransition: true,
-    showNewCycle: true,
-    ...fullForm
+    showVerificationDecision: true,
+    showNewCycle: false,
+    validUntilRequired: false
   },
   cycle: {
     type: 'cycle',
@@ -81,6 +95,7 @@ const configs: Record<Exclude<ChangeType, 'transfer'>, ChangeVerifierDialogConfi
     reasonLabel: '调整原因',
     reasonPlaceholder: '请填写检定周期调整原因及说明',
     showCycleTransition: true,
+    showVerificationDecision: true,
     ...fullForm
   },
   precheck: {
@@ -123,7 +138,7 @@ export function resolveChangeVerifierDialog(order?: ChangeOrderVO | null): Chang
   const isPeriodicScrapReturn = type === 'scrap' && order?.items?.some((item) => item.scrapType === 'normal')
   const baseConfig = isPeriodicScrapReturn
     ? periodicScrapReturn
-    : type && type !== 'transfer' && configs[type]
+    : type && configs[type]
       ? configs[type]
       : configs.precheck
   const items = order?.items || []
@@ -155,7 +170,13 @@ export function changeVerifierReason(order?: ChangeOrderVO | null) {
 
 export function validateChangeVerifierForm(config: ChangeVerifierDialogConfig, form: ChangeVerifierFormState) {
   if (!form.reason.trim()) return `请填写${config.reasonLabel}`
-  if (!config.showVerification) return ''
+  if (config.showVerificationDecision && form.verificationRequired !== 0 && form.verificationRequired !== 1) {
+    return '请选择是否检定'
+  }
+  const verificationRequired = config.showVerificationDecision
+    ? form.verificationRequired === 1
+    : config.showVerification
+  if (!verificationRequired) return ''
   if (!form.verificationDate) return '请选择检定日期'
   if (config.validUntilRequired && !form.validUntil) return '请选择有效期'
   if (!form.result) return '请选择结果判定'
@@ -174,18 +195,33 @@ export function buildChangeVerifierHandleRequest(
     throw new Error('状态变更任务身份不完整，请刷新后重试')
   }
   const config = resolveChangeVerifierDialog(order)
-  return {
+  const verificationRequired = config.showVerificationDecision
+    ? form.verificationRequired
+    : config.showVerification
+      ? 1
+      : 0
+  if (verificationRequired !== 0 && verificationRequired !== 1) {
+    throw new Error('请选择是否检定')
+  }
+  const baseRequest: ChangeVerifierHandleRequest = {
     orderId: order.id,
     taskId: order.taskId,
     rowVersion: order.rowVersion,
+    verificationRequired,
+    reason: form.reason.trim(),
+    opinion: form.opinion.trim() || undefined
+  }
+  if (verificationRequired === 0) {
+    return baseRequest
+  }
+  return {
+    ...baseRequest,
     verificationResult: form.result,
     verificationDate: form.verificationDate || undefined,
     ...(config.validUntilRequired && form.validUntil ? { validUntil: form.validUntil } : {}),
     certificateAttachmentGroupId: form.certificateAttachmentGroupId,
-    reason: form.reason.trim(),
     responsibleEngineerId: form.responsibleEngineerId,
     responsibleEngineerName: form.responsibleEngineerName,
-    ...(config.showNewCycle && form.newCycleMonth ? { newCycleMonth: form.newCycleMonth } : {}),
-    opinion: form.opinion.trim() || undefined
+    ...(config.showNewCycle && form.newCycleMonth ? { newCycleMonth: form.newCycleMonth } : {})
   }
 }

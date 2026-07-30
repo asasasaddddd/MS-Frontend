@@ -14,6 +14,7 @@ import { useWorkflowTask } from '@/composables/useWorkflowTask'
 import { useSessionStore } from '@/stores/session'
 import type {
   SamplingEntityId,
+  SamplingCountResult,
   SamplingPlanVO,
   SamplingResult,
   SamplingTaskVO,
@@ -68,6 +69,14 @@ const resultOpen = ref(false)
 const resultMode = ref<SamplingResult>('qualified')
 const resultDialogTasks = ref<SamplingTaskVO[]>([])
 const adminOpinion = ref('实物清点无误，同意进入抽检流程')
+const adminCountDrafts = ref<Record<string, { countResult: SamplingCountResult; abnormalReason: string }>>({})
+
+const countResultOptions: Array<{ label: string; value: SamplingCountResult }> = [
+  { label: '正常', value: 'normal' },
+  { label: '丢失', value: 'lost' },
+  { label: '损坏', value: 'damaged' },
+  { label: '其它', value: 'other' }
+]
 
 const routePlanId = computed(() => {
   const value = route.query.planId
@@ -142,6 +151,12 @@ function resetFilter() {
 function updateSelection(keys: SamplingEntityId[], tasks: SamplingTaskVO[]) {
   selectedRowKeys.value = keys
   selectedTasks.value = tasks
+  const nextDrafts = { ...adminCountDrafts.value }
+  for (const task of tasks) {
+    const key = String(task.id)
+    nextDrafts[key] ||= { countResult: task.countResult || 'normal', abnormalReason: task.countReason || '' }
+  }
+  adminCountDrafts.value = nextDrafts
 }
 
 function openDetail(task: SamplingTaskVO) {
@@ -178,8 +193,7 @@ function openProcess(task: SamplingTaskVO) {
     return
   }
   if (action === 'admin-confirm') {
-    selectedRowKeys.value = [task.id]
-    selectedTasks.value = [task]
+    updateSelection([task.id], [task])
     return
   }
   openResult('qualified', [task])
@@ -203,14 +217,28 @@ async function submitAdminConfirm() {
     message.warning('一次只能提交同一张抽检计划内的设备')
     return
   }
+  for (const task of selectedTasks.value) {
+    const draft = adminCountDrafts.value[String(task.id)]
+    if (!draft) {
+      message.warning(`设备 ${task.deviceCode || task.id} 缺少清点结果`)
+      return
+    }
+    if (draft.countResult !== 'normal' && !draft.abnormalReason.trim()) {
+      message.warning(`请填写设备 ${task.deviceCode || task.id} 的异常清点原因`)
+      return
+    }
+  }
   submitting.value = true
   let refreshedByConflict = false
   try {
     for (const task of selectedTasks.value) {
+      const draft = adminCountDrafts.value[String(task.id)]!
       const result = await executeSamplingAction(task, () => adminConfirmSampling({
         samplingTaskId: task.id,
         taskId: taskWorkflowId(task),
         rowVersion: task.rowVersion!,
+        countResult: draft.countResult,
+        abnormalReason: draft.countResult === 'normal' ? undefined : draft.abnormalReason.trim(),
         opinion: adminOpinion.value
       }))
       if (result.status === 'already-handled') {
@@ -221,6 +249,7 @@ async function submitAdminConfirm() {
     message.success('抽检清点结果已提交')
     selectedRowKeys.value = []
     selectedTasks.value = []
+    adminCountDrafts.value = {}
     if (!refreshedByConflict) await loadData()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '抽检清点提交失败')
@@ -293,6 +322,7 @@ async function loadData() {
   loading.value = true
   selectedRowKeys.value = []
   selectedTasks.value = []
+  adminCountDrafts.value = {}
   try {
     /** 路由计划基础信息和权威汇总与任务列表并行读取。 */
     const planContextPromise = loadPlanContext()
@@ -388,6 +418,25 @@ watch(routePlanId, () => {
         <a-button @click="backToTodo">返回待办</a-button>
       </div>
 
+      <div v-if="isAdminActionWorkspace && activeTab === 'todo' && selectedTasks.length > 0" class="admin-count-panel">
+        <div v-for="task in selectedTasks" :key="String(task.id)" class="admin-count-row">
+          <div class="admin-count-device">
+            <strong>{{ task.deviceCode || task.id }}</strong>
+            <span>{{ task.deviceName || '-' }}</span>
+          </div>
+          <a-select
+            v-model:value="adminCountDrafts[String(task.id)].countResult"
+            class="count-result-select"
+            :options="countResultOptions"
+          />
+          <a-input
+            v-model:value="adminCountDrafts[String(task.id)].abnormalReason"
+            :disabled="adminCountDrafts[String(task.id)].countResult === 'normal'"
+            placeholder="异常清点时填写原因"
+          />
+        </div>
+      </div>
+
       <SamplingTaskTable
         :tasks="visibleTasks"
         :role="role"
@@ -450,6 +499,39 @@ watch(routePlanId, () => {
   padding: 12px 14px;
   border-bottom: 1px solid #e5eaf1;
   background: #fbfcfe;
+}
+
+.admin-count-panel {
+  display: grid;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e5eaf1;
+  background: #fffaf0;
+}
+
+.admin-count-row {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 140px minmax(260px, 2fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-count-device {
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  color: #344054;
+}
+
+.admin-count-device span {
+  overflow: hidden;
+  color: #667085;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count-result-select {
+  width: 140px;
 }
 
 .task-tabs {

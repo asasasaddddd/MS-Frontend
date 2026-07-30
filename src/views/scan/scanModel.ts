@@ -12,7 +12,9 @@ export const changeScanActions: ChangeScanAction[] = [
   'change-verifier-receive',
   'change-external-send-out',
   'change-send-out-return',
-  'change-manager-take-back'
+  'change-manager-take-back',
+  'change-scrap-inbound',
+  'change-transfer-receive'
 ]
 
 export const periodicScanActions: PeriodicScanAction[] = [
@@ -41,14 +43,18 @@ const scanCodeByAction: Readonly<Record<string, string>> = {
   'change-verifier-receive': 'RECEIVE',
   'change-external-send-out': 'SEND_OUT',
   'change-send-out-return': 'SEND_OUT_RETURN',
-  'change-manager-take-back': 'TAKE_BACK'
+  'change-manager-take-back': 'TAKE_BACK',
+  'change-scrap-inbound': 'SCRAP_INBOUND',
+  'change-transfer-receive': 'TRANSFER_RECEIVE'
 }
 
 const changeNodeNameByAction: Readonly<Record<ChangeScanAction, string>> = {
   'change-verifier-receive': '\u5f85\u68c0\u5b9a\u5458\u63a5\u6536',
   'change-external-send-out': '\u5f85\u5916\u59d4\u9001\u51fa',
   'change-send-out-return': '\u5f85\u5916\u59d4\u9001\u56de',
-  'change-manager-take-back': '\u5f85\u7ba1\u7406\u5458\u53d6\u56de'
+  'change-manager-take-back': '\u5f85\u7ba1\u7406\u5458\u53d6\u56de',
+  'change-scrap-inbound': '\u5f85\u62a5\u5e9f\u5b9e\u7269\u5165\u5e93',
+  'change-transfer-receive': '\u5f85\u63a5\u6536\u90e8\u95e8\u7ba1\u7406\u5458\u626b\u7801'
 }
 
 function normalizedActionCodes(actions?: readonly string[]) {
@@ -148,6 +154,8 @@ export function normalizeChangeInboxRow(row: ChangeScanInboxItem): UnifiedScanIn
     businessId: row.orderId,
     orderId: row.orderId,
     itemId: row.itemId,
+    taskId: row.taskId,
+    rowVersion: row.rowVersion,
     deviceId: row.deviceId,
     currentNodeName: row.currentNodeName || (row.scanned ? '\u5df2\u626b\u7801' : changeNodeNameByAction[action]),
     scanAction: action,

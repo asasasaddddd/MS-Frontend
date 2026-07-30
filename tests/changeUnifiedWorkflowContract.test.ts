@@ -23,9 +23,11 @@ assert.deepEqual(buildChangeRejectRequest({ ...taskIdentity, reason: '资料不�
 })
 assert.deepEqual(buildChangeVerifierHandleRequest({
   ...taskIdentity,
+  verificationRequired: 1,
   verificationResult: 'qualified'
 }), {
   ...taskIdentity,
+  verificationRequired: 1,
   verificationResult: 'qualified'
 })
 

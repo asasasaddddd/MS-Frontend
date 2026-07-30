@@ -103,7 +103,7 @@ function createChange() {
     const payload = buildPeriodicExceptionChangeRequest(tasksToDisplay.value, session.user || undefined, form)
     emit('createChange', payload)
   } catch (error) {
-    message.warning(error instanceof Error ? error.message : '状态变更申请信息不完整')
+    message.warning(error instanceof Error ? error.message : '周检异常处理信息不完整')
   }
 }
 
@@ -268,10 +268,10 @@ watch(longerVerificationCycleOptions, (options) => {
               <AttachmentUploadButton
                 v-model="form.attachmentGroupId"
                 business-type="CHANGE_APPLY"
-                remark="周检异常状态变更申请附件"
+                remark="周检异常处理附件"
                 button-text="上传文件"
               />
-              <span>支持 pdf、doc、jpg，最多 10MB；附件会随状态变更申请流转</span>
+              <span>支持 pdf、doc、jpg，最多 10MB；附件会随周检异常处理流程流转</span>
             </div>
           </label>
         </div>

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
   buildPeriodicExceptionChangeRequest,
@@ -6,6 +7,19 @@ import {
   periodicExceptionHandlingType,
   periodicCycleExtensionOptions
 } from '../src/views/periodic/periodicExceptionModel.ts'
+
+const exceptionDialogSource = readFileSync(
+  new URL('../src/views/periodic/components/PeriodicExceptionDialog.vue', import.meta.url),
+  'utf8'
+)
+const workspaceSource = readFileSync(
+  new URL('../src/views/periodic/components/PeriodicTaskWorkspace.vue', import.meta.url),
+  'utf8'
+)
+
+assert.doesNotMatch(exceptionDialogSource, /状态变更申请/)
+assert.doesNotMatch(workspaceSource, /状态变更申请已提交|状态变更申请提交失败/)
+assert.match(workspaceSource, /异常分流已提交/)
 
 const task = {
   id: '2073579908903317505',

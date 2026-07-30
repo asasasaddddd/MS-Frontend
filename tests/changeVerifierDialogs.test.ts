@@ -22,6 +22,14 @@ const verifierViewSource = readFileSync(
   new URL('../src/views/change/ChangeVerifierView.vue', import.meta.url),
   'utf8'
 )
+const applyDialogSource = readFileSync(
+  new URL('../src/views/change/components/ChangeApplyDialog.vue', import.meta.url),
+  'utf8'
+)
+const receiveAdminSource = readFileSync(
+  new URL('../src/views/change/components/ChangeReceiveAdminPanel.vue', import.meta.url),
+  'utf8'
+)
 const productSupportSource = readFileSync(
   new URL('../src/views/product-support/ProductSupportVerifierView.vue', import.meta.url),
   'utf8'
@@ -60,7 +68,7 @@ assertFields(dialogSource, ['申请时间', '附件', '上传文件', '返回', 
 ;[
   '启用信息填写',
   '封存确认',
-  '非正常报废确认',
+  '确认报废 / 实物入库',
   '周检报废退回',
   '管理类别调整填写',
   '检定周期调整填写',
@@ -91,6 +99,15 @@ assert.equal(deferConfig.type, 'defer')
 assert.equal(deferConfig.title, '缓检确认')
 assert.equal(deferConfig.showVerification, false, '缓检不进入检定员，不应展示检定信息')
 
+const transferConfig = resolveChangeVerifierDialog({
+  id: 'CHANGE-TRANSFER-1',
+  changeType: 'transfer'
+})
+assert.equal(transferConfig.showVerification, false, '设备转移不应展示检定结果')
+
+assert.doesNotMatch(applyDialogSource, /label="是否检定"|form\.precheckRequired/)
+assert.doesNotMatch(applyDialogSource, /precheckRequired:\s*form\.precheckRequired/)
+
 const handleRequest = buildChangeVerifierHandleRequest(
   {
     id: 'CHANGE-CYCLE-1',
@@ -100,6 +117,7 @@ const handleRequest = buildChangeVerifierHandleRequest(
   },
   {
     reason: '调整周期',
+    verificationRequired: 1,
     verificationDate: '2026-07-27',
     validUntil: '2027-07-26',
     result: 'qualified',
@@ -111,6 +129,7 @@ assert.equal(
   false,
   '状态变更检定请求不再提交需送检字段'
 )
+assert.equal(handleRequest.verificationRequired, 1)
 
 const handleRequestTypeSource = changeTypeSource.match(
   /export interface ChangeVerifierHandleRequest \{[\s\S]*?\n\}/
@@ -118,6 +137,7 @@ const handleRequestTypeSource = changeTypeSource.match(
 assert.ok(handleRequestTypeSource)
 assert.doesNotMatch(handleRequestTypeSource, /sendOutRequired/)
 assert.doesNotMatch(handleRequestTypeSource, /unqualified/)
+assert.match(handleRequestTypeSource, /verificationRequired:\s*0\s*\|\s*1/)
 assert.match(changeTypeSource, /\| 'defer'/)
 
 assert.doesNotMatch(dialogSource, /需送检|已标记送检|showNeedSend|needSend|toggleNeedSend/)
@@ -133,6 +153,7 @@ assert.equal(oneTimeConfig.validUntilRequired, false)
 assert.equal(oneTimeConfig.showNewCycle, false, '一次检定不得继续要求或提交检定周期')
 assert.equal(validateChangeVerifierForm(oneTimeConfig, {
   reason: '一次检定',
+  verificationRequired: 1,
   verificationDate: '2026-07-28',
   validUntil: '',
   result: 'qualified',
@@ -150,6 +171,7 @@ const oneTimeRequest = buildChangeVerifierHandleRequest(
   },
   {
     reason: '一次检定无需周期和有效期',
+    verificationRequired: 1,
     verificationDate: '2026-07-28',
     validUntil: '2027-07-27',
     newCycleMonth: 12,
@@ -165,16 +187,52 @@ const periodicCategoryConfig = resolveChangeVerifierDialog({
   changeType: 'category',
   items: [{ id: 'ITEM-PERIODIC-CATEGORY-1', confirmInterval: '周期检定' }]
 })
-assert.equal(periodicCategoryConfig.validUntilRequired, true)
-assert.equal(periodicCategoryConfig.showNewCycle, true)
-assert.notEqual(validateChangeVerifierForm(periodicCategoryConfig, {
-  reason: '周期检定仍需周期和有效期',
+assert.equal(periodicCategoryConfig.validUntilRequired, false, '调整为C类后标签使用检定日期，不应继续要求有效期')
+assert.equal(periodicCategoryConfig.showNewCycle, false, '管理类别调整为C类时检定周期必须置空')
+assert.equal(periodicCategoryConfig.showVerificationDecision, true)
+assert.equal(validateChangeVerifierForm(periodicCategoryConfig, {
+  reason: '调整为C类后按一次检定处理',
+  verificationRequired: 1,
   verificationDate: '2026-07-28',
   validUntil: '',
   result: 'qualified',
   opinion: ''
 }), '')
+
+const noVerificationCategoryRequest = buildChangeVerifierHandleRequest(
+  {
+    id: 'CHANGE-CATEGORY-SKIP-1',
+    changeType: 'category',
+    taskId: 'TASK-CATEGORY-SKIP-1',
+    rowVersion: 4,
+    items: [{ id: 'ITEM-CATEGORY-SKIP-1', newCategory: 'C' }]
+  },
+  {
+    reason: '接收后确认无需检定',
+    verificationRequired: 0,
+    verificationDate: '2026-07-28',
+    validUntil: '2027-07-27',
+    result: 'qualified',
+    newCycleMonth: 12,
+    opinion: ''
+  }
+)
+assert.equal(noVerificationCategoryRequest.verificationRequired, 0)
+assert.equal(Object.prototype.hasOwnProperty.call(noVerificationCategoryRequest, 'verificationResult'), false)
+assert.equal(Object.prototype.hasOwnProperty.call(noVerificationCategoryRequest, 'verificationDate'), false)
+assert.equal(Object.prototype.hasOwnProperty.call(noVerificationCategoryRequest, 'validUntil'), false)
+assert.equal(Object.prototype.hasOwnProperty.call(noVerificationCategoryRequest, 'newCycleMonth'), false)
+assert.equal(validateChangeVerifierForm(periodicCategoryConfig, {
+  reason: '无需检定',
+  verificationRequired: 0,
+  verificationDate: '',
+  validUntil: '',
+  result: 'qualified',
+  opinion: ''
+}), '')
 assert.match(dialogSource, /props\.order\?\.id/)
+assert.match(dialogSource, /是否检定/)
+assert.match(dialogSource, /form\.verificationRequired/)
 
 assert.match(modelSource, /scrapType.*normal|normal.*scrapType/s)
 assert.match(dialogSource, /listUsersByDeptAndRole\([^)]*'RESPONSIBLE_ENGINEER'/s)
@@ -183,6 +241,13 @@ assert.match(dialogSource, /width="820px"/)
 assert.match(dialogSource, /grid-template-columns:\s*repeat\(4,/)
 assert.ok(verifierViewSource.includes('ChangeVerifierHandleDialog'))
 assert.ok(!verifierViewSource.includes('mode="verifier"'))
+
+assert.match(changeTypeSource, /physicalStatus\?:\s*string/)
+assert.match(changeTypeSource, /lastScanRecordId\?:\s*EntityId/)
+assert.match(changeTypeSource, /lastScanUserId\?:\s*string/)
+assert.match(receiveAdminSource, /扫码状态/)
+assert.match(receiveAdminSource, /接收签字/)
+assert.match(receiveAdminSource, /transfer_received/)
 
 assertFields(
   productSupportSource,

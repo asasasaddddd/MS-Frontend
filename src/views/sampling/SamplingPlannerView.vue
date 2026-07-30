@@ -1,17 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { createSamplingPlan } from '@/api/sampling'
-import { listDevicePage } from '@/api/device'
+import { createSamplingPlan, listSamplingEligibleDevices } from '@/api/sampling'
 import { useSessionStore } from '@/stores/session'
-import type { DeviceVO } from '@/types/device'
-import type { SamplingEntityId } from '@/types/sampling'
+import type { SamplingEligibleDevice, SamplingEntityId } from '@/types/sampling'
 import { display, formatDate } from './samplingDisplayModel'
 
 const session = useSessionStore()
 const loading = ref(false)
 const submitting = ref(false)
-const rows = ref<DeviceVO[]>([])
+const rows = ref<SamplingEligibleDevice[]>([])
 const selectedRowKeys = ref<SamplingEntityId[]>([])
 
 const form = reactive({
@@ -27,54 +25,40 @@ const form = reactive({
 
 const selectedDevices = computed(() => {
   const keys = new Set(selectedRowKeys.value.map(String))
-  return rows.value.filter((row) => keys.has(String(row.id)))
+  return rows.value.filter((row) => row.eligible === true && keys.has(String(row.deviceId)))
 })
+const dataQualityRows = computed(() => rows.value.filter((row) => row.eligible !== true))
 
 const columns = [
   { title: '序号', key: 'index', width: 70 },
   { title: '计量编号', key: 'deviceCode', width: 160 },
   { title: '设备名称', key: 'deviceName', width: 180 },
   { title: '使用部门', key: 'deptName', width: 180 },
-  { title: '检定日期', key: 'verificationDate', width: 130 },
-  { title: '管理类别', key: 'manageCategory', width: 100 },
+  { title: '有效期', key: 'validUntil', width: 130 },
+  { title: '超期年限', key: 'overdueYears', width: 110 },
   { title: '规格型号', key: 'modelSpec', width: 150 },
-  { title: '出厂编号', key: 'factoryCode', width: 140 },
-  { title: '检定方式', key: 'verificationMethod', width: 120 },
-  { title: '是否通用设备', key: 'isCommon', width: 130 }
+  { title: '资格状态', key: 'eligible', width: 110 },
+  { title: '数据质量', key: 'dataQualityReason', width: 220 }
 ]
 
 const rowSelection = computed(() => ({
   selectedRowKeys: selectedRowKeys.value,
   onChange: (keys: SamplingEntityId[]) => {
     selectedRowKeys.value = keys
-  }
+  },
+  getCheckboxProps: (row: SamplingEligibleDevice) => ({
+    disabled: row.eligible !== true,
+    title: row.eligible !== true ? row.dataQualityReason || '当前设备不满足抽检资格' : undefined
+  })
 }))
-
-function methodName() {
-  return '自检'
-}
-
-function commonName(value?: number) {
-  if (value === 1) return '是'
-  if (value === 0) return '否'
-  return '-'
-}
 
 async function loadDevices() {
   loading.value = true
   try {
-    const page = await listDevicePage({
-      current: 1,
-      size: 200,
-      deptName: form.deptName || undefined,
-      manageCategory: 'C'
-    })
-    rows.value = page.records.filter((row) => {
-      const status = String(row.deviceStatus || '').toLowerCase()
-      const category = String(row.manageCategory || '')
-      return (category === 'C' || category === 'C类') && (!status || status === 'in_use' || status === '在用')
-    })
-    selectedRowKeys.value = selectedRowKeys.value.filter((key) => rows.value.some((row) => String(row.id) === String(key)))
+    rows.value = await listSamplingEligibleDevices(form.deptId || undefined)
+    selectedRowKeys.value = selectedRowKeys.value.filter((key) =>
+      rows.value.some((row) => row.eligible === true && String(row.deviceId) === String(key))
+    )
   } catch (error) {
     rows.value = []
     message.error(error instanceof Error ? error.message : '抽检候选设备加载失败')
@@ -108,7 +92,7 @@ async function submitPlan() {
       deptName: form.deptName || session.user?.deptName,
       verificationDate: form.verificationDate,
       planStartDate: form.verificationDate,
-      deviceIds: selectedDevices.value.map((device) => device.id),
+      deviceIds: selectedDevices.value.map((device) => device.deviceId),
       remark: form.remark
     })
     message.success(`抽检计划已提交：${planId}`)
@@ -131,7 +115,7 @@ onMounted(loadDevices)
       <div class="form-grid cols-4">
         <label><span>检定日期 <b>*</b></span><a-input v-model:value="form.verificationDate" type="date" /></label>
         <label><span>管理类别</span><a-input v-model:value="form.manageCategory" readonly /></label>
-        <label><span>使用部门 <b>*</b></span><a-input v-model:value="form.deptName" placeholder="输入使用部门筛选" /></label>
+        <label><span>使用部门 <b>*</b></span><a-input v-model:value="form.deptName" readonly /></label>
         <label><span>计划名称</span><a-input v-model:value="form.planName" placeholder="默认按日期生成" /></label>
         <label><span>抽检规则</span><a-input v-model:value="form.sampleRule" /></label>
         <label><span>抽检比例</span><a-input-number v-model:value="form.sampleRate" :min="0" :max="100" style="width:100%" /></label>
@@ -153,28 +137,35 @@ onMounted(loadDevices)
         <a-button @click="selectedRowKeys = []">取消</a-button>
         <a-button type="primary" :loading="submitting" @click="submitPlan">提交</a-button>
       </div>
+      <a-alert
+        v-if="dataQualityRows.length > 0"
+        type="warning"
+        show-icon
+        :message="`发现 ${dataQualityRows.length} 台数据质量异常设备，已禁止勾选`"
+        description="请先补齐台账有效期等必要信息，再重新查询抽检资格。"
+      />
       <a-table
         :columns="columns"
         :data-source="rows"
         :loading="loading"
         :pagination="{ pageSize: 10, showSizeChanger: false }"
-        :row-key="(row: DeviceVO) => row.id"
+        :row-key="(row: SamplingEligibleDevice) => row.deviceId"
         :row-selection="rowSelection"
         :scroll="{ x: 1300 }"
         size="middle"
       >
         <template #bodyCell="{ column, record, index }">
           <template v-if="column.key === 'index'">{{ index + 1 }}</template>
-          <template v-else-if="column.key === 'verificationDate'">{{ form.verificationDate }}</template>
-          <template v-else-if="column.key === 'manageCategory'">{{ display(record.manageCategory) }}</template>
-          <template v-else-if="column.key === 'verificationMethod'">{{ methodName() }}</template>
-          <template v-else-if="column.key === 'isCommon'">{{ commonName(record.isCommon) }}</template>
           <template v-else-if="column.key === 'deptName'">{{ display(record.deptName) }}</template>
           <template v-else-if="column.key === 'deviceCode'">{{ display(record.deviceCode) }}</template>
           <template v-else-if="column.key === 'deviceName'">{{ display(record.deviceName) }}</template>
           <template v-else-if="column.key === 'modelSpec'">{{ display(record.modelSpec) }}</template>
-          <template v-else-if="column.key === 'factoryCode'">{{ display(record.factoryCode) }}</template>
-          <template v-else>{{ formatDate(record.validUntil) }}</template>
+          <template v-else-if="column.key === 'validUntil'">{{ formatDate(record.validUntil) }}</template>
+          <template v-else-if="column.key === 'overdueYears'">{{ record.overdueYears ?? '-' }}</template>
+          <template v-else-if="column.key === 'eligible'">
+            <a-tag :color="record.eligible === true ? 'green' : 'orange'">{{ record.eligible === true ? '可抽检' : '不可勾选' }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'dataQualityReason'">{{ display(record.dataQualityReason) }}</template>
         </template>
       </a-table>
     </a-card>

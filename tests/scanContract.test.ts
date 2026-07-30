@@ -258,6 +258,40 @@ const changeRows = [
     deviceName: '\u72b6\u6001\u53d8\u66f4\u8bbe\u59074',
     allowedActions: ['TAKE_BACK'],
     scanned: false
+  },
+  {
+    orderId: '3005',
+    itemId: '3105',
+    taskId: '3305',
+    rowVersion: '5',
+    orderNo: 'BG-3005',
+    changeType: 'transfer',
+    currentNodeName: '\u5f85\u63a5\u6536\u90e8\u95e8\u7ba1\u7406\u5458\u626b\u7801',
+    scanStatus: 'pending',
+    scanAction: 'change-transfer-receive',
+    scanScene: 'change_transfer_receive',
+    scanCode: 'JL-3005',
+    deviceId: '3205',
+    deviceCode: 'JL-3005',
+    deviceName: '\u72b6\u6001\u53d8\u66f4\u8bbe\u59075',
+    allowedActions: ['TRANSFER_RECEIVE'],
+    scanned: false
+  },
+  {
+    orderId: '3006',
+    itemId: '3106',
+    orderNo: 'BG-3006',
+    changeType: 'scrap',
+    currentNodeName: '\u5f85\u62a5\u5e9f\u5b9e\u7269\u5165\u5e93',
+    scanStatus: 'pending',
+    scanAction: 'change-scrap-inbound',
+    scanScene: 'change_scrap_inbound',
+    scanCode: 'JL-3006',
+    deviceId: '3206',
+    deviceCode: 'JL-3006',
+    deviceName: '\u72b6\u6001\u53d8\u66f4\u8bbe\u59076',
+    allowedActions: ['SCRAP_INBOUND'],
+    scanned: false
   }
 ]
 
@@ -301,7 +335,9 @@ assert.deepEqual(
     'change-verifier-receive',
     'change-external-send-out',
     'change-send-out-return',
-    'change-manager-take-back'
+    'change-manager-take-back',
+    'change-transfer-receive',
+    'change-scrap-inbound'
   ]
 )
 assert.equal(rows.some((row) => row.orderId === 1005), false)
@@ -348,7 +384,9 @@ assert.deepEqual(
     'change-verifier-receive',
     'change-external-send-out',
     'change-send-out-return',
-    'change-manager-take-back'
+    'change-manager-take-back',
+    'change-transfer-receive',
+    'change-scrap-inbound'
   ]
 )
 assert.equal(normalizedChangeRows.every((row) => row.sourceType === 'CHANGE'), true)
@@ -374,7 +412,9 @@ assert.deepEqual(
     '/change/verifier-receive',
     '/change/external-send-out',
     '/change/send-out-return',
-    '/change/manager-take-back'
+    '/change/manager-take-back',
+    '/change/transfer-receive',
+    '/change/scrap-inbound'
   ]
 )
 assert.deepEqual(
@@ -382,6 +422,13 @@ assert.deepEqual(
   changeRows.map((row) => [row.orderId, row.itemId, row.deviceId])
 )
 assert.equal(changeSubmitCalls.every((call) => call.data.scanCode === call.data.scanCode.trim()), true)
+const transferReceiveCall = changeSubmitCalls.find((call) => call.url === '/change/transfer-receive')
+assert.deepEqual(
+  [transferReceiveCall?.data.taskId, transferReceiveCall?.data.rowVersion],
+  ['3305', '5']
+)
+assert.equal(scan.scanActionName('change-transfer-receive'), '转移接收')
+assert.equal(scan.scanActionName('change-scrap-inbound'), '报废实物入库')
 
 const unauthorizedRow = {
   ...rows.find((row) => row.orderId === largeFirstCheckOrderId)!,

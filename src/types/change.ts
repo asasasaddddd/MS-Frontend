@@ -93,7 +93,9 @@ export interface ChangeVerifierHandleRequest {
   taskId: EntityId
   /** 统一工作流任务乐观并发版本。 */
   rowVersion: EntityId
-  verificationResult: 'qualified' | 'scrap' | 'repair'
+  /** 检定员接收实物后的真实检定选择。 */
+  verificationRequired: 0 | 1
+  verificationResult?: 'qualified' | 'scrap' | 'repair'
   verificationDate?: string
   validUntil?: string
   certificateAttachmentGroupId?: EntityId
@@ -150,6 +152,11 @@ export interface ChangeItemVO {
   verificationRecordId?: EntityId
   certificateAttachmentGroupId?: EntityId
   itemStatus?: string
+  physicalStatus?: string
+  lastScanRecordId?: EntityId
+  lastScanScene?: string
+  lastScanTime?: string
+  lastScanUserId?: string
   remark?: string
 }
 
