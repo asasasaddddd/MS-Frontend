@@ -39,11 +39,20 @@ export function listSamplingPlanTasks(planId: SamplingEntityId) {
   })
 }
 
-export function getSamplingTask(taskId: SamplingEntityId, signal?: AbortSignal) {
+export function getSamplingTask(
+  samplingTaskId: SamplingEntityId,
+  workflowTaskIdOrSignal?: SamplingEntityId | AbortSignal,
+  signal?: AbortSignal
+) {
+  const hasWorkflowTaskId =
+    typeof workflowTaskIdOrSignal === 'string' || typeof workflowTaskIdOrSignal === 'number'
+  const workflowTaskId = hasWorkflowTaskId ? workflowTaskIdOrSignal : undefined
+  const requestSignal = hasWorkflowTaskId ? signal : workflowTaskIdOrSignal
   return request<SamplingTaskVO>({
-    url: `/sampling/tasks/${taskId}`,
+    url: `/sampling/tasks/${samplingTaskId}`,
     method: 'GET',
-    signal
+    params: workflowTaskId === undefined ? undefined : { taskId: workflowTaskId },
+    signal: requestSignal
   })
 }
 

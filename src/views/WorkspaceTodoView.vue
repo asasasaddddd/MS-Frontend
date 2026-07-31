@@ -596,7 +596,7 @@ async function loadWorkflowSummary() {
       return getPeriodicTask(task.businessId, task.taskId, signal)
     }
     if (matchesBusinessType(task.businessType, 'sampling')) {
-      return getSamplingTask(task.businessId, signal)
+      return getSamplingTask(task.businessId, task.taskId, signal)
     }
     if (matchesBusinessType(task.businessType, 'productSupport')) {
       return getProductSupportOrder(task.businessId, signal)

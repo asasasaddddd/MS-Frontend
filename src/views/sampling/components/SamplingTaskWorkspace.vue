@@ -329,7 +329,7 @@ async function loadData() {
     await refreshWorkflowTasks()
     const details = await loadWorkflowDetails(
       [...workflowTodoTasks.value, ...workflowParticipatedTasks.value],
-      (task, signal) => getSamplingTask(task.businessId, signal)
+      (task, signal) => getSamplingTask(task.businessId, task.taskId, signal)
     )
     if (!details || loadId !== dataLoadId) return
     const detailByWorkflowTaskId = new Map(details.map((task) => [String(task.workflowTaskId), task]))
