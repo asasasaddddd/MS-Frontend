@@ -22,6 +22,8 @@ assert.equal(resolvePeriodicTaskAction(periodicTask('send_out', ['SEND_OUT'])), 
 assert.equal(resolvePeriodicTaskAction(periodicTask('send_out', ['SEND_OUT_RETURN'])), undefined)
 assert.equal(resolvePeriodicTaskAction(periodicTask('verifier_second_judge', ['SUBMIT'])), undefined)
 assert.equal(resolvePeriodicTaskAction(periodicTask('verifier_second_judge', ['JUDGE'])), 'judgement')
+assert.equal(resolvePeriodicTaskAction(periodicTask('responsible_scrap_confirm', ['APPROVE_REJECT'])), 'scrap-confirm')
+assert.equal(resolvePeriodicTaskAction(periodicTask('responsible_scrap_tracking_decision', ['JUDGE'])), 'scrap-tracking-decision')
 assert.equal(resolvePeriodicTaskAction(periodicTask('manager_forward_confirm', ['SUBMIT'])), 'manager-forward')
 assert.equal(resolvePeriodicTaskAction(periodicTask('confirmer_confirm', ['APPROVE_REJECT'])), 'confirm')
 assert.equal(resolvePeriodicTaskAction(periodicTask('send_out_return', ['VIEW'])), undefined)

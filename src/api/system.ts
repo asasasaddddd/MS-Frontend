@@ -1,9 +1,9 @@
 import { request } from '@/api/request'
-import type { PageResult } from '@/types/common'
+import type { EntityId, PageResult } from '@/types/common'
 import type { AllowedOrganizationNodeVO } from '@/types/nodePermission'
 
 export interface SysUserVO {
-  id?: number
+  id?: EntityId
   employeeId: string
   employeeName?: string
   orgId?: string
@@ -22,7 +22,7 @@ export interface SysUserVO {
 }
 
 export interface SysOrgVO {
-  id?: number
+  id?: EntityId
   orgId: string
   orgFullCName?: string
   orgSimpleCName?: string
@@ -51,7 +51,7 @@ export interface SysUserOrgRelationVO {
 }
 
 export interface SysRoleVO {
-  id: number
+  id: EntityId
   roleCode: string
   roleName: string
   roleDesc?: string

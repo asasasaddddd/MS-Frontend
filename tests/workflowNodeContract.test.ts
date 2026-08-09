@@ -29,6 +29,15 @@ const responsibleJudgementNodes = [
   'responsible_third_judge',
   'responsible_fourth_judge'
 ]
+const responsibleScrapNodes = [
+  ['responsible_scrap_confirm', 'POST /api/periodic/responsible-scrap-confirm'],
+  ['responsible_scrap_tracking_decision', 'POST /api/periodic/responsible-scrap-tracking-decision']
+] as const
+for (const [nodeCode, api] of responsibleScrapNodes) {
+  const node = getWorkflowNode('periodic', nodeCode)
+  assert.deepEqual(node?.roles, ['RESPONSIBLE_ENGINEER'])
+  assert.equal(node?.api, api)
+}
 for (const nodeCode of responsibleJudgementNodes) {
   const node = getWorkflowNode('periodic', nodeCode)
   assert.deepEqual(node?.roles, ['RESPONSIBLE_ENGINEER'])
@@ -48,7 +57,10 @@ assert.equal(verifierScrapDisposalNode?.api, 'POST /api/periodic/scrap-disposal'
 
 assert.equal(getWorkflowNode('periodic', 'external_third_judge'), undefined)
 
-assert.deepEqual(workflowNodeGroups.periodic.responsibleEngineer, responsibleJudgementNodes)
+assert.deepEqual(workflowNodeGroups.periodic.responsibleEngineer, [
+  ...responsibleScrapNodes.map(([nodeCode]) => nodeCode),
+  ...responsibleJudgementNodes
+])
 assert.equal(
   ['verifier_second_judge', 'verifier_third_judge', 'verifier_scrap_disposal'].every((nodeCode) =>
     workflowNodeGroups.periodic.externalVerifier.includes(nodeCode)

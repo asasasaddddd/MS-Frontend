@@ -10,6 +10,7 @@ import type {
   CostSummaryVO,
   CostStatistics
 } from '@/types/cost'
+import type { EntityId } from '@/types/common'
 
 export function listCostRecords(params: CostRecordQueryRequest = {}) {
   return request<CostRecordVO[]>({
@@ -30,7 +31,7 @@ export function getCostSummary(params: CostSummaryQueryRequest = {}) {
 }
 
 export function createManualCostRecord(data: CostManualCreateRequest) {
-  return request<string | number>({
+  return request<EntityId>({
     url: costEndpoint('manual'),
     method: 'POST',
     data: buildCostManualRequest(data)
@@ -55,7 +56,7 @@ export function cancelCostRecord(data: CostCancelRequest) {
   })
 }
 
-export function cancelCost(recordId: string | number, reason: string) {
+export function cancelCost(recordId: EntityId, reason: string) {
   return cancelCostRecord({ recordId, reason })
 }
 

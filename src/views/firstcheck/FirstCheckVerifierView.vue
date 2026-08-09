@@ -8,6 +8,7 @@ import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
 import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { WorkflowTask } from '@/types/workflow'
+import type { EntityId, RowVersion } from '@/types/common'
 import { useSessionStore } from '@/stores/session'
 import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
 import FirstCheckHistoryPanel from '@/views/firstcheck/components/FirstCheckHistoryPanel.vue'
@@ -24,8 +25,8 @@ type StatusFilter = 'all' | FirstCheckVerifierStatusKey
 
 interface VerifierRow {
   key: string
-  taskId: string | number
-  taskRowVersion: string | number
+  taskId: EntityId
+  taskRowVersion: RowVersion
   allowedActions: string[]
   nodeCode: string
   nodeName?: string

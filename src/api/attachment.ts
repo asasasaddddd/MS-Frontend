@@ -9,6 +9,7 @@ import {
   type AttachmentUploadInput
 } from '@/api/attachmentModel'
 import type { AttachmentCaseGroupVO } from '@/types/device'
+import type { EntityId } from '@/types/common'
 
 export type {
   AttachmentGroupCreateInput,
@@ -54,8 +55,8 @@ export async function listAttachmentsByGroupId(groupId: AttachmentId) {
 }
 
 export function listAttachmentsByCaseId(
-  caseId: string | number,
-  deviceId: string | number
+  caseId: EntityId,
+  deviceId: EntityId
 ) {
   return request<AttachmentCaseGroupVO[]>({
     url: `/attachment/cases/${encodeURIComponent(String(caseId))}/devices/${encodeURIComponent(String(deviceId))}`,

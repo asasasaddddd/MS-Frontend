@@ -44,7 +44,7 @@ const approvalDialogSource = readFileSync(
 
 assert.match(
   typeSource,
-  /interface ChangeReviseRequest \{[\s\S]*?orderId:\s*EntityId[\s\S]*?taskId:\s*EntityId[\s\S]*?rowVersion:\s*EntityId[\s\S]*?reason\?:\s*string[\s\S]*?remark\?:\s*string[\s\S]*?attachmentGroupId\?:\s*EntityId[\s\S]*?opinion:\s*string[\s\S]*?items:\s*ChangeItemSubmitRequest\[\]/
+  /interface ChangeReviseRequest \{[\s\S]*?orderId:\s*EntityId[\s\S]*?taskId:\s*EntityId[\s\S]*?rowVersion:\s*RowVersion[\s\S]*?reason\?:\s*string[\s\S]*?remark\?:\s*string[\s\S]*?attachmentGroupId\?:\s*EntityId[\s\S]*?opinion:\s*string[\s\S]*?items:\s*ChangeItemSubmitRequest\[\]/
 )
 assert.match(apiSource, /function reviseChange\([\s\S]*changeEndpoint\('revise'\)[\s\S]*buildChangeReviseRequest\(data\)/)
 assert.match(workflowSource, /code:\s*'manager_revise'[\s\S]*module:\s*'change'[\s\S]*RESUBMIT[\s\S]*\/api\/change\/revise/)
@@ -59,6 +59,10 @@ assert.match(adminSource, /rowVersion:\s*order\.rowVersion/)
 assert.match(adminSource, /items:\s*payload\.items/)
 assert.match(adminSource, /opinion:\s*payload\.opinion/)
 assert.match(adminSource, /originalDeviceIds[\s\S]*revisedDeviceIds/)
+assert.match(
+  applyDialogSource,
+  /v-if="order" class="revision-device-list"[\s\S]*v-for="device in devices"[\s\S]*display\(device\.deviceCode\)/
+)
 
 assert.doesNotMatch(applyDialogSource, /precheckRequired:\s*(?:undefined as )?number \| undefined/)
 assert.doesNotMatch(applyDialogSource, /verificationMethod:\s*undefined as string \| undefined/)
@@ -75,6 +79,14 @@ assert.doesNotMatch(applyDialogSource, /type === 'category' \|\| type === 'cycle
 assert.match(
   applyDialogSource,
   /props\.type === 'precheck'[\s\S]*?newVerificationMethod:\s*device\.verificationMethod/
+)
+assert.match(
+  applyDialogSource,
+  /props\.type === 'defer'[\s\S]*?verificationReason:\s*form\.verificationReason/
+)
+assert.match(
+  applyDialogSource,
+  /props\.type === 'defer'[\s\S]*?return required\(form\.verificationReason/
 )
 assert.doesNotMatch(applyDialogSource, /props\.type === 'precheck'[\s\S]*?sendOutRequired:/)
 assert.doesNotMatch(applyDialogSource, /type === 'precheck'[\s\S]*?v-model:value="form\.verificationMethod"/)

@@ -1,3 +1,5 @@
+import type { EntityId } from '@/types/common'
+
 export type WorkspaceTodoType =
   | 'all'
   | 'firstcheck'
@@ -26,28 +28,28 @@ export interface WorkspaceTodoRouteTarget {
 }
 
 export interface BusinessTaskReference {
-  businessId: string | number
+  businessId: EntityId
 }
 
 export interface FirstCheckPhysicalTodoReference {
   id?: string
   businessType?: string
   sourceType?: string
-  businessId?: string | number
-  orderId?: string | number
-  taskId?: string | number
+  businessId?: EntityId
+  orderId?: EntityId
+  taskId?: EntityId
   scanAction?: string
   allowedActions?: readonly string[]
   scanned?: boolean
 }
 
 export interface PhysicalTodoReference {
-  id?: string | number
+  id?: EntityId
   businessType?: string
   sourceType?: string
-  businessId?: string | number
-  orderId?: string | number
-  taskId?: string | number
+  businessId?: EntityId
+  orderId?: EntityId
+  taskId?: EntityId
   scanAction?: string
   allowedActions?: readonly string[]
   scanned?: boolean
@@ -300,4 +302,9 @@ export function getWorkspaceLaunchActions(roleCode?: string): WorkspaceLaunchAct
       path: '/firstcheck/supplier'
     }
   ]
+}
+
+export function shouldShowWorkspaceTaskSections(roleCode?: string) {
+  if (!roleCode) return false
+  return roleCode !== 'SUPPLIER'
 }

@@ -15,9 +15,10 @@ import type {
   ChangeSubmitRequest,
   ChangeVerifierHandleRequest
 } from '@/types/change'
+import type { EntityId } from '@/types/common'
 
 export function submitChange(data: ChangeSubmitRequest) {
-  return request<string | number>({
+  return request<EntityId>({
     url: changeEndpoint('submit'),
     method: 'POST',
     data: buildChangeSubmitRequest(data)
@@ -58,7 +59,7 @@ export function verifierHandleChange(data: ChangeVerifierHandleRequest) {
   })
 }
 
-export function getChangeOrderDetail(orderId: string | number, signal?: AbortSignal) {
+export function getChangeOrderDetail(orderId: EntityId, signal?: AbortSignal) {
   return request<ChangeOrderVO>({
     url: changeEndpoint('detail', orderId),
     method: 'GET',

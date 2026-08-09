@@ -11,6 +11,7 @@ import type {
   UserRoleScopeRequest,
   UserRoleScopeVO
 } from '@/types/nodePermission'
+import type { EntityId, RowVersion } from '@/types/common'
 
 export function listNodeOperations(businessType: string) {
   return request<NodeOperationVO[]>({
@@ -81,7 +82,7 @@ export function saveUserRoleScope(userId: string, data: UserRoleScopeRequest) {
 
 export function updateUserRoleScope(
   userId: string,
-  scopeId: string | number,
+  scopeId: EntityId,
   data: UserRoleScopeRequest
 ) {
   return request<UserRoleScopeVO>({
@@ -93,8 +94,8 @@ export function updateUserRoleScope(
 
 export function revokeUserRoleScope(
   userId: string,
-  scopeId: string | number,
-  rowVersion: string | number,
+  scopeId: EntityId,
+  rowVersion: RowVersion,
   reason: string
 ) {
   return request<UserRoleScopeVO>({

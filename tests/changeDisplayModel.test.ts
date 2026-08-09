@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import {
+  changeNodeName,
   changeStatusName,
   changeTypeMetas,
   changeTypeName,
@@ -29,6 +30,10 @@ assert.equal(normalizeCategory('B类'), 'B类')
 assert.equal(normalizeCategoryCode('C类'), 'C')
 assert.equal(formatCycleMonth(12), '12个月')
 assert.equal(changeStatusName('running'), '流转中')
+assert.equal(changeNodeName('manager_forward_confirm'), '管理员转办确认员')
+assert.equal(changeNodeName('confirmer_confirm'), '确认员确认')
+assert.equal(changeNodeName('label_print'), '检定员打印标签')
+assert.equal(changeNodeName('admin_take_back'), '管理员取回')
 
 const payload = buildChangeSubmitRequest({
   changeType: 'cycle',

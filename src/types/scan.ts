@@ -1,4 +1,6 @@
-export type ScanEntityId = string | number
+import type { EntityId, RowVersion } from '@/types/common'
+
+export type ScanEntityId = EntityId
 
 export type FirstCheckScanAction = 'receive' | 'sendout' | 'sendout-return' | 'take-back'
 
@@ -78,7 +80,7 @@ export interface ChangeScanInboxItem {
   orderId: ScanEntityId
   itemId: ScanEntityId
   taskId?: ScanEntityId
-  rowVersion?: ScanEntityId
+  rowVersion?: RowVersion
   orderNo?: string
   changeType?: string
   currentNodeName?: string
@@ -106,7 +108,7 @@ export interface UnifiedScanInboxItem {
   orderId?: ScanEntityId
   itemId?: ScanEntityId
   taskId?: ScanEntityId
-  rowVersion?: ScanEntityId
+  rowVersion?: RowVersion
   deviceId?: ScanEntityId
   orderNo?: string
   taskNo?: string
@@ -141,7 +143,7 @@ export interface ChangeScanRequest {
   itemId: ScanEntityId
   deviceId: ScanEntityId
   taskId?: ScanEntityId
-  rowVersion?: ScanEntityId
+  rowVersion?: RowVersion
   scanCode: string
   scanContent?: string
   scanLocation?: string

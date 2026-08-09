@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute } from 'vue-router'
 import { approveChange, getChangeOrderDetail, rejectChange } from '@/api/change'
@@ -58,6 +58,8 @@ const {
   query: summaryScope,
   immediate: false
 })
+let rowLoadGeneration = 0
+let rowLoadController: AbortController | undefined
 
 const columns = [
   { title: '申请编号', key: 'orderNo', width: 170 },
@@ -125,34 +127,62 @@ function toRow(task: WorkflowTask, order: ChangeOrderVO): ChangeTaskRow {
   }
 }
 
-async function loadRows() {
-  loading.value = true
-  selectedRowKeys.value = []
-  const summaryPromise = refreshSummary().catch(() => undefined)
-  const [taskResult] = await Promise.allSettled([listWorkflowTasks('CHANGE')])
+function isCurrentRowLoad(
+  generation: number,
+  requestedIdentity: string,
+  activeController: AbortController
+) {
+  return !(
+    generation !== rowLoadGeneration || activeController.signal.aborted || workflowIdentity.value !== requestedIdentity
+  )
+}
 
-  if (taskResult.status === 'fulfilled') {
-    const tasks = taskResult.value.filter(
-      (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change')
-    )
-    const details = await Promise.allSettled(
-      tasks.map(async (task) => ({
-        task,
-        order: await getChangeOrderDetail(task.businessId)
-      }))
-    )
-    rows.value = details
-      .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: ChangeOrderVO }> => item.status === 'fulfilled')
-      .map((item) => toRow(item.value.task, item.value.order))
-    const targetOrderId = route.query.orderId ? String(route.query.orderId) : ''
-    const targetRow = targetOrderId ? rows.value.find((row) => String(row.order.id) === targetOrderId) : undefined
-    if (targetRow) openDetail(targetRow)
-  } else {
-    rows.value = []
-    message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '状态变更待办加载失败')
+async function loadRows() {
+  const requestedIdentity = workflowIdentity.value
+  const generation = ++rowLoadGeneration
+  rowLoadController?.abort()
+  const activeController = new AbortController()
+  rowLoadController = activeController
+  loading.value = true
+  rows.value = []
+  selectedRowKeys.value = []
+  approvalOpen.value = false
+  activeOrders.value = []
+  const summaryPromise = refreshSummary().catch(() => undefined)
+  try {
+    const [taskResult] = await Promise.allSettled([
+      listWorkflowTasks('CHANGE', activeController.signal)
+    ])
+    if (!isCurrentRowLoad(generation, requestedIdentity, activeController)) return
+
+    if (taskResult.status === 'fulfilled') {
+      const tasks = taskResult.value.filter(
+        (task) => isPendingWorkflowTask(task) && matchesBusinessType(task.businessType, 'change')
+      )
+      const details = await Promise.allSettled(
+        tasks.map(async (task) => ({
+          task,
+          order: await getChangeOrderDetail(task.businessId, activeController.signal)
+        }))
+      )
+      if (!isCurrentRowLoad(generation, requestedIdentity, activeController)) return
+      rows.value = details
+        .filter((item): item is PromiseFulfilledResult<{ task: WorkflowTask; order: ChangeOrderVO }> => item.status === 'fulfilled')
+        .map((item) => toRow(item.value.task, item.value.order))
+      const targetOrderId = route.query.orderId ? String(route.query.orderId) : ''
+      const targetRow = targetOrderId ? rows.value.find((row) => String(row.order.id) === targetOrderId) : undefined
+      if (targetRow) openDetail(targetRow)
+    } else {
+      rows.value = []
+      message.error(taskResult.reason instanceof Error ? taskResult.reason.message : '状态变更待办加载失败')
+    }
+  } finally {
+    await summaryPromise
+    if (generation === rowLoadGeneration) {
+      loading.value = false
+      rowLoadController = undefined
+    }
   }
-  loading.value = false
-  await summaryPromise
 }
 
 function assertSameChangeType(targetRows: ChangeTaskRow[]) {
@@ -245,7 +275,15 @@ function batchReject() {
   openApproval(selectedRows.value)
 }
 
-onMounted(loadRows)
+watch(workflowIdentity, () => {
+  void loadRows()
+}, { immediate: true })
+
+onScopeDispose(() => {
+  rowLoadGeneration += 1
+  rowLoadController?.abort()
+  rowLoadController = undefined
+})
 </script>
 
 <template>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onScopeDispose, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import QRCode from 'qrcode'
@@ -45,6 +45,12 @@ const filters = reactive({
 })
 
 const isSupplier = computed(() => session.user?.roleCode === 'SUPPLIER')
+const workflowIdentity = computed(() => {
+  const user = session.user
+  return user ? `${user.employeeId}|${user.roleCode}` : ''
+})
+let rowLoadGeneration = 0
+let rowLoadController: AbortController | undefined
 const title = computed(() => {
   if (isSupplier.value) return props.mode === 'pending' ? '临时首检标签' : '已打印临时首检标签'
   return props.mode === 'pending' ? '打印标签' : '已打印标签'
@@ -55,6 +61,7 @@ const columns = computed(() => {
   if (isSupplier.value) {
     return [
       { title: '序号', key: 'index', width: 70 },
+      { title: '来源事项', dataIndex: 'sourceLabel', key: 'sourceLabel', width: 110 },
       { title: '首检编号', key: 'orderNo', width: 170 },
       { title: '临时首检码', dataIndex: 'deviceCode', key: 'deviceCode', width: 190 },
       { title: '采购订单号', key: 'purchaseOrderNo', width: 150 },
@@ -69,6 +76,7 @@ const columns = computed(() => {
   }
   const base = [
     { title: '序号', key: 'index', width: 70 },
+    { title: '来源事项', dataIndex: 'sourceLabel', key: 'sourceLabel', width: 110 },
     { title: '计量编号', dataIndex: 'deviceCode', key: 'deviceCode', width: 150 },
     { title: '设备名称', dataIndex: 'deviceName', key: 'deviceName', width: 150 },
     { title: '有效期', dataIndex: 'validUntil', key: 'validUntil', width: 130 },
@@ -114,17 +122,6 @@ function signatureDisplay(row: LabelPrintRecord) {
   if (!name && !userId) return '-'
   if (name && userId) return `${name} / ${userId}`
   return String(name || userId)
-}
-
-function sourceTypeName(value?: string) {
-  const map: Record<string, string> = {
-    FIRST_CHECK: '首检',
-    PERIODIC: '周检',
-    BEFORE_USE: '用前检定',
-    CHANGE: '状态变更',
-    SAMPLING: '抽检'
-  }
-  return value ? map[value] || value : '-'
 }
 
 function labelTypeName(value?: string) {
@@ -226,23 +223,54 @@ async function confirmPrint() {
   }
 }
 
+function isCurrentRowLoad(
+  generation: number,
+  requestedIdentity: string,
+  activeController: AbortController
+) {
+  return !(
+    generation !== rowLoadGeneration ||
+    activeController.signal.aborted ||
+    workflowIdentity.value !== requestedIdentity
+  )
+}
+
 async function loadRows() {
+  const requestedIdentity = workflowIdentity.value
+  const generation = ++rowLoadGeneration
+  rowLoadController?.abort()
+  const activeController = new AbortController()
+  rowLoadController = activeController
   loading.value = true
+  rows.value = []
+  selectedRowKeys.value = []
+  previewRows.value = []
+  previewOpen.value = false
+  qrCodeMap.value = {}
   try {
+    let nextRows: LabelPrintRecord[]
     if (isSupplier.value) {
-      rows.value = props.mode === 'pending'
-        ? await listSupplierFirstCheckUnprintedLabels()
-        : await listSupplierFirstCheckPrintedLabels()
+      nextRows = props.mode === 'pending'
+        ? await listSupplierFirstCheckUnprintedLabels(activeController.signal)
+        : await listSupplierFirstCheckPrintedLabels(activeController.signal)
     } else {
-      rows.value = props.mode === 'pending' ? await listUnprintedLabels() : await listPrintedLabels()
+      nextRows = props.mode === 'pending'
+        ? await listUnprintedLabels(undefined, activeController.signal)
+        : await listPrintedLabels(undefined, activeController.signal)
     }
+    if (!isCurrentRowLoad(generation, requestedIdentity, activeController)) return
+    rows.value = nextRows
     selectedRowKeys.value = selectedRowKeys.value.filter((key) => rows.value.some((row) => labelRowKey(row.id) === key))
     await focusRouteTarget()
   } catch (error) {
+    if (!isCurrentRowLoad(generation, requestedIdentity, activeController)) return
     rows.value = []
     message.error(error instanceof Error ? error.message : '标签列表加载失败')
   } finally {
-    loading.value = false
+    if (generation === rowLoadGeneration) {
+      loading.value = false
+      rowLoadController = undefined
+    }
   }
 }
 
@@ -283,7 +311,15 @@ async function focusRouteTarget() {
   await router.replace({ path: route.path, query: { mode: props.mode } })
 }
 
-onMounted(loadRows)
+watch(workflowIdentity, () => {
+  void loadRows()
+}, { immediate: true })
+
+onScopeDispose(() => {
+  rowLoadGeneration += 1
+  rowLoadController?.abort()
+  rowLoadController = undefined
+})
 </script>
 
 <template>
@@ -296,7 +332,7 @@ onMounted(loadRows)
           <a-input v-model:value="filters.deviceCode" :placeholder="isSupplier ? '请输入临时首检码' : '请输入计量编号'" allow-clear />
         </label>
         <label v-if="!isSupplier">
-          <span>来源流程</span>
+          <span>来源事项</span>
           <a-select
             v-model:value="filters.sourceType"
             :options="[
@@ -362,6 +398,7 @@ onMounted(loadRows)
       >
         <template #bodyCell="{ column, record, index }">
           <template v-if="column.key === 'index'">{{ index + 1 }}</template>
+          <template v-else-if="column.key === 'sourceLabel'">{{ display(record.sourceLabel) }}</template>
           <template v-else-if="column.key === 'orderNo'">{{ display(record.sourceDetail?.businessNo) }}</template>
           <template v-else-if="column.key === 'deviceCode'">
             <a-button type="link" class="code-link" @click="openPreview(record)">{{ display(record.deviceCode) }}</a-button>
@@ -415,7 +452,6 @@ onMounted(loadRows)
             </template>
             <template v-else>
               <span>设备名称：{{ display(row.deviceName) }}</span>
-              <span>来源流程：{{ sourceTypeName(row.sourceType) }}</span>
               <span>标签类型：{{ labelTypeName(row.labelType) }}</span>
               <span>检定方式：{{ labelVerificationMethodName(row.verificationMethod) }}</span>
               <span>管理类别：{{ display(row.manageCategory) }}</span>

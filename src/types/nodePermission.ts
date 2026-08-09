@@ -1,3 +1,5 @@
+import type { EntityId, RowVersion } from '@/types/common'
+
 export type NodeGrantEffect = 'ALLOW' | 'DENY'
 
 export type NodeScopeType = 'GROUP' | 'DEPARTMENT' | 'COMPANY'
@@ -43,11 +45,11 @@ export interface UserRoleScopeRequest {
   effectiveFrom?: string
   effectiveTo?: string
   grantReason?: string
-  rowVersion?: string | number
+  rowVersion?: RowVersion
 }
 
 export interface UserRoleScopeVO {
-  id: string | number
+  id: EntityId
   userId: string
   userName?: string | null
   roleCode: string
@@ -67,7 +69,7 @@ export interface UserRoleScopeVO {
   revokedBy?: string | null
   revokedAt?: string | null
   revokeReason?: string | null
-  rowVersion: string | number
+  rowVersion: RowVersion
   createdAt?: string | null
   updatedAt?: string | null
 }
@@ -88,9 +90,9 @@ export interface UserRoleScopePreviewVO {
   effectiveTo?: string | null
   grantReason?: string | null
   roleWillBeAssigned: boolean
-  existingScopeId?: string | number | null
+  existingScopeId?: EntityId | null
   existingStatus?: string | null
-  existingRowVersion?: string | number | null
+  existingRowVersion?: RowVersion | null
   warnings: string[]
 }
 
@@ -102,8 +104,8 @@ export interface EffectivePermissionItemVO {
   audienceMode: RoleScopeAudienceMode
   decision: string
   source: string
-  matchedRoleScopeId?: string | number | null
-  matchedGrantId?: string | number | null
+  matchedRoleScopeId?: EntityId | null
+  matchedGrantId?: EntityId | null
 }
 
 export interface EffectivePermissionVO {
@@ -155,8 +157,8 @@ export interface TaskCandidateVO {
   userName?: string | null
   requiredRoleCode: string
   permissionCode: string
-  matchedGrantId?: string | number | null
-  matchedRoleScopeId?: string | number | null
+  matchedGrantId?: EntityId | null
+  matchedRoleScopeId?: EntityId | null
   matchedScopeType?: string | null
   matchedScopeOrgId?: string | null
   grantSource?: string | null
@@ -232,8 +234,8 @@ export interface NodeScopeGrantDraft {
 
 export interface NodeGrantVO extends Omit<NodeScopeGrantRequest, 'scopeType'> {
   scopeType: NodeScopeType
-  id?: string | number
-  grantId?: string | number
+  id?: EntityId
+  grantId?: EntityId
   userId?: string
   businessType?: string
   businessName?: string
@@ -243,7 +245,7 @@ export interface NodeGrantVO extends Omit<NodeScopeGrantRequest, 'scopeType'> {
   operationName?: string
   scopeOrgName?: string
   scopeOrgPath?: string
-  rowVersion?: string | number
+  rowVersion?: RowVersion
   status?: string
   createdAt?: string
   updatedAt?: string
@@ -270,9 +272,9 @@ export interface NodeScopeGrantPreviewVO {
   effectiveTo?: string | null
   grantReason?: string | null
   manualElevation: boolean
-  existingGrantId?: string | number | null
+  existingGrantId?: EntityId | null
   existingGrantStatus?: string | null
-  existingRowVersion?: string | number | null
+  existingRowVersion?: RowVersion | null
   warnings: string[]
 }
 
@@ -297,7 +299,7 @@ export interface NodeGrantPreviewDisplay {
   existingGrant: {
     id: string
     status: string
-    rowVersion: string | number | null
+    rowVersion: RowVersion | null
   } | null
 }
 

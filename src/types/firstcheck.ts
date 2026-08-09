@@ -1,4 +1,5 @@
 import type { BusinessCaseDetailVO } from '@/types/device'
+import type { EntityId, RowVersion } from '@/types/common'
 
 export type FirstCheckNodeCode =
   | 'supplier_submit'
@@ -12,10 +13,10 @@ export type ManageCategory = 'A类' | 'B类' | 'C类'
 export type VerificationType = 'self_check' | 'external_commission'
 export type VerificationResult = 'qualified' | 'unqualified' | 'partial'
 export type ConfirmResult = 'APPROVE' | 'REJECT' | 'PASS' | 'RETURN'
-export type AttachmentId = string | number
+export type AttachmentId = EntityId
 
 export interface FirstCheckOrder {
-  id: string | number
+  id: EntityId
   orderNo?: string
   purchaseOrderNo?: string
   purchaseOrderLineId?: string
@@ -110,9 +111,9 @@ export interface FirstCheckOrder {
 }
 
 export interface ApproveRequest {
-  orderId: string | number
-  taskId: string | number
-  taskRowVersion: string | number
+  orderId: EntityId
+  taskId: EntityId
+  taskRowVersion: RowVersion
   approve?: boolean
   responsibleEngineerId?: string
   responsibleEngineerName?: string
@@ -169,23 +170,23 @@ export interface BatchDeptLeaderApproveRequest {
 
 /** 批量操作中的单条任务并发上下文。 */
 export interface BatchWorkflowTaskItem {
-  orderId: string | number
-  taskId: string | number
-  taskRowVersion: string | number
+  orderId: EntityId
+  taskId: EntityId
+  taskRowVersion: RowVersion
 }
 
 export interface BatchOperationResult {
   successCount?: number
   failedItems?: Array<{
-    orderId: string | number
+    orderId: EntityId
     errorMsg?: string
   }>
 }
 
 export interface ConfirmCategoryRequest {
-  orderId: string | number
-  taskId: string | number
-  taskRowVersion: string | number
+  orderId: EntityId
+  taskId: EntityId
+  taskRowVersion: RowVersion
   isWithReport: number
   reportFileId?: AttachmentId
   usageScenario?: string
@@ -198,9 +199,9 @@ export interface ConfirmCategoryRequest {
 }
 
 export interface ConfirmVerificationTypeRequest {
-  orderId: string | number
-  taskId: string | number
-  taskRowVersion: string | number
+  orderId: EntityId
+  taskId: EntityId
+  taskRowVersion: RowVersion
   verificationType: VerificationType
   selfVerifierId?: string
   selfVerifierName?: string
@@ -213,12 +214,19 @@ export interface ConfirmVerificationTypeRequest {
 }
 
 export interface DeviceCodeReservationRequest {
-  orderId: string | number
-  taskId: string | number
-  taskRowVersion: string | number
+  orderId: EntityId
+  taskId: EntityId
+  taskRowVersion: RowVersion
   subjectSubcategory: string
   identifierCode?: string
   qualifiedQuantity: number
+}
+
+export interface DeviceCodeReservationReleaseRequest {
+  orderId: EntityId
+  taskId: EntityId
+  taskRowVersion: RowVersion
+  reservationId: EntityId
 }
 
 export interface DeviceCodeReservation {
@@ -236,9 +244,9 @@ export interface QualifiedFirstCheckDeviceRequest {
 }
 
 export interface VerifierVerifyAndAssignRequest {
-  orderId: string | number
-  taskId: string | number
-  taskRowVersion: string | number
+  orderId: EntityId
+  taskId: EntityId
+  taskRowVersion: RowVersion
   reservationId?: string
   verificationResult: VerificationResult
   qualifiedQuantity: number
@@ -276,8 +284,8 @@ export interface AssignedFirstCheckDevice {
 
 export interface FirstCheckAdminRow {
   key: string
-  taskId: string | number
-  taskRowVersion: string | number
+  taskId: EntityId
+  taskRowVersion: RowVersion
   allowedActions: string[]
   nodeCode: string
   nodeName: string

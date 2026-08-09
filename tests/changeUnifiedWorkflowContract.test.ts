@@ -51,7 +51,7 @@ assert.ok(apiSource.includes('buildChangeRejectRequest(data)'), '驳回接口不
 ;[leaderSource, verifierSource, receiveAdminSource].forEach((source) => {
   assert.ok(source.includes('rowVersion: task.rowVersion'), '状态变更待办必须保存任务版本')
   assert.ok(source.includes('allowedActions: [...task.allowedActions]'), '状态变更按钮必须消费后端允许操作')
-  assert.ok(source.includes("listWorkflowTasks('CHANGE')"), '状态变更页面必须按后端业务类型查询统一待办')
+  assert.match(source, /listWorkflowTasks\('CHANGE'/, '状态变更页面必须按后端业务类型查询统一待办')
   assert.ok(!source.includes('changeNodeCodesByRole'), '状态变更页面不得按本地角色表二次推导节点权限')
 })
 assert.ok(leaderSource.includes('CHANGE_APPROVE_ACTION'))

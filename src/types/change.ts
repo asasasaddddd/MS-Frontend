@@ -1,4 +1,4 @@
-import type { EntityId } from '@/types/periodic'
+import type { EntityId, RowVersion } from '@/types/common'
 
 export type ChangeType =
   | 'seal'
@@ -61,7 +61,7 @@ export interface ChangeSubmitRequest {
 export interface ChangeReviseRequest {
   orderId: EntityId
   taskId: EntityId
-  rowVersion: EntityId
+  rowVersion: RowVersion
   reason?: string
   remark?: string
   attachmentGroupId?: EntityId
@@ -74,7 +74,7 @@ export interface ChangeApproveRequest {
   /** 统一工作流任务主键。 */
   taskId: EntityId
   /** 统一工作流任务乐观并发版本。 */
-  rowVersion: EntityId
+  rowVersion: RowVersion
   opinion?: string
 }
 
@@ -83,7 +83,7 @@ export interface ChangeRejectRequest {
   /** 统一工作流任务主键。 */
   taskId: EntityId
   /** 统一工作流任务乐观并发版本。 */
-  rowVersion: EntityId
+  rowVersion: RowVersion
   reason?: string
 }
 
@@ -92,7 +92,7 @@ export interface ChangeVerifierHandleRequest {
   /** 统一工作流任务主键。 */
   taskId: EntityId
   /** 统一工作流任务乐观并发版本。 */
-  rowVersion: EntityId
+  rowVersion: RowVersion
   /** 检定员接收实物后的真实检定选择。 */
   verificationRequired: 0 | 1
   verificationResult?: 'qualified' | 'scrap' | 'repair'
@@ -180,7 +180,7 @@ export interface ChangeOrderVO {
   attachmentGroupId?: EntityId
   processInstanceId?: EntityId
   taskId?: EntityId
-  rowVersion?: EntityId
+  rowVersion?: RowVersion
   currentNodeCode?: string
   currentNodeName?: string
   allowedActions?: string[]

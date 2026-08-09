@@ -1,4 +1,6 @@
-export type AttachmentId = string | number
+import type { EntityId } from '@/types/common'
+
+export type AttachmentId = EntityId
 
 export interface AttachmentRecord {
   id: AttachmentId

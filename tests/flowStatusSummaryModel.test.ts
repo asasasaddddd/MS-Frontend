@@ -411,6 +411,33 @@ assert.equal(roleCoverageLabels.get('cycle:verifier_handle'), '检定周期调�
 assert.equal(roleCoverageLabels.get('transfer:receive_dept_leader_confirm'), '设备转移 · 待接收部门主管确认')
 assert.equal(roleCoverageLabels.get('transfer:receive_admin_confirm'), '设备转移 · 待接收部门管理员确认')
 
+const changeDecisionLateStageSummary: FlowSummary = {
+  businessType: 'CHANGE',
+  scope: 'pending',
+  snapshotAt: '2026-08-01T10:00:00',
+  overview: [],
+  dimensions: [
+    {
+      dimensionCode: 'business',
+      countUnit: 'order',
+      totalCount: 4,
+      unknownCount: 0,
+      stageCounts: {
+        'category:manager_forward_confirm': 1,
+        'category:label_print': 1,
+        'cycle:label_print': 1,
+        'cycle:admin_take_back': 1
+      }
+    }
+  ]
+}
+const changeDecisionLateStageView = buildFlowStatusViewModel(changeDecisionLateStageSummary)
+assert.deepEqual(
+  changeDecisionLateStageView.pendingDimension?.unregisteredStageCodes,
+  [],
+  'category/cycle late change nodes must be registered in the unified business summary'
+)
+
 const changeCombinationDefinitions = FLOW_STAGE_DEFINITIONS.filter((definition) =>
   changeBusinessStageCodes.includes(definition.stageCode)
 )
@@ -443,6 +470,93 @@ const adminTakeBackSummary: FlowSummary = {
 }
 const adminTakeBackView = buildFlowStatusViewModel(adminTakeBackSummary)
 assert.deepEqual(adminTakeBackView.pendingDimension?.unregisteredStageCodes, [])
+
+const authoritativeChangeNodesByType: Record<string, string[]> = {
+  seal: [
+    'dept_leader_approve',
+    'measure_leader_review',
+    'manager_revise',
+    'verifier_handle',
+    'label_print',
+    'admin_take_back'
+  ],
+  enable: [
+    'dept_leader_approve',
+    'measure_leader_review',
+    'manager_revise',
+    'verifier_handle',
+    'manager_forward_confirm',
+    'confirmer_confirm',
+    'label_print',
+    'admin_take_back'
+  ],
+  transfer: [
+    'dept_leader_approve',
+    'measure_leader_review',
+    'manager_revise',
+    'receive_dept_leader_confirm',
+    'receive_admin_confirm'
+  ],
+  category: [
+    'dept_leader_approve',
+    'responsible_engineer_review',
+    'manager_revise',
+    'verifier_handle',
+    'manager_forward_confirm',
+    'confirmer_confirm',
+    'label_print',
+    'admin_take_back'
+  ],
+  cycle: [
+    'dept_leader_approve',
+    'responsible_engineer_review',
+    'manager_revise',
+    'verifier_handle',
+    'manager_forward_confirm',
+    'confirmer_confirm',
+    'label_print',
+    'admin_take_back'
+  ],
+  scrap: [
+    'dept_leader_approve',
+    'measure_leader_review',
+    'manager_revise',
+    'verifier_handle'
+  ],
+  precheck: [
+    'dept_leader_approve',
+    'measure_leader_review',
+    'manager_revise'
+  ],
+  defer: [
+    'dept_leader_approve',
+    'measure_leader_review',
+    'manager_revise'
+  ]
+}
+const authoritativeChangeStageCounts = Object.fromEntries(
+  Object.entries(authoritativeChangeNodesByType).flatMap(([changeType, nodes]) =>
+    nodes.map((node) => [`${changeType}:${node}`, 1])
+  )
+)
+const authoritativeChangeStageView = buildFlowStatusViewModel({
+  businessType: 'CHANGE',
+  scope: 'pending',
+  snapshotAt: '2026-08-01T10:00:00',
+  overview: [],
+  dimensions: [{
+    dimensionCode: 'business',
+    countUnit: 'order',
+    totalCount: Object.keys(authoritativeChangeStageCounts).length,
+    unknownCount: 0,
+    stageCounts: authoritativeChangeStageCounts
+  }]
+})
+assert.deepEqual(
+  authoritativeChangeStageView.pendingDimension?.unregisteredStageCodes,
+  [],
+  'frontend status catalog must cover every authoritative change type + reachable workflow node emitted by backend'
+)
 assert.equal(adminTakeBackView.pendingDimension?.stages[0]?.label, '待管理员取回')
 
 const changeResultSummary: FlowSummary = {
@@ -486,9 +600,14 @@ const periodicNodeSummary: FlowSummary = {
     {
       dimensionCode: 'business',
       countUnit: 'device',
-      totalCount: 2,
+      totalCount: 4,
       unknownCount: 0,
-      stageCounts: { admin_exception_route: 1, external_uncommon_fill: 1 }
+      stageCounts: {
+        admin_exception_route: 1,
+        external_uncommon_fill: 1,
+        responsible_scrap_confirm: 1,
+        responsible_scrap_tracking_decision: 1
+      }
     }
   ]
 }
@@ -499,6 +618,8 @@ assert.deepEqual(
   ),
   [
     { stageCode: 'admin_exception_route', label: '待异常分流' },
-    { stageCode: 'external_uncommon_fill', label: '待外委检定员填写否通用设备信息' }
+    { stageCode: 'external_uncommon_fill', label: '待外委检定员填写否通用设备信息' },
+    { stageCode: 'responsible_scrap_confirm', label: '待责任工程师确认正常报废' },
+    { stageCode: 'responsible_scrap_tracking_decision', label: '待责任工程师判定是否进行不合格追踪' }
   ]
 )

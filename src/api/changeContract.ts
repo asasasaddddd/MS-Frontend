@@ -5,6 +5,7 @@ import type {
   ChangeSubmitRequest,
   ChangeVerifierHandleRequest
 } from '@/types/change'
+import type { EntityId } from '@/types/common'
 
 const changeEndpoints = {
   submit: '/change/submit',
@@ -18,7 +19,7 @@ const changeEndpoints = {
 
 export type ChangeEndpointKey = keyof typeof changeEndpoints
 
-export function changeEndpoint(key: ChangeEndpointKey, id?: string | number) {
+export function changeEndpoint(key: ChangeEndpointKey, id?: EntityId) {
   if (key === 'detail' && id !== undefined) return `${changeEndpoints.detail}/${id}`
   return changeEndpoints[key]
 }

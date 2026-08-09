@@ -1,7 +1,7 @@
-import type { PageResult, RoleCode } from '@/types/common'
+import type { EntityId, PageResult, RoleCode, RowVersion } from '@/types/common'
 
 /** 工作流雪花主键在前端保持字符串兼容，禁止强制转换为 Number。 */
-export type WorkflowEntityId = string | number
+export type WorkflowEntityId = EntityId
 
 /** 统一工作流支持的查询视图。 */
 export type WorkflowTaskView = 'todo' | 'handled' | 'participated' | 'department'
@@ -40,7 +40,7 @@ export interface WorkflowTask {
   scopeOrgId?: string
   audienceMode?: string
   taskStatus: WorkflowTaskStatus
-  rowVersion: WorkflowEntityId
+  rowVersion: RowVersion
   handlerId?: string
   handlerName?: string
   handlerRoleCode?: RoleCode | string
@@ -100,6 +100,8 @@ export interface WorkflowTimelineEntry {
 export interface WorkflowNode {
   code: string
   name: string
+  /** 状态汇总使用的节点文案；未配置时回退到 name。 */
+  summaryLabel?: string
   module: 'firstcheck' | 'periodic' | 'change' | 'sampling' | 'productSupport'
   roles: RoleCode[]
   api?: string

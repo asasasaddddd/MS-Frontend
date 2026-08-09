@@ -2,6 +2,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import type { TablePaginationConfig } from 'ant-design-vue'
+import type { EntityId, RowVersion } from '@/types/common'
 import {
   assignUserRoles,
   getAllowedOrganizationTree,
@@ -106,8 +107,8 @@ interface GrantForm {
 }
 
 interface RoleScopeForm {
-  scopeId: string | number | null
-  rowVersion: string | number | null
+  scopeId: EntityId | null
+  rowVersion: RowVersion | null
   roleCode: string
   scopeType: RoleScopeType
   scopeOrgId: string

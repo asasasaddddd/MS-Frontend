@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
 import type { AttachmentId } from '@/api/attachment'
+import { getAllowedOrganizationTree } from '@/api/system'
 import { useProductionDictionaries } from '@/composables/useProductionDictionaries'
 import type { ChangeItemSubmitRequest, ChangeOrderVO, ChangeSubmitRequest, ChangeType } from '@/types/change'
 import type { DeviceVO } from '@/types/device'
 import { useSessionStore } from '@/stores/session'
 import {
   buildBaseChangeItem,
+  buildTransferDepartmentOptions,
   categoryTargetOptions,
   changeTypeApplyTitle,
   deviceRowKey,
@@ -69,12 +71,8 @@ const applyTimeLabel = computed(() => (props.type === 'enable' ? '申请时间' 
 const applyTimeValue = computed(() => (props.type === 'enable' ? form.applyDateTime : form.applyDate))
 const selectedDeviceCountText = computed(() => (props.devices.length > 1 ? `已选择 ${props.devices.length} 台设备` : ''))
 
-const transferDeptOptions = [
-  { label: '重一', value: '重一' },
-  { label: '重二', value: '重二' },
-  { label: '质量检验部', value: '质量检验部' },
-  { label: '工业透平事业部', value: '工业透平事业部' }
-]
+const transferDeptOptions = ref<Array<{ label: string, value: string }>>([])
+const transferDeptLoading = ref(false)
 
 const scrapTypeOptions = [
   { label: '丢失', value: 'lost' },
@@ -92,8 +90,30 @@ watch(
     } catch (error) {
       message.warning(error instanceof Error ? error.message : '检定周期字典加载失败')
     }
+    if (props.type === 'transfer') {
+      await loadTransferDepartments()
+    }
   }
 )
+
+async function loadTransferDepartments() {
+  transferDeptLoading.value = true
+  try {
+    transferDeptOptions.value = buildTransferDepartmentOptions(await getAllowedOrganizationTree())
+    const selected = transferDeptOptions.value.find((option) => option.value === form.transferToDeptId)
+    if (selected) form.transferToDeptName = selected.label
+  } catch (error) {
+    transferDeptOptions.value = []
+    message.warning(error instanceof Error ? error.message : '接收单位加载失败')
+  } finally {
+    transferDeptLoading.value = false
+  }
+}
+
+function handleTransferDepartmentChange(value: string) {
+  const selected = transferDeptOptions.value.find((option) => option.value === value)
+  form.transferToDeptName = selected?.label
+}
 
 function resetForm() {
   const now = new Date()
@@ -156,7 +176,7 @@ function buildItem(device: DeviceVO): ChangeItemSubmitRequest | null {
   }
   if (props.type === 'transfer') {
     return buildBaseChangeItem(device, {
-      transferToDeptId: form.transferToDeptId || form.transferToDeptName,
+      transferToDeptId: form.transferToDeptId,
       transferToDeptName: form.transferToDeptName,
       transferReason: form.transferReason,
       remark: form.remark
@@ -194,6 +214,12 @@ function buildItem(device: DeviceVO): ChangeItemSubmitRequest | null {
       remark: form.remark
     })
   }
+  if (props.type === 'defer') {
+    return buildBaseChangeItem(device, {
+      verificationReason: form.verificationReason,
+      remark: form.remark
+    })
+  }
   return null
 }
 
@@ -206,7 +232,9 @@ function validate() {
   if (props.type === 'seal') return required(form.sealReason, '请填写封存原因')
   if (props.type === 'enable') return required(form.enableReason, '请填写启用原因')
   if (props.type === 'transfer') {
-    return required(form.transferToDeptName, '请选择接收单位') && required(form.transferReason, '请填写转移原因')
+    return required(form.transferToDeptId, '请选择接收单位') &&
+      required(form.transferToDeptName, '请选择接收单位') &&
+      required(form.transferReason, '请填写转移原因')
   }
   if (props.type === 'category') {
     for (const device of props.devices) {
@@ -229,6 +257,9 @@ function validate() {
   if (props.type === 'scrap') return required(form.scrapReason, '请填写报废原因')
   if (props.type === 'precheck') {
     return required(form.verificationReason, '请填写用前检定原因')
+  }
+  if (props.type === 'defer') {
+    return required(form.verificationReason, '请填写缓检原因')
   }
   return true
 }
@@ -257,6 +288,7 @@ function resolvePrimaryReason() {
   if (props.type === 'cycle') return `检定周期调整为${targetCycle.value}`
   if (props.type === 'scrap') return form.scrapReason
   if (props.type === 'precheck') return form.verificationReason
+  if (props.type === 'defer') return form.verificationReason
   return ''
 }
 </script>
@@ -285,6 +317,14 @@ function resolvePrimaryReason() {
       </header>
 
       <main class="apply-body">
+        <section v-if="order" class="revision-device-list" aria-label="修订设备">
+          <span class="revision-device-list-title">修订设备</span>
+          <div v-for="device in devices" :key="deviceRowKey(device)" class="revision-device-row">
+            <strong>{{ display(device.deviceCode) }}</strong>
+            <span>{{ display(device.deviceName) }}</span>
+          </div>
+        </section>
+
         <div v-if="type === 'cycle'" class="current-strip">
           <span>当前周期：</span>
           <strong>{{ currentCycle }}</strong>
@@ -373,7 +413,14 @@ function resolvePrimaryReason() {
 
           <template v-if="type === 'transfer'">
             <a-form-item label="接收单位" required>
-              <a-select v-model:value="form.transferToDeptName" size="large" :options="transferDeptOptions" placeholder="请选择接收单位" />
+              <a-select
+                v-model:value="form.transferToDeptId"
+                size="large"
+                :options="transferDeptOptions"
+                :loading="transferDeptLoading"
+                placeholder="请选择接收单位"
+                @change="handleTransferDepartmentChange"
+              />
             </a-form-item>
             <a-form-item label="转移原因" required>
               <a-textarea v-model:value="form.transferReason" placeholder="请填写设备转移原因" :rows="4" />
@@ -473,6 +520,39 @@ function resolvePrimaryReason() {
 .apply-body {
   padding: 24px;
   background: #f4f7fb;
+}
+
+.revision-device-list {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding: 12px 0;
+  border-top: 1px solid #d8e0eb;
+  border-bottom: 1px solid #d8e0eb;
+}
+
+.revision-device-list-title {
+  color: #667085;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.revision-device-row {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(120px, auto) minmax(0, 1fr);
+  gap: 12px;
+  color: #344054;
+  font-size: 14px;
+}
+
+.revision-device-row strong,
+.revision-device-row span {
+  overflow-wrap: anywhere;
+}
+
+.revision-device-row strong {
+  color: #10203f;
 }
 
 .current-strip {
@@ -674,6 +754,11 @@ function resolvePrimaryReason() {
 
   .category-device-row {
     grid-template-columns: 1fr;
+  }
+
+  .revision-device-row {
+    grid-template-columns: 1fr;
+    gap: 2px;
   }
 }
 </style>

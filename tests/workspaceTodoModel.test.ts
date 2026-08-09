@@ -9,6 +9,7 @@ import {
   getPendingPhysicalTodoRows,
   getSupplementalPhysicalTodoRows,
   getWorkspaceFixedTodoRoute,
+  shouldShowWorkspaceTaskSections,
   getWorkspaceRoleTodoPath,
   filterTasksWithLoadedDetails,
   filterVisibleTodoEntries,
@@ -77,6 +78,13 @@ assert.deepEqual(getWorkspaceLaunchActions('SUPPLIER'), [
   }
 ])
 assert.deepEqual(getWorkspaceLaunchActions('MEASURE_ADMIN'), [])
+
+assert.equal(
+  shouldShowWorkspaceTaskSections('SUPPLIER'),
+  false,
+  '采购供应商在总待办页只需要发起首检入口，不显示待办汇总和流程任务区域'
+)
+assert.equal(shouldShowWorkspaceTaskSections('MEASURE_ADMIN'), true)
 
 assert.equal(getChangeTaskRoute('MEASURE_ADMIN'), '/change/admin-task')
 assert.equal(getChangeTaskRoute('DEPT_LEADER'), '/change/approval')

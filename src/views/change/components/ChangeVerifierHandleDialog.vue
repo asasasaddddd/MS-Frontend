@@ -10,6 +10,7 @@ import {
   buildChangeVerifierHandleRequest,
   changeVerifierReason,
   resolveChangeVerifierDialog,
+  shouldShowChangeVerifierInspectionFields,
   validateChangeVerifierForm,
   verifierResultOptions,
   type ChangeVerifierFormState
@@ -84,10 +85,8 @@ const categoryBefore = computed(() => normalizeCategory(item.value?.oldCategory)
 const categoryAfter = computed(() => normalizeCategory(item.value?.newCategory))
 const cycleBefore = computed(() => formatCycleMonth(item.value?.oldCycleMonth))
 const cycleAfter = computed(() => formatCycleMonth(item.value?.newCycleMonth))
-const verificationSelected = computed(() =>
-  config.value.showVerificationDecision
-    ? form.verificationRequired === 1
-    : config.value.showVerification
+const verificationFieldsVisible = computed(() =>
+  shouldShowChangeVerifierInspectionFields(config.value, form, props.order)
 )
 
 function localDate() {
@@ -119,7 +118,7 @@ function targetCycleMonth() {
 }
 
 function syncValidUntil() {
-  if (!verificationSelected.value) {
+  if (!verificationFieldsVisible.value) {
     form.validUntil = ''
     return
   }
@@ -142,7 +141,7 @@ function selectEngineer(employeeId?: string) {
 
 function submit() {
   if (!props.order) return
-  const error = validateChangeVerifierForm(config.value, form)
+  const error = validateChangeVerifierForm(config.value, form, props.order)
   if (error) {
     message.warning(error)
     return
@@ -297,7 +296,7 @@ watch(
             <label>附件</label>
             <div class="upload-area">
               <AttachmentUploadButton
-                v-if="verificationSelected"
+                v-if="verificationFieldsVisible"
                 v-model="form.certificateAttachmentGroupId"
                 business-type="CHANGE_VERIFIER"
                 :business-id="order.id"
@@ -325,7 +324,7 @@ watch(
         </template>
       </section>
 
-      <section v-if="verificationSelected" class="modal-section">
+      <section v-if="verificationFieldsVisible" class="modal-section">
         <h3>检定信息</h3>
         <div class="form-inline">
           <div class="form-row">

@@ -74,6 +74,15 @@ assert.equal(defer.items[0].verificationReason, '现场暂不具备送检条件'
 assert.equal('precheckRequired' in defer.items[0], false)
 assert.equal(periodicExceptionHandlingType('defer'), 'defer')
 
+const abnormalScrap = buildPeriodicExceptionChangeRequest(task, applicant, {
+  actionType: 'scrap',
+  scrapType: 'damaged',
+  scrapReason: 'Device was damaged outside verification'
+})
+assert.equal(abnormalScrap.changeType, 'abnormal_scrap')
+assert.equal(abnormalScrap.items[0].scrapType, 'damaged')
+assert.equal(abnormalScrap.items[0].scrapReason, 'Device was damaged outside verification')
+
 const category = buildPeriodicExceptionChangeRequest(task, applicant, {
   actionType: 'category',
   adjustmentReason: '风险降低',

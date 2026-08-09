@@ -31,6 +31,20 @@ export interface ChangeVerifierFormState {
   certificateAttachmentGroupId?: EntityId
 }
 
+const externalVerificationMethodCodes = new Set([
+  'send_out',
+  'external',
+  'external_commission',
+  '外委',
+  '外送',
+  '外委检定',
+  '外送检定',
+  '送检'
+])
+const externalReturnReceivedPhysicalStatuses = new Set(['send_out_return_received', 'sendout_return_received'])
+const externalReadyForSendOutPhysicalStatuses = new Set(['wait_external_send_out'])
+const verificationDecisionChangeTypes = new Set(['category', 'cycle'])
+
 const fullForm = {
   showApplicationMeta: true,
   showVerification: true,
@@ -168,15 +182,65 @@ export function changeVerifierReason(order?: ChangeOrderVO | null) {
   }
 }
 
-export function validateChangeVerifierForm(config: ChangeVerifierDialogConfig, form: ChangeVerifierFormState) {
+function normalizeText(value?: string | null) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function isExternalVerificationMethod(value?: string | null) {
+  return externalVerificationMethodCodes.has(normalizeText(value))
+}
+
+function isExternalDecisionItem(candidate: NonNullable<ChangeOrderVO['items']>[number]) {
+  const method = candidate.oldVerificationMethod || candidate.newVerificationMethod
+  return isExternalVerificationMethod(method) || candidate.sendOutRequired === 1
+}
+
+export function isExternalDecisionBeforeReturn(order?: ChangeOrderVO | null) {
+  if (!verificationDecisionChangeTypes.has(normalizeText(order?.changeType))) return false
+  const items = order?.items || []
+  if (items.length === 0) return false
+  return items.some((candidate) => {
+    if (!isExternalDecisionItem(candidate)) return false
+    return !externalReturnReceivedPhysicalStatuses.has(normalizeText(candidate.physicalStatus))
+  })
+}
+
+export function isExternalDecisionReadyForSendOut(order?: ChangeOrderVO | null) {
+  if (!verificationDecisionChangeTypes.has(normalizeText(order?.changeType))) return false
+  const externalItems = (order?.items || []).filter(isExternalDecisionItem)
+  return externalItems.length > 0
+    && externalItems.every((candidate) =>
+      externalReadyForSendOutPhysicalStatuses.has(normalizeText(candidate.physicalStatus))
+    )
+}
+
+export function shouldShowChangeVerifierInspectionFields(
+  config: ChangeVerifierDialogConfig,
+  form: ChangeVerifierFormState,
+  order?: ChangeOrderVO | null
+) {
+  const verificationRequired = config.showVerificationDecision
+    ? form.verificationRequired === 1
+    : config.showVerification
+  return verificationRequired && !isExternalDecisionBeforeReturn(order)
+}
+
+export function validateChangeVerifierForm(
+  config: ChangeVerifierDialogConfig,
+  form: ChangeVerifierFormState,
+  order?: ChangeOrderVO | null
+) {
   if (!form.reason.trim()) return `请填写${config.reasonLabel}`
   if (config.showVerificationDecision && form.verificationRequired !== 0 && form.verificationRequired !== 1) {
     return '请选择是否检定'
   }
-  const verificationRequired = config.showVerificationDecision
-    ? form.verificationRequired === 1
-    : config.showVerification
-  if (!verificationRequired) return ''
+  if (config.showVerificationDecision
+      && form.verificationRequired === 1
+      && isExternalDecisionBeforeReturn(order)
+      && !isExternalDecisionReadyForSendOut(order)) {
+    return '外委设备需送回扫码后再填写检定信息'
+  }
+  if (!shouldShowChangeVerifierInspectionFields(config, form, order)) return ''
   if (!form.verificationDate) return '请选择检定日期'
   if (config.validUntilRequired && !form.validUntil) return '请选择有效期'
   if (!form.result) return '请选择结果判定'
@@ -212,6 +276,9 @@ export function buildChangeVerifierHandleRequest(
     opinion: form.opinion.trim() || undefined
   }
   if (verificationRequired === 0) {
+    return baseRequest
+  }
+  if (isExternalDecisionBeforeReturn(order)) {
     return baseRequest
   }
   return {

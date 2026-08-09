@@ -38,6 +38,5 @@ assert.doesNotMatch(
   '通知重载期间不能把 null 当作 Empty 图片 VNode，否则弹层更新会触发 Vue 空节点异常',
 )
 assert.match(appShellSource, /TodoNotificationBell/)
-assert.match(appShellSource, /<router-view\s+:key="route\.fullPath"\s*\/>/)
 assert.match(appShellSource, /todoNotifications\.activate/)
 assert.match(summaryComposable, /invalidationVersion/)

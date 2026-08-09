@@ -16,6 +16,10 @@ assert.equal(resolveDeviceCurrentStatus({ deviceStatus: '在用', verificationSt
 assert.equal(resolveDeviceCurrentStatus({ deviceStatus: 'in_use', verificationStatus: 'periodic_check' }).text, '周检中')
 assert.equal(resolveDeviceCurrentStatus({ deviceStatus: 'in_use', verificationStatus: '抽检中' }).text, '抽检中')
 assert.equal(resolveDeviceCurrentStatus({ deviceStatus: 'in_use', verificationStatus: '用前检定中' }).text, '用前检定中')
+assert.deepEqual(
+  resolveDeviceCurrentStatus({ deviceStatus: 'in_use', verificationStatus: 'change_processing' }),
+  { code: 'change_processing', text: '状态变更中', color: 'orange', intermediate: true }
+)
 
 assert.equal(
   resolveDeviceCurrentStatus({

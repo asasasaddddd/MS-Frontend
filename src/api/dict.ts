@@ -1,4 +1,5 @@
 import { request } from '@/api/request'
+import type { EntityId } from '@/types/common'
 
 export const productionDictionaryTypes = {
   deviceUsage: 'device_usage',
@@ -11,7 +12,7 @@ export const productionDictionaryTypes = {
 export type ProductionDictionaryType = typeof productionDictionaryTypes[keyof typeof productionDictionaryTypes]
 
 export interface DictItemVO {
-  id: string | number
+  id: EntityId
   dictTypeCode: string
   itemCode: string
   itemName: string

@@ -13,6 +13,7 @@ import type {
   WorkflowTaskView,
   WorkflowTimelineEntry
 } from '@/types/workflow'
+import { normalizeEntityId, type RowVersion } from '@/types/common'
 
 export interface WorkflowTaskGateway {
   queryTasks: (query: WorkflowTaskQuery, signal?: AbortSignal) => Promise<WorkflowTaskPage>
@@ -25,7 +26,7 @@ export type WorkflowTaskViewRecords = Partial<Record<WorkflowTaskView, WorkflowT
 export interface WorkflowTaskContext {
   workflowTaskId: WorkflowEntityId
   processInstanceId: WorkflowEntityId
-  rowVersion: WorkflowEntityId
+  rowVersion: RowVersion
   allowedActions: string[]
 }
 
@@ -56,7 +57,11 @@ function optionalString(value: unknown) {
 }
 
 function optionalEntityId(value: unknown): WorkflowEntityId | undefined {
-  return typeof value === 'string' || typeof value === 'number' ? value : undefined
+  try {
+    return normalizeEntityId(value)
+  } catch {
+    return undefined
+  }
 }
 
 /** Normalize the backend's flat timeline DTO without deriving domain state. */

@@ -15,6 +15,7 @@ function blockBetween(content: string, startMarker: string, endMarker: string) {
 
 const workspace = source('../src/views/WorkspaceTodoView.vue')
 const model = source('../src/views/workspaceTodoModel.ts')
+const adapters = source('../src/views/workspaceTodoAdapters.ts')
 
 const firstCheckTodo = blockBetween(workspace, 'const firstCheckTodoEntries', 'const firstCheckHistoryEntries')
 const firstCheckHistory = blockBetween(workspace, 'const firstCheckHistoryEntries', 'const changeTodoEntries')
@@ -53,9 +54,10 @@ assert.match(samplingTodo, /key:\s*'sampling-todo-summary'/)
 assert.match(samplingTodo, /countUniqueBusinessTasks\(workflowSamplingTasks\)/)
 assert.match(samplingTodo, /alwaysVisible:\s*true/)
 for (const block of [firstCheckTodo, periodicTodo, changeTodo, samplingTodo]) {
-  assert.match(block, /getWorkspaceFixedTodoRoute/)
+  assert.match(block, /getTodoModuleAdapter/)
   assert.doesNotMatch(block, /!path/)
 }
+assert.match(adapters, /getWorkspaceFixedTodoRoute/)
 assert.doesNotMatch(firstCheckTodo, /filterTasksWithLoadedDetails/)
 assert.match(firstCheckHistory, /filterTasksWithLoadedDetails/)
 assert.doesNotMatch(changeTodo, /filterTasksWithLoadedDetails/)

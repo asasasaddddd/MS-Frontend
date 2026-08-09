@@ -2,6 +2,8 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import AppShell from '@/components/AppShell.vue'
 import LoginView from '@/views/LoginView.vue'
 import WorkspaceTodoView from '@/views/WorkspaceTodoView.vue'
+import { fetchCurrentUser } from '@/api/auth'
+import { reconcileAuthorizedSessionUser } from '@/auth/sessionAuthorization'
 import { allNavItems, getFirstNavPathForRole, getFirstNavPathForRoles } from '@/composables/useNavSections'
 import { useSessionStore } from '@/stores/session'
 import type { RoleCode } from '@/types/common'
@@ -218,7 +220,7 @@ const router = createRouter({
   routes
 })
 
-router.beforeEach((to) => {
+router.beforeEach(async (to) => {
   const session = useSessionStore()
 
   if (!session.isLoggedIn && !to.meta.public) {
@@ -227,6 +229,16 @@ router.beforeEach((to) => {
 
   if (session.isLoggedIn && to.path === '/login') {
     return session.user?.homePath || getFirstNavPathForRoles(session.user?.roles)
+  }
+
+  if (session.isLoggedIn && session.user && !to.meta.public) {
+    try {
+      const currentUser = await fetchCurrentUser()
+      session.setUser(reconcileAuthorizedSessionUser(session.user, currentUser))
+    } catch {
+      session.clear()
+      return { path: '/login', query: { redirect: to.fullPath } }
+    }
   }
 
   const requiredRole = to.meta.role

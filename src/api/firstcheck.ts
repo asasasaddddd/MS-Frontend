@@ -7,21 +7,23 @@ import type {
   ConfirmCategoryRequest,
   ConfirmVerificationTypeRequest,
   DeviceCodeReservation,
+  DeviceCodeReservationReleaseRequest,
   DeviceCodeReservationRequest,
   FirstCheckOrder,
   StartFirstCheckRequest,
   VerifierVerifyAndAssignRequest
 } from '@/types/firstcheck'
+import type { EntityId } from '@/types/common'
 
 export function startFirstCheck(data: StartFirstCheckRequest) {
-  return request<string | number>({
+  return request<EntityId>({
     url: '/firstcheck/start',
     method: 'POST',
     data
   })
 }
 
-export function getFirstCheckDetail(orderId: string | number, taskId: string | number, signal?: AbortSignal) {
+export function getFirstCheckDetail(orderId: EntityId, taskId: EntityId, signal?: AbortSignal) {
   return request<FirstCheckOrder>({
     url: `/firstcheck/detail/${orderId}`,
     method: 'GET',
@@ -81,6 +83,14 @@ export function engineerConfirmTypeFirstCheck(data: ConfirmVerificationTypeReque
 export function reserveDeviceCodesFirstCheck(data: DeviceCodeReservationRequest) {
   return request<DeviceCodeReservation>({
     url: '/firstcheck/device-code-reservations',
+    method: 'POST',
+    data
+  })
+}
+
+export function releaseDeviceCodeReservationFirstCheck(data: DeviceCodeReservationReleaseRequest) {
+  return request<void>({
+    url: '/firstcheck/device-code-reservations/release',
     method: 'POST',
     data
   })

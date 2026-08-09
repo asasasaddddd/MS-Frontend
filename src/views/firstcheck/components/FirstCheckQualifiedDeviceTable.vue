@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import AttachmentUploadButton from '@/components/AttachmentUploadButton.vue'
+import type { EntityId } from '@/types/common'
 import {
   calculateQualifiedDeviceValidUntil,
   type QualifiedFirstCheckDeviceRow
 } from '@/views/firstcheck/firstCheckQualifiedDeviceModel'
 
 const props = defineProps<{
-  orderId?: string | number
+  orderId?: EntityId
   confirmInterval?: string
   verificationCycleMonth?: number
 }>()

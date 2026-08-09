@@ -12,6 +12,7 @@ import {
   getPeriodicJudgementDisplay,
   mapPeriodicTaskRow
 } from '../src/views/periodic/periodicDisplayModel.ts'
+import { FLOW_STAGE_DEFINITIONS } from '../src/components/workflow/flowStatusDefinitions.ts'
 
 assert.equal(periodicEndpoint('judgements'), '/periodic/judgements')
 assert.equal(periodicEndpoint('scrapDisposal'), '/periodic/scrap-disposal')
@@ -144,9 +145,16 @@ const statusDefinitionSource = readFileSync(
   new URL('../src/components/workflow/flowStatusDefinitions.ts', import.meta.url),
   'utf8'
 )
+const statusDefinitionKeys = new Set(
+  FLOW_STAGE_DEFINITIONS.map((definition) => `${definition.dimensionCode}:${definition.stageCode}`)
+)
 for (const nodeCode of [...judgementNodes.map(([nodeCode]) => nodeCode), 'verifier_scrap_disposal']) {
-  assert.match(statusDefinitionSource, new RegExp(`stageCode: '${nodeCode}'`))
+  assert.ok(
+    statusDefinitionKeys.has(`business:${nodeCode}`),
+    `${nodeCode} 必须进入统一 business 状态目录`
+  )
 }
+assert.doesNotMatch(statusDefinitionSource, /CHANGE_BUSINESS_NODE_DEFINITIONS/)
 assert.doesNotMatch(statusDefinitionSource, /stageCode: 'external_third_judge'/)
 
 const responsibleViewSource = readFileSync(

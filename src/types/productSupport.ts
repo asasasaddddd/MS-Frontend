@@ -1,4 +1,6 @@
-export type ProductSupportEntityId = string | number
+import type { EntityId, RowVersion } from '@/types/common'
+
+export type ProductSupportEntityId = EntityId
 
 export type ProductSupportNodeCode = 'verifier_verify' | 'completed' | string
 export type ProductSupportOrderStatus = 'pending' | 'completed' | string
@@ -47,7 +49,7 @@ export interface ProductSupportRatioResultRequest {
 export interface ProductSupportVerifyRequest {
   orderId: ProductSupportEntityId
   taskId: ProductSupportEntityId
-  rowVersion: ProductSupportEntityId
+  rowVersion: RowVersion
   verificationDate: string
   attachmentGroupId?: ProductSupportEntityId
   ratioResults: ProductSupportRatioResultRequest[]
@@ -82,7 +84,7 @@ export interface ProductSupportOrderVO {
   id: ProductSupportEntityId
   workflowTaskId?: ProductSupportEntityId
   processInstanceId?: ProductSupportEntityId
-  rowVersion?: ProductSupportEntityId
+  rowVersion?: RowVersion
   allowedActions?: string[]
   orderNo?: string
   contractNo?: string

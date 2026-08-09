@@ -1,7 +1,9 @@
+import type { EntityId } from '@/types/common'
+
 export type LabelVerificationMethod = 'self' | 'send_out'
 
 export interface LabelSourceDetail {
-  sourceId?: string | number
+  sourceId?: EntityId
   businessNo?: string
   purchaseOrderNo?: string
   materialCode?: string
@@ -19,10 +21,10 @@ export interface LabelSourceDetail {
 }
 
 export interface LabelPrintRecord {
-  id: string | number
+  id: EntityId
   labelType?: string
   deviceCode?: string
-  deviceId?: string | number
+  deviceId?: EntityId
   deviceName?: string
   validUntil?: string
   verificationDate?: string
@@ -34,11 +36,15 @@ export interface LabelPrintRecord {
   printUserName?: string
   signUserId?: string
   signUserName?: string
+  printAssigneeId?: string
+  printAssigneeRoleCode?: string
+  printRoleCode?: string
   firstPrintTime?: string
   lastPrintTime?: string
   printCount?: number
   sourceType?: string
-  sourceId?: string | number
+  sourceLabel?: string
+  sourceId?: EntityId
   qrCodeData?: string
   sourceDetail?: LabelSourceDetail
   createdAt?: string

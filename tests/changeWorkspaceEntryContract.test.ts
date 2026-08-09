@@ -13,6 +13,10 @@ const workspaceSource = readFileSync(
   new URL('../src/views/WorkspaceTodoView.vue', import.meta.url),
   'utf8'
 )
+const adapterSource = readFileSync(
+  new URL('../src/views/workspaceTodoAdapters.ts', import.meta.url),
+  'utf8'
+)
 const routerSource = readFileSync(new URL('../src/router/index.ts', import.meta.url), 'utf8')
 
 assert.doesNotMatch(applySource, /ChangeReceiveAdminPanel/)
@@ -20,6 +24,7 @@ assert.doesNotMatch(applySource, /ChangeHistoryPanel/)
 assert.match(adminTaskSource, /ChangeReceiveAdminPanel/)
 assert.match(adminTaskSource, /ChangeHistoryPanel/)
 assert.doesNotMatch(adminTaskSource, /role-code=/)
-assert.match(workspaceSource, /getChangeTaskRoute/)
+assert.match(workspaceSource, /getTodoModuleAdapter\('change'\)/)
+assert.match(adapterSource, /getChangeTaskRoute/)
 assert.doesNotMatch(workspaceSource, /const changeRouteByRole/)
 assert.match(routerSource, /['"]\/change\/admin-task['"]:\s*\(\)\s*=>\s*import\(['"]@\/views\/change\/ChangeAdminTaskView\.vue['"]\)/)

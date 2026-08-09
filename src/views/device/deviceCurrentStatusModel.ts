@@ -48,6 +48,13 @@ const verificationStatuses: StatusDefinition[] = [
     aliases: ['pre_use_check', 'precheck', 'pre_check', 'before_use', '用前检定中']
   },
   {
+    code: 'change_processing',
+    text: '状态变更中',
+    color: 'orange',
+    intermediate: true,
+    aliases: ['change_processing', 'change-processing', 'change processing', '状态变更中']
+  },
+  {
     code: 'deferred',
     text: '缓检',
     color: 'orange',

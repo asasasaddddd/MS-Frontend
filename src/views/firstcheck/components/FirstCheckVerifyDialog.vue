@@ -2,6 +2,7 @@
 import { computed, onUnmounted, reactive, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import {
+  releaseDeviceCodeReservationFirstCheck,
   reserveDeviceCodesFirstCheck,
   verifierVerifyAndAssignFirstCheck
 } from '@/api/firstcheck'
@@ -22,12 +23,13 @@ import type {
   FirstCheckOrder,
   VerifierVerifyAndAssignRequest
 } from '@/types/firstcheck'
+import type { EntityId, RowVersion } from '@/types/common'
 
 const props = defineProps<{
   open: boolean
   order?: FirstCheckOrder
-  taskId?: string | number
-  taskRowVersion?: string | number
+  taskId?: EntityId
+  taskRowVersion?: RowVersion
   allowedActions: string[]
 }>()
 
@@ -136,6 +138,11 @@ function close() {
   emit('update:open', false)
 }
 
+async function cancel() {
+  await releaseReservationIfPresent()
+  close()
+}
+
 function stopReservationClock() {
   if (reservationTimer) clearInterval(reservationTimer)
   reservationTimer = undefined
@@ -171,9 +178,31 @@ function commonText(value?: number) {
   return '-'
 }
 
-function clearReservation() {
+function clearReservationLocal() {
   reservation.value = undefined
   qualifiedDevices.value = invalidateDeviceCodeReservation(qualifiedDevices.value)
+}
+
+async function releaseReservationIfPresent() {
+  const current = reservation.value
+  const order = props.order
+  clearReservationLocal()
+  if (!current?.reservationId
+      || !order
+      || props.taskId === undefined
+      || props.taskRowVersion === undefined) {
+    return
+  }
+  try {
+    await releaseDeviceCodeReservationFirstCheck({
+      orderId: order.id,
+      taskId: props.taskId,
+      taskRowVersion: props.taskRowVersion,
+      reservationId: current.reservationId
+    })
+  } catch (error) {
+    message.warning(error instanceof Error ? error.message : '旧计量编号预留释放失败，重新生成时将由后端自动替换')
+  }
 }
 
 function resetForm(order?: FirstCheckOrder) {
@@ -276,7 +305,7 @@ async function generateDeviceCodes() {
     reservation.value = result
     message.success(`已生成 ${result.deviceCodes.length} 个正式计量编号`)
   } catch (error) {
-    clearReservation()
+    clearReservationLocal()
     message.error(error instanceof Error ? error.message : '计量编号生成失败')
   } finally {
     reserving.value = false
@@ -416,7 +445,7 @@ watch(
 
 watch(
   () => form.qualifiedQuantity,
-  (value) => {
+  async (value) => {
     if (resetting) return
     qualifiedDevices.value = resizeQualifiedDeviceRows(
       qualifiedDevices.value,
@@ -425,14 +454,14 @@ watch(
       form.confirmInterval,
       form.verificationCycleMonth
     )
-    clearReservation()
+    await releaseReservationIfPresent()
   }
 )
 
 watch(
   () => form.subjectSubcategory,
-  () => {
-    if (!resetting) clearReservation()
+  async () => {
+    if (!resetting) await releaseReservationIfPresent()
   }
 )
 
@@ -459,7 +488,7 @@ onUnmounted(stopReservationClock)
     width="95vw"
     :footer="null"
     :destroy-on-close="true"
-    @cancel="close"
+    @cancel="cancel"
   >
     <template #title>
       <div class="dialog-title">
@@ -468,7 +497,7 @@ onUnmounted(stopReservationClock)
           <strong>首次检定表单填写</strong>
         </div>
         <div class="dialog-title-actions">
-          <a-button @click="close">取消</a-button>
+          <a-button @click="cancel">取消</a-button>
           <a-button type="primary" :loading="submitting" :disabled="Number(form.qualifiedQuantity || 0) > 0 && !reservationReady" @click="submit">
             提交检定并赋码
           </a-button>

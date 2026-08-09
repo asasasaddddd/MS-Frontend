@@ -1,4 +1,6 @@
-export type SamplingEntityId = string | number
+import type { EntityId, RowVersion } from '@/types/common'
+
+export type SamplingEntityId = EntityId
 
 export type SamplingNodeCode =
   | 'admin_confirm'
@@ -43,7 +45,7 @@ export interface SamplingCreatePlanRequest {
 export interface SamplingAdminConfirmRequest {
   samplingTaskId: SamplingEntityId
   taskId: SamplingEntityId
-  rowVersion: SamplingEntityId
+  rowVersion: RowVersion
   countResult: SamplingCountResult
   abnormalReason?: string
   opinion?: string
@@ -52,7 +54,7 @@ export interface SamplingAdminConfirmRequest {
 export interface SamplingVerificationSubmitRequest {
   samplingTaskId: SamplingEntityId
   taskId: SamplingEntityId
-  rowVersion: SamplingEntityId
+  rowVersion: RowVersion
   result?: SamplingResult
   verificationDate?: string
   validUntil?: string
@@ -92,7 +94,7 @@ export interface SamplingTaskVO {
   id: SamplingEntityId
   workflowTaskId?: SamplingEntityId
   processInstanceId?: SamplingEntityId
-  rowVersion?: SamplingEntityId
+  rowVersion?: RowVersion
   allowedActions?: string[]
   planId?: SamplingEntityId
   planNo?: string

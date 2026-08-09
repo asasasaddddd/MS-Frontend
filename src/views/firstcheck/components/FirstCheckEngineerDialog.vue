@@ -5,12 +5,13 @@ import { engineerConfirmTypeFirstCheck, engineerReturnFirstCheck } from '@/api/f
 import { listUsersByDeptAndRole, type SysUserVO } from '@/api/system'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import type { FirstCheckOrder, VerificationType } from '@/types/firstcheck'
+import type { EntityId, RowVersion } from '@/types/common'
 
 const props = defineProps<{
   open: boolean
   order?: FirstCheckOrder
-  taskId?: string | number
-  taskRowVersion?: string | number
+  taskId?: EntityId
+  taskRowVersion?: RowVersion
   allowedActions: string[]
 }>()
 

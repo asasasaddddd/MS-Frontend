@@ -5,6 +5,7 @@ import type {
   FlowOverviewMetric,
   FlowSummary
 } from '../../types/flowSummary'
+import { changeNodes, workflowNodes } from '../../workflows/metrologyWorkflow.ts'
 
 /** 统一状态标签使用的语义色，不承载业务判断。 */
 export type FlowStatusTone = 'neutral' | 'info' | 'processing' | 'success' | 'warning' | 'error'
@@ -197,24 +198,116 @@ const CHANGE_BUSINESS_TYPE_DEFINITIONS: readonly ChangeBusinessTypeDefinition[] 
   { code: 'defer', label: '缓检' }
 ]
 
-/** 状态变更业务节点的中文与语义色定义。 */
-const CHANGE_BUSINESS_NODE_DEFINITIONS: Readonly<Record<string, { label: string; tone: FlowStatusTone }>> = {
-  admin_submit: { label: '待管理员发起', tone: 'processing' },
-  dept_leader_approve: { label: '待分厂主管领导审批', tone: 'warning' },
-  measure_leader_review: { label: '待计量领导审批', tone: 'warning' },
-  responsible_engineer_review: { label: '待责任工程师审批', tone: 'warning' },
-  manager_revise: { label: '退回管理员修订', tone: 'error' },
-  verifier_handle: { label: '待检定员处理', tone: 'processing' },
-  receive_dept_leader_confirm: { label: '待接收部门主管确认', tone: 'warning' },
-  receive_admin_confirm: { label: '待接收部门管理员确认', tone: 'warning' }
-}
-
 /** 状态变更流程实例终态的中文与语义色定义。 */
 const CHANGE_PROCESS_STAGE_DEFINITIONS: Readonly<Record<string, { label: string; tone: FlowStatusTone }>> = {
   approved: { label: '流程已通过', tone: 'success' },
   rejected: { label: '流程已驳回', tone: 'error' },
   cancelled: { label: '流程已取消', tone: 'neutral' },
   returned: { label: '流程已退回', tone: 'error' }
+}
+
+/** 工作流节点的语义色属于展示层，不参与节点归属或状态判断。 */
+const WORKFLOW_NODE_TONE_BY_CODE: Readonly<Record<string, FlowStatusTone>> = {
+  admin_submit: 'processing',
+  supplier_submit: 'info',
+  system_issue: 'info',
+  manager_classify: 'warning',
+  manager_revise: 'error',
+  dept_leader_approve: 'warning',
+  measure_leader_review: 'warning',
+  responsible_engineer_review: 'warning',
+  engineer_route: 'warning',
+  admin_exception_route: 'warning',
+  admin_confirm: 'warning',
+  self_verify: 'processing',
+  verifier_verify_assign: 'processing',
+  verifier_handle: 'processing',
+  verifier_fill: 'processing',
+  external_common_fill: 'warning',
+  external_uncommon_fill: 'warning',
+  verifier_second_judge: 'warning',
+  responsible_second_judge: 'warning',
+  responsible_third_judge: 'warning',
+  verifier_third_judge: 'warning',
+  responsible_fourth_judge: 'warning',
+  responsible_scrap_confirm: 'warning',
+  responsible_scrap_tracking_decision: 'warning',
+  verifier_scrap_disposal: 'error',
+  manager_forward_confirm: 'warning',
+  confirmer_confirm: 'warning',
+  label_print: 'processing',
+  admin_take_back: 'processing',
+  receive_dept_leader_confirm: 'warning',
+  receive_admin_confirm: 'warning'
+}
+
+/** 工作流节点在汇总卡中的稳定视觉顺序。 */
+const WORKFLOW_NODE_ORDER_BY_CODE: Readonly<Record<string, number>> = {
+  supplier_submit: 15,
+  system_issue: 20,
+  manager_classify: 30,
+  manager_revise: 31,
+  dept_leader_approve: 40,
+  engineer_route: 50,
+  admin_exception_route: 60,
+  self_verify: 70,
+  external_common_fill: 80,
+  verifier_verify_assign: 90,
+  admin_confirm: 91,
+  verifier_fill: 100,
+  external_uncommon_fill: 120,
+  verifier_second_judge: 125,
+  responsible_second_judge: 130,
+  responsible_third_judge: 135,
+  verifier_third_judge: 140,
+  responsible_fourth_judge: 145,
+  responsible_scrap_confirm: 146,
+  responsible_scrap_tracking_decision: 147,
+  verifier_scrap_disposal: 148,
+  manager_forward_confirm: 150,
+  confirmer_confirm: 160,
+  measure_leader_review: 180,
+  responsible_engineer_review: 185,
+  verifier_handle: 190,
+  receive_dept_leader_confirm: 195,
+  receive_admin_confirm: 196,
+  label_print: 210,
+  admin_take_back: 221,
+  admin_submit: 500
+}
+
+function workflowNodeLabel(node: { name: string; summaryLabel?: string }) {
+  return node.summaryLabel || node.name
+}
+
+function workflowNodeTone(nodeCode: string): FlowStatusTone {
+  return WORKFLOW_NODE_TONE_BY_CODE[nodeCode] || 'warning'
+}
+
+/** 将统一工作流节点目录展开为状态汇总的单节点定义。 */
+function buildWorkflowNodeStageDefinitions(
+  dimensionCode: 'business' | 'workflow',
+  includeChangeNodes: boolean
+): FlowStageDefinition[] {
+  const nodes = Object.values(workflowNodes).flatMap((moduleNodes) => moduleNodes)
+  const seen = new Set<string>()
+  const definitions: FlowStageDefinition[] = []
+
+  nodes.forEach((node, nodeIndex) => {
+    if (!includeChangeNodes && node.module === 'change') return
+    if (seen.has(node.code)) return
+    seen.add(node.code)
+    definitions.push({
+      dimensionCode,
+      stageCode: node.code,
+      label: workflowNodeLabel(node),
+      tone: workflowNodeTone(node.code),
+      order: WORKFLOW_NODE_ORDER_BY_CODE[node.code] ?? 500 + nodeIndex * 10,
+      showWhenZero: false
+    })
+  })
+
+  return definitions
 }
 
 /**
@@ -226,12 +319,12 @@ const CHANGE_PROCESS_STAGE_DEFINITIONS: Readonly<Record<string, { label: string;
  */
 function buildChangeBusinessStageDefinitions(): FlowStageDefinition[] {
   return CHANGE_BUSINESS_TYPE_DEFINITIONS.flatMap((typeDefinition, typeIndex) => {
-    const nodeDefinitions = Object.entries(CHANGE_BUSINESS_NODE_DEFINITIONS).map(([nodeCode, nodeDefinition], nodeIndex) => {
+    const nodeDefinitions = changeNodes.map((node, nodeIndex) => {
       return {
         dimensionCode: 'business' as const,
-        stageCode: `${typeDefinition.code}:${nodeCode}`,
-        label: `${typeDefinition.label} · ${nodeDefinition.label}`,
-        tone: nodeDefinition.tone,
+        stageCode: `${typeDefinition.code}:${node.code}`,
+        label: `${typeDefinition.label} · ${workflowNodeLabel(node)}`,
+        tone: workflowNodeTone(node.code),
         order: 1000 + typeIndex * 100 + nodeIndex * 10,
         showWhenZero: false
       }
@@ -264,54 +357,31 @@ export const FLOW_STAGE_DEFINITIONS: readonly FlowStageDefinition[] = [
   { dimensionCode: 'business', stageCode: 'draft', label: '草稿', tone: 'neutral', order: 10, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'submitted', label: '已提交', tone: 'info', order: 11, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'processing', label: '处理中', tone: 'processing', order: 12, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'system_issue', label: '系统下发', tone: 'info', order: 20, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'manager_classify', label: '待分类', tone: 'warning', order: 30, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'manager_revise', label: '退回待修改', tone: 'error', order: 31, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'dept_leader_approve', label: '待主管领导审批', tone: 'warning', order: 40, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'engineer_route', label: '待责任工程师确认', tone: 'warning', order: 50, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'admin_exception_route', label: '待异常分流', tone: 'warning', order: 60, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'manager_receive', label: '待管理员接收', tone: 'warning', order: 65, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'self_verify', label: '待自检', tone: 'processing', order: 70, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'external_common_fill', label: '待外扩填写通用设备信息', tone: 'warning', order: 80, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'verifier_verify_assign', label: '待检定员处理', tone: 'processing', order: 90, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'verifier_verify', label: '待检定员处理', tone: 'processing', order: 91, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'wait_receive', label: '待接收', tone: 'warning', order: 91, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'wait_sendout_return', label: '待外委送回', tone: 'warning', order: 92, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'external_returned', label: '外委已送回', tone: 'info', order: 93, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'verifier_received', label: '已接收', tone: 'success', order: 94, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'admin_confirm', label: '待管理员确认', tone: 'warning', order: 91, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'external_uncommon_fill', label: '待外委检定员填写否通用设备信息', tone: 'warning', order: 120, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'verifier_second_judge', label: '待外委检定员二次判定', tone: 'warning', order: 125, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'responsible_second_judge', label: '待责任工程师二次判定', tone: 'warning', order: 130, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'responsible_third_judge', label: '待责任工程师三次判定', tone: 'warning', order: 135, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'verifier_third_judge', label: '待外委检定员三次判定', tone: 'warning', order: 140, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'responsible_fourth_judge', label: '待责任工程师四次判定', tone: 'warning', order: 145, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'verifier_scrap_disposal', label: '待外委检定员报废处置', tone: 'error', order: 148, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'manager_forward_confirm', label: '待管理员转办', tone: 'warning', order: 150, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'confirmer_confirm', label: '待确认员确认', tone: 'warning', order: 160, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'planner_approve', label: '待计划员审批', tone: 'warning', order: 170, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'measure_leader_approve', label: '待计量领导审批', tone: 'warning', order: 180, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'verifier_handle', label: '待检定员处理', tone: 'processing', order: 190, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'responsible_engineer_handle', label: '待责任工程师处理', tone: 'warning', order: 200, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'assign_code', label: '待完善计量编号', tone: 'processing', order: 210, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'admin_receive', label: '待管理员取回', tone: 'processing', order: 220, showWhenZero: false },
-  { dimensionCode: 'business', stageCode: 'admin_take_back', label: '待管理员取回', tone: 'processing', order: 221, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'approved', label: '已通过', tone: 'success', order: 245, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'rejected', label: '已驳回', tone: 'error', order: 250, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'cancelled', label: '已取消', tone: 'neutral', order: 260, showWhenZero: false },
   { dimensionCode: 'business', stageCode: 'completed', label: '已完成', tone: 'success', order: 270, showWhenZero: false },
+  ...buildWorkflowNodeStageDefinitions('business', false),
   ...buildChangeBusinessStageDefinitions(),
 
-  { dimensionCode: 'workflow', stageCode: 'dept_leader_approve', label: '待分厂主管领导审批', tone: 'warning', order: 10, showWhenZero: false },
-  { dimensionCode: 'workflow', stageCode: 'measure_leader_review', label: '待计量领导审批', tone: 'warning', order: 20, showWhenZero: false },
   { dimensionCode: 'workflow', stageCode: 'measure_leader_approve', label: '待计量领导审批', tone: 'warning', order: 21, showWhenZero: false },
-  { dimensionCode: 'workflow', stageCode: 'responsible_engineer_review', label: '待责任工程师审批', tone: 'warning', order: 30, showWhenZero: false },
-  { dimensionCode: 'workflow', stageCode: 'verifier_handle', label: '待检定员处理', tone: 'processing', order: 40, showWhenZero: false },
   { dimensionCode: 'workflow', stageCode: 'manager_complete', label: '待管理员办结', tone: 'processing', order: 50, showWhenZero: false },
   { dimensionCode: 'workflow', stageCode: 'approved', label: '流程已通过', tone: 'success', order: 60, showWhenZero: false },
   { dimensionCode: 'workflow', stageCode: 'rejected', label: '流程已驳回', tone: 'error', order: 70, showWhenZero: false },
   { dimensionCode: 'workflow', stageCode: 'cancelled', label: '流程已取消', tone: 'neutral', order: 80, showWhenZero: false },
   { dimensionCode: 'workflow', stageCode: 'returned', label: '流程已退回', tone: 'error', order: 90, showWhenZero: false },
+  ...buildWorkflowNodeStageDefinitions('workflow', true),
   { dimensionCode: 'physical', stageCode: 'none', label: '未进入实物交接', tone: 'neutral', order: 1, showWhenZero: false },
   { dimensionCode: 'physical', stageCode: 'wait_verifier_receive', label: '待检定员接收', tone: 'warning', order: 10, showWhenZero: false },
   { dimensionCode: 'physical', stageCode: 'verifier_received', label: '检定员已接收', tone: 'success', order: 20, showWhenZero: false },

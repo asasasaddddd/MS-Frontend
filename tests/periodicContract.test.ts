@@ -16,6 +16,8 @@ assert.equal(periodicEndpoint('supplierFillInfo'), '/periodic/external-common-fi
 assert.equal(periodicEndpoint('verifierFillInfo'), '/periodic/external-uncommon-fill')
 assert.equal(periodicEndpoint('judgements'), '/periodic/judgements')
 assert.equal(periodicEndpoint('scrapDisposal'), '/periodic/scrap-disposal')
+assert.equal(periodicEndpoint('responsibleScrapConfirm'), '/periodic/responsible-scrap-confirm')
+assert.equal(periodicEndpoint('responsibleScrapTrackingDecision'), '/periodic/responsible-scrap-tracking-decision')
 
 assert.equal(periodicNodeName('system_issue'), '系统下发')
 assert.equal(periodicNodeName('admin_exception_route'), '管理员异常分流')
@@ -26,6 +28,8 @@ assert.equal(periodicNodeName('responsible_second_judge'), '责任工程师二�
 assert.equal(periodicNodeName('responsible_third_judge'), '责任工程师三次判定')
 assert.equal(periodicNodeName('verifier_third_judge'), '外委检定员三次判定')
 assert.equal(periodicNodeName('responsible_fourth_judge'), '责任工程师四次判定')
+assert.equal(periodicNodeName('responsible_scrap_confirm'), '责任工程师确认正常报废')
+assert.equal(periodicNodeName('responsible_scrap_tracking_decision'), '责任工程师判定是否进行不合格追踪')
 assert.equal(periodicNodeName('verifier_scrap_disposal'), '外委检定员报废处置')
 
 assert.equal(isPeriodicJudgementResult('qualified'), true)
@@ -84,6 +88,8 @@ const periodicApiSource = readFileSync(new URL('../src/api/periodic.ts', import.
 assert.doesNotMatch(periodicApiSource, /my-tasks|my-history|listPeriodicMy/)
 assert.match(periodicApiSource, /generatePeriodicTestPlan\(scenario: PeriodicTestPlanScenario\)/)
 assert.match(periodicApiSource, /params:\s*\{ scenario \}/)
+assert.match(periodicApiSource, /function submitPeriodicResponsibleScrapConfirm[\s\S]*periodicEndpoint\('responsibleScrapConfirm'\)/)
+assert.match(periodicApiSource, /function submitPeriodicResponsibleScrapTrackingDecision[\s\S]*periodicEndpoint\('responsibleScrapTrackingDecision'\)/)
 assert.doesNotMatch(periodicApiSource, /normalSubmit|submitPeriodicNormalTasks/)
 
 const periodicContractSource = readFileSync(new URL('../src/api/periodicContract.ts', import.meta.url), 'utf8')
@@ -93,6 +99,8 @@ const periodicTypeSource = readFileSync(new URL('../src/types/periodic.ts', impo
 assert.match(periodicTypeSource, /'self'/)
 assert.match(periodicTypeSource, /'external_common'/)
 assert.match(periodicTypeSource, /'external_non_common'/)
+assert.match(periodicTypeSource, /interface PeriodicResponsibleScrapConfirmRequest/)
+assert.match(periodicTypeSource, /interface PeriodicResponsibleScrapTrackingDecisionRequest/)
 assert.doesNotMatch(periodicTypeSource, /PeriodicNormalSubmitRequest/)
 
 const periodicPlanSummarySource = readFileSync(

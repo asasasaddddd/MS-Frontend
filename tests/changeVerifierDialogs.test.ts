@@ -5,6 +5,7 @@ import type { ChangeOrderVO } from '../src/types/change.ts'
 import {
   buildChangeVerifierHandleRequest,
   resolveChangeVerifierDialog,
+  shouldShowChangeVerifierInspectionFields,
   validateChangeVerifierForm,
   verifierResultOptions,
   type ChangeVerifierFormState
@@ -141,7 +142,7 @@ assert.match(handleRequestTypeSource, /verificationRequired:\s*0\s*\|\s*1/)
 assert.match(changeTypeSource, /\| 'defer'/)
 
 assert.doesNotMatch(dialogSource, /需送检|已标记送检|showNeedSend|needSend|toggleNeedSend/)
-assert.doesNotMatch(modelSource, /showNeedSend|needSend|sendOutRequired|unqualified/)
+assert.doesNotMatch(modelSource, /showNeedSend|needSend|unqualified/)
 assert.doesNotMatch(dialogSource, /是否需要外送|外送单位/)
 
 const oneTimeConfig = resolveChangeVerifierDialog({
@@ -233,6 +234,131 @@ assert.equal(validateChangeVerifierForm(periodicCategoryConfig, {
 assert.match(dialogSource, /props\.order\?\.id/)
 assert.match(dialogSource, /是否检定/)
 assert.match(dialogSource, /form\.verificationRequired/)
+
+const externalCategoryBeforeReturnOrder: ChangeOrderVO = {
+  id: 'CHANGE-CATEGORY-EXTERNAL-BEFORE-RETURN',
+  changeType: 'category',
+  taskId: 'TASK-CATEGORY-EXTERNAL-BEFORE-RETURN',
+  rowVersion: 5,
+  items: [{
+    id: 'ITEM-CATEGORY-EXTERNAL-BEFORE-RETURN',
+    oldVerificationMethod: 'send_out',
+    physicalStatus: 'wait_external_send_out'
+  }]
+}
+const externalCategoryBeforeReturnConfig = resolveChangeVerifierDialog(externalCategoryBeforeReturnOrder)
+assert.equal(shouldShowChangeVerifierInspectionFields(externalCategoryBeforeReturnConfig, {
+  reason: 'external decision only',
+  verificationRequired: 1,
+  verificationDate: '',
+  validUntil: '',
+  result: 'qualified',
+  opinion: ''
+}, externalCategoryBeforeReturnOrder), false, 'external category/cycle before return must hide inspection fields when need verification is selected')
+assert.equal(validateChangeVerifierForm(externalCategoryBeforeReturnConfig, {
+  reason: 'external decision only',
+  verificationRequired: 1,
+  verificationDate: '',
+  validUntil: '',
+  result: 'qualified',
+  opinion: ''
+}, externalCategoryBeforeReturnOrder), '', 'external category/cycle decision before return must not validate inspection fields')
+
+const externalCategoryDisplayMethodOrder: ChangeOrderVO = {
+  id: 'CHANGE-CATEGORY-EXTERNAL-DISPLAY-METHOD',
+  changeType: 'category',
+  taskId: 'TASK-CATEGORY-EXTERNAL-DISPLAY-METHOD',
+  rowVersion: 6,
+  items: [{
+    id: 'ITEM-CATEGORY-EXTERNAL-DISPLAY-METHOD',
+    oldVerificationMethod: '外委',
+    sendOutRequired: 1,
+    physicalStatus: 'wait_external_send_out'
+  }]
+}
+const externalCategoryDisplayMethodConfig = resolveChangeVerifierDialog(externalCategoryDisplayMethodOrder)
+assert.equal(shouldShowChangeVerifierInspectionFields(externalCategoryDisplayMethodConfig, {
+  reason: 'external decision only',
+  verificationRequired: 1,
+  verificationDate: '',
+  validUntil: '',
+  result: 'qualified',
+  opinion: ''
+}, externalCategoryDisplayMethodOrder), false, 'external display method values must also hide inspection fields before return')
+
+const externalCycleWaitingReturnOrder: ChangeOrderVO = {
+  id: 'CHANGE-CYCLE-EXTERNAL-WAITING-RETURN',
+  changeType: 'cycle',
+  taskId: 'TASK-CYCLE-EXTERNAL-WAITING-RETURN',
+  rowVersion: 8,
+  items: [{
+    id: 'ITEM-CYCLE-EXTERNAL-WAITING-RETURN',
+    oldVerificationMethod: 'send_out',
+    physicalStatus: 'wait_send_out_return'
+  }]
+}
+assert.notEqual(validateChangeVerifierForm(resolveChangeVerifierDialog(externalCycleWaitingReturnOrder), {
+  reason: 'external is away',
+  verificationRequired: 1,
+  verificationDate: '',
+  validUntil: '',
+  result: 'qualified',
+  opinion: ''
+}, externalCycleWaitingReturnOrder), '', 'external category/cycle must wait for send-out return before verifier inspection submit')
+
+const externalDecisionRequest = buildChangeVerifierHandleRequest(
+  {
+    id: 'CHANGE-CYCLE-EXTERNAL-BEFORE-RETURN',
+    changeType: 'cycle',
+    taskId: 'TASK-CYCLE-EXTERNAL-BEFORE-RETURN',
+    rowVersion: 6,
+    items: [{
+      id: 'ITEM-CYCLE-EXTERNAL-BEFORE-RETURN',
+      oldVerificationMethod: 'send_out',
+      physicalStatus: 'wait_external_send_out'
+    }]
+  },
+  {
+    reason: 'external decision only',
+    verificationRequired: 1,
+    verificationDate: '2026-07-28',
+    validUntil: '2027-07-27',
+    result: 'qualified',
+    certificateAttachmentGroupId: 'CERT-BEFORE-RETURN',
+    opinion: ''
+  }
+)
+assert.equal(externalDecisionRequest.verificationRequired, 1)
+assert.equal(Object.prototype.hasOwnProperty.call(externalDecisionRequest, 'verificationResult'), false)
+assert.equal(Object.prototype.hasOwnProperty.call(externalDecisionRequest, 'verificationDate'), false)
+assert.equal(Object.prototype.hasOwnProperty.call(externalDecisionRequest, 'certificateAttachmentGroupId'), false)
+
+const externalReturnedRequest = buildChangeVerifierHandleRequest(
+  {
+    id: 'CHANGE-CYCLE-EXTERNAL-RETURNED',
+    changeType: 'cycle',
+    taskId: 'TASK-CYCLE-EXTERNAL-RETURNED',
+    rowVersion: 7,
+    items: [{
+      id: 'ITEM-CYCLE-EXTERNAL-RETURNED',
+      oldVerificationMethod: 'send_out',
+      physicalStatus: 'send_out_return_received'
+    }]
+  },
+  {
+    reason: 'external returned',
+    verificationRequired: 1,
+    verificationDate: '2026-07-28',
+    validUntil: '2027-07-27',
+    result: 'qualified',
+    certificateAttachmentGroupId: 'CERT-AFTER-RETURN',
+    opinion: ''
+  }
+)
+assert.equal(externalReturnedRequest.verificationResult, 'qualified')
+assert.equal(externalReturnedRequest.verificationDate, '2026-07-28')
+assert.equal(externalReturnedRequest.certificateAttachmentGroupId, 'CERT-AFTER-RETURN')
+assert.match(dialogSource, /verificationFieldsVisible/)
 
 assert.match(modelSource, /scrapType.*normal|normal.*scrapType/s)
 assert.match(dialogSource, /listUsersByDeptAndRole\([^)]*'RESPONSIBLE_ENGINEER'/s)

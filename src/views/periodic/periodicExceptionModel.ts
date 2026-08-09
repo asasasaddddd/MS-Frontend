@@ -1,7 +1,7 @@
-import type { ChangeType } from '../../types/change'
 import type {
   EntityId,
   PeriodicExceptionChangeItem,
+  PeriodicExceptionFlowType,
   PeriodicExceptionChangeSubmitRequest,
   PeriodicTaskVO
 } from '../../types/periodic'
@@ -114,8 +114,9 @@ function sourceIdOf(tasks: PeriodicTaskVO[]): EntityId {
   return first.planId || first.id
 }
 
-function changeTypeOf(action: PeriodicExceptionAction): ChangeType {
+function changeTypeOf(action: PeriodicExceptionAction): PeriodicExceptionFlowType {
   if (action === 'defer') return 'defer'
+  if (action === 'scrap') return 'abnormal_scrap'
   if (action === 'category') return 'category'
   if (action === 'cycle') return 'cycle'
   return action

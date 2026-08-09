@@ -8,6 +8,23 @@ const model = workspaceModel as Record<string, (...args: any[]) => any>
 assert.match(workspace, /useRoleTodoSummary/)
 assert.match(workspace, /businessType:\s*selectedWorkflowBusinessType/)
 assert.match(workspace, /<FlowStatusSummary/)
+assert.match(workspace, /const showWorkspaceTaskSections = computed\(\(\) => shouldShowWorkspaceTaskSections\(roleCode\.value\)\)/)
+assert.match(workspace, /user && showWorkspaceTaskSections\.value \? `\$\{user\.employeeId\}\|\$\{user\.roleCode\}` : ''/)
+assert.match(
+  workspace,
+  /if \(!shouldShowWorkspaceTaskSections\(requestedRole\)\) return/,
+  '发起型角色不应触发待办汇总、扫码待办和详情加载'
+)
+assert.match(
+  workspace,
+  /<FlowStatusSummary\s+v-if="showWorkspaceTaskSections && route\.path === '\/todo' && activeBucket === 'todo'"/,
+  '供应商只保留业务发起入口，不显示待办汇总卡片'
+)
+assert.match(
+  workspace,
+  /<a-card v-if="showWorkspaceTaskSections && route\.path === '\/todo'" class="todo-panel"/,
+  '供应商只保留业务发起入口，不显示流程任务卡片'
+)
 assert.doesNotMatch(workspace, /const metrics = computed/)
 assert.doesNotMatch(workspace, /todoCountByType|todoDeviceCountByType/)
 assert.match(workspace, /planId/)
@@ -24,6 +41,9 @@ assert.equal(model.workspaceTodoTypeFromQuery(['change', 'periodic']), 'change')
 assert.equal(model.workspaceTodoTypeFromQuery('unsupported'), 'all')
 assert.equal(model.workspaceTodoTypeFromQuery('__proto__'), 'all')
 assert.equal(model.workspaceTodoTypeFromQuery(undefined), 'all')
+assert.equal(typeof model.shouldShowWorkspaceTaskSections, 'function')
+assert.equal(model.shouldShowWorkspaceTaskSections('SUPPLIER'), false)
+assert.equal(model.shouldShowWorkspaceTaskSections('MEASURE_ADMIN'), true)
 assert.match(
   workspace,
   /watch\(\s*\(\) => route\.query\.type[\s\S]*workspaceTodoTypeFromQuery/,

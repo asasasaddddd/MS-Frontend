@@ -1,6 +1,7 @@
 import { httpClient, request } from '@/api/request'
 import { useSessionStore } from '@/stores/session'
 import type { LabelPrintRecord } from '@/types/label'
+import type { EntityId } from '@/types/common'
 
 function labelDownloadHeaders() {
   const session = useSessionStore()
@@ -20,44 +21,48 @@ function labelDownloadHeaders() {
   return headers
 }
 
-export function listUnprintedLabels(sourceType?: string) {
+export function listUnprintedLabels(sourceType?: string, signal?: AbortSignal) {
   return request<LabelPrintRecord[]>({
     url: '/label/unprintedList',
     method: 'GET',
-    params: sourceType ? { sourceType } : undefined
+    params: sourceType ? { sourceType } : undefined,
+    signal
   })
 }
 
-export function listPrintedLabels(sourceType?: string) {
+export function listPrintedLabels(sourceType?: string, signal?: AbortSignal) {
   return request<LabelPrintRecord[]>({
     url: '/label/printedList',
     method: 'GET',
-    params: sourceType ? { sourceType } : undefined
+    params: sourceType ? { sourceType } : undefined,
+    signal
   })
 }
 
-export function listSupplierFirstCheckUnprintedLabels() {
+export function listSupplierFirstCheckUnprintedLabels(signal?: AbortSignal) {
   return request<LabelPrintRecord[]>({
     url: '/label/supplier/firstcheck/unprinted',
-    method: 'GET'
+    method: 'GET',
+    signal
   })
 }
 
-export function listSupplierFirstCheckPrintedLabels() {
+export function listSupplierFirstCheckPrintedLabels(signal?: AbortSignal) {
   return request<LabelPrintRecord[]>({
     url: '/label/supplier/firstcheck/printed',
-    method: 'GET'
+    method: 'GET',
+    signal
   })
 }
 
-export function printLabelRecord(recordId: string | number) {
+export function printLabelRecord(recordId: EntityId) {
   return request<void>({
     url: `/label/print/${recordId}`,
     method: 'POST'
   })
 }
 
-export async function downloadLabelPdf(recordId: string | number) {
+export async function downloadLabelPdf(recordId: EntityId) {
   const response = await httpClient.get<Blob>(`/label/pdf/${encodeURIComponent(String(recordId))}`, {
     responseType: 'blob',
     headers: labelDownloadHeaders()

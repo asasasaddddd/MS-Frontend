@@ -1,16 +1,21 @@
 import type {
   PeriodicJudgementRequest,
   PeriodicJudgementResult,
+  PeriodicResponsibleScrapConfirmRequest,
+  PeriodicResponsibleScrapTrackingDecisionRequest,
   PeriodicScanRequest,
   PeriodicScrapDisposalRequest,
   PeriodicNodeCode,
   PeriodicVerificationRecordRequest
 } from '@/types/periodic'
+import type { EntityId } from '@/types/common'
 
 const PERIODIC_NODE_CODES = new Set<PeriodicNodeCode>([
   'system_issue',
   'admin_exception_route',
   'self_verify',
+  'responsible_scrap_confirm',
+  'responsible_scrap_tracking_decision',
   'external_common_fill',
   'verifier_second_judge',
   'responsible_second_judge',
@@ -37,8 +42,6 @@ const periodicEndpoints = {
   generateTestPlan: '/periodic/plans/generate-test-one',
   generateMonthPlan: '/periodic/plans/generate-month',
   generateBeforeUsePlan: '/periodic/pre-use/plans/generate',
-  planDetail: '/periodic/plans',
-  planTasks: '/periodic/plans',
   taskDetail: '/periodic/tasks',
   verifierReceive: '/periodic/verifier-receive',
   externalSendOut: '/periodic/external-send-out',
@@ -51,7 +54,9 @@ const periodicEndpoints = {
   supplierFillInfo: '/periodic/external-common-fill',
   verifierFillInfo: '/periodic/external-uncommon-fill',
   judgements: '/periodic/judgements',
-  scrapDisposal: '/periodic/scrap-disposal'
+  scrapDisposal: '/periodic/scrap-disposal',
+  responsibleScrapConfirm: '/periodic/responsible-scrap-confirm',
+  responsibleScrapTrackingDecision: '/periodic/responsible-scrap-tracking-decision'
 } as const
 
 /** 周检接口路径表支持的端点键。 */
@@ -63,9 +68,7 @@ export type PeriodicEndpointKey = keyof typeof periodicEndpoints
  * @param key 接口键。
  * @param id 详情类接口的业务主键。
  */
-export function periodicEndpoint(key: PeriodicEndpointKey, id?: string | number) {
-  if (key === 'planDetail' && id !== undefined) return `${periodicEndpoints.planDetail}/${id}`
-  if (key === 'planTasks' && id !== undefined) return `${periodicEndpoints.planTasks}/${id}/tasks`
+export function periodicEndpoint(key: PeriodicEndpointKey, id?: EntityId) {
   if (key === 'taskDetail' && id !== undefined) return `${periodicEndpoints.taskDetail}/${id}`
   return periodicEndpoints[key]
 }
@@ -80,6 +83,8 @@ export function periodicNodeName(value?: string) {
     system_issue: '系统下发',
     admin_exception_route: '管理员异常分流',
     self_verify: '自检检定',
+    responsible_scrap_confirm: '责任工程师确认正常报废',
+    responsible_scrap_tracking_decision: '责任工程师判定是否进行不合格追踪',
     external_common_fill: '外扩账号填写通用设备检定信息',
     verifier_second_judge: '外委检定员二次判定',
     responsible_second_judge: '责任工程师二次判定',
@@ -197,6 +202,26 @@ export function buildPeriodicScrapDisposalRequest(
   return {
     ...input,
     scrapReason,
+    opinion: input.opinion?.trim() || undefined
+  }
+}
+
+export function buildPeriodicResponsibleScrapConfirmRequest(
+  input: PeriodicResponsibleScrapConfirmRequest
+): PeriodicResponsibleScrapConfirmRequest {
+  return {
+    ...input,
+    approved: Boolean(input.approved),
+    opinion: input.opinion?.trim() || undefined
+  }
+}
+
+export function buildPeriodicResponsibleScrapTrackingDecisionRequest(
+  input: PeriodicResponsibleScrapTrackingDecisionRequest
+): PeriodicResponsibleScrapTrackingDecisionRequest {
+  return {
+    ...input,
+    trackingRequired: Boolean(input.trackingRequired),
     opinion: input.opinion?.trim() || undefined
   }
 }

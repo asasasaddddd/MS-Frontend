@@ -21,6 +21,10 @@ const detailSource = readFileSync(
   'utf8'
 )
 const todoSource = readFileSync(new URL('../src/views/WorkspaceTodoView.vue', import.meta.url), 'utf8')
+const todoAdapterSource = readFileSync(
+  new URL('../src/views/workspaceTodoAdapters.ts', import.meta.url),
+  'utf8'
+)
 const displayModelSource = readFileSync(
   new URL('../src/views/periodic/periodicDisplayModel.ts', import.meta.url),
   'utf8'
@@ -44,6 +48,10 @@ assert.match(
 )
 assert.match(storeSource, /fetchTask\(periodicTaskId: EntityId, workflowTaskId: EntityId\)/)
 assert.match(storeSource, /getPeriodicTask\(periodicTaskId, workflowTaskId\)/)
+assert.doesNotMatch(apiSource, /getPeriodicPlan|listPeriodicPlanTasks/)
+assert.doesNotMatch(contractSource, /planDetail|planTasks/)
+assert.doesNotMatch(storeSource, /currentPlan|planTasks|fetchPlan/)
+assert.doesNotMatch(typeSource, /interface PeriodicPlanVO/)
 assert.match(workspaceSource, /getPeriodicTask\(task\.businessId, task\.taskId, signal\)/)
 assert.match(workspaceSource, /getPeriodicTask\(task\.id, task\.workflowTaskId/)
 assert.match(workspaceSource, /action === 'scan-receive'/)
@@ -52,7 +60,9 @@ assert.match(workspaceSource, /action:\s*'periodic-manager-take-back'/)
 assert.match(workspaceSource, /mergePeriodicTaskPhysicalActions/)
 assert.doesNotMatch(workspaceSource, /function toPhysicalPeriodicTask/)
 assert.match(detailSource, /row\.physicalStatusName/)
-assert.match(todoSource, /getPeriodicTask\(task\.businessId, task\.taskId, signal\)/)
+assert.match(todoSource, /loadTodoModuleDetail/)
+assert.match(todoAdapterSource, /getPeriodicTask\(task\.businessId, task\.taskId, signal\)/)
+assert.match(todoAdapterSource, /parsePeriodicNodeCode\(detail\.currentNode\)/)
 assert.match(todoSource, /mergePeriodicTaskPhysicalActions/)
 assert.doesNotMatch(todoSource, /function toPeriodicPhysicalTask/)
 
@@ -66,6 +76,8 @@ const authoritativeNodeCodes = [
   'system_issue',
   'admin_exception_route',
   'self_verify',
+  'responsible_scrap_confirm',
+  'responsible_scrap_tracking_decision',
   'external_common_fill',
   'verifier_second_judge',
   'responsible_second_judge',
@@ -101,8 +113,14 @@ assert.match(contractSource, /parsePeriodicNodeCode/)
 assert.match(contractSource, /admin_exception_route/)
 assert.doesNotMatch(contractSource, /^\s*(?:plan_confirm|verifier_receive|verification_record|supplier_fill_info|verifier_fill_info|exception_disposal):/m)
 assert.equal(parsePeriodicNodeCode('admin_take_back'), 'admin_take_back')
+assert.equal(parsePeriodicNodeCode('responsible_scrap_confirm'), 'responsible_scrap_confirm')
+assert.equal(parsePeriodicNodeCode('responsible_scrap_tracking_decision'), 'responsible_scrap_tracking_decision')
 assert.equal(periodicNodeName('admin_take_back'), '管理员取回')
+assert.equal(periodicNodeName('responsible_scrap_confirm'), '责任工程师确认正常报废')
+assert.equal(periodicNodeName('responsible_scrap_tracking_decision'), '责任工程师判定是否进行不合格追踪')
 assert.equal(periodicEndpoint('managerTakeBack'), '/periodic/manager-take-back')
+assert.equal(periodicEndpoint('responsibleScrapConfirm'), '/periodic/responsible-scrap-confirm')
+assert.equal(periodicEndpoint('responsibleScrapTrackingDecision'), '/periodic/responsible-scrap-tracking-decision')
 assert.doesNotMatch(workspaceSource, /String\(task\.currentNode\)\s*===\s*'admin_take_back'/)
 
 assert.doesNotMatch(apiSource, /exceptionDisposePeriodic|PeriodicExceptionDisposeRequest|exceptionDispose/)

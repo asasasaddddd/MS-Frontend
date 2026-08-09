@@ -1,6 +1,8 @@
 import { request } from '@/api/request'
 import {
   buildPeriodicJudgementRequest,
+  buildPeriodicResponsibleScrapConfirmRequest,
+  buildPeriodicResponsibleScrapTrackingDecisionRequest,
   buildPeriodicScanRequest,
   buildPeriodicScrapDisposalRequest,
   buildPeriodicVerificationRecordRequest,
@@ -14,7 +16,8 @@ import type {
   PeriodicExceptionChangeSubmitRequest,
   PeriodicJudgementRequest,
   PeriodicManagerForwardConfirmRequest,
-  PeriodicPlanVO,
+  PeriodicResponsibleScrapConfirmRequest,
+  PeriodicResponsibleScrapTrackingDecisionRequest,
   PeriodicScanRequest,
   PeriodicScrapDisposalRequest,
   PeriodicSupplierFillInfoRequest,
@@ -53,20 +56,6 @@ export function generateBeforeUsePlans(data: GenerateBeforeUsePlanRequest) {
     url: periodicEndpoint('generateBeforeUsePlan'),
     method: 'POST',
     data
-  })
-}
-
-export function getPeriodicPlan(planId: EntityId) {
-  return request<PeriodicPlanVO>({
-    url: periodicEndpoint('planDetail', planId),
-    method: 'GET'
-  })
-}
-
-export function listPeriodicPlanTasks(planId: EntityId) {
-  return request<PeriodicTaskVO[]>({
-    url: periodicEndpoint('planTasks', planId),
-    method: 'GET'
   })
 }
 
@@ -182,6 +171,24 @@ export function submitPeriodicScrapDisposal(data: PeriodicScrapDisposalRequest) 
     url: periodicEndpoint('scrapDisposal'),
     method: 'POST',
     data: buildPeriodicScrapDisposalRequest(data)
+  })
+}
+
+export function submitPeriodicResponsibleScrapConfirm(data: PeriodicResponsibleScrapConfirmRequest) {
+  return request<void>({
+    url: periodicEndpoint('responsibleScrapConfirm'),
+    method: 'POST',
+    data: buildPeriodicResponsibleScrapConfirmRequest(data)
+  })
+}
+
+export function submitPeriodicResponsibleScrapTrackingDecision(
+  data: PeriodicResponsibleScrapTrackingDecisionRequest
+) {
+  return request<void>({
+    url: periodicEndpoint('responsibleScrapTrackingDecision'),
+    method: 'POST',
+    data: buildPeriodicResponsibleScrapTrackingDecisionRequest(data)
   })
 }
 

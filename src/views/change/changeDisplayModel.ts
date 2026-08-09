@@ -1,6 +1,7 @@
 import type { ChangeItemSubmitRequest, ChangeItemVO, ChangeOrderVO, ChangeType } from '@/types/change'
 import type { DeviceVO } from '@/types/device'
-import type { EntityId } from '@/types/periodic'
+import type { AllowedOrganizationNodeVO } from '@/types/nodePermission'
+import type { EntityId, RowVersion } from '@/types/common'
 import { resolveDeviceCurrentStatus } from '../device/deviceCurrentStatusModel.ts'
 
 export interface ChangeTypeMeta {
@@ -15,7 +16,7 @@ export interface ChangeTypeMeta {
 export interface ChangeTaskRow {
   key: string
   taskId: EntityId
-  rowVersion: string | number
+  rowVersion: RowVersion
   allowedActions: string[]
   nodeCode?: string
   nodeName?: string
@@ -184,7 +185,11 @@ export function changeNodeName(value?: string) {
     responsible_engineer_review: '责任工程师审核',
     receive_dept_leader_confirm: '接收部门主管确认',
     receive_admin_confirm: '接收管理员确认',
-    verifier_handle: '检定员处理'
+    verifier_handle: '检定员处理',
+    manager_forward_confirm: '管理员转办确认员',
+    confirmer_confirm: '确认员确认',
+    label_print: '检定员打印标签',
+    admin_take_back: '管理员取回'
   }
   return value ? map[value] || value : '-'
 }
@@ -207,6 +212,22 @@ export function todayIsoDate() {
 
 export function deviceRowKey(device: DeviceVO) {
   return String(device.id ?? device.deviceCode ?? '')
+}
+
+export function buildTransferDepartmentOptions(
+  organizations: AllowedOrganizationNodeVO[]
+): Array<{ label: string, value: string }> {
+  const options: Array<{ label: string, value: string }> = []
+  for (const organization of organizations || []) {
+    if (organization.orgType === 'DEPARTMENT' && organization.orgId) {
+      options.push({
+        label: organization.orgName || organization.orgId,
+        value: organization.orgId
+      })
+    }
+    options.push(...buildTransferDepartmentOptions(organization.children || []))
+  }
+  return options
 }
 
 export function changeOrderRowKey(order: ChangeOrderVO) {

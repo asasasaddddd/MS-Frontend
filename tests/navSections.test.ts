@@ -20,6 +20,8 @@ const labelBlock = source.slice(labelStart, labelEnd)
 assert.doesNotMatch(labelBlock, /MEASURE_ADMIN/)
 assert.match(labelBlock, /SUPPLIER/)
 assert.match(labelBlock, /VERIFIER_SELF/)
+assert.match(labelBlock, /VERIFIER_EXTERNAL/)
+assert.match(labelBlock, /EXTERNAL_OPERATOR/)
 
 const workflowRouteSource = source.slice(
   source.indexOf('export const workflowRouteItems'),

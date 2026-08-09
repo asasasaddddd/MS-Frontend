@@ -13,16 +13,21 @@ const verifierModel = source('../src/views/firstcheck/firstCheckVerifierModel.ts
 const workflow = source('../src/workflows/metrologyWorkflow.ts')
 
 assert.match(api, /device-code-reservations/)
+assert.match(api, /device-code-reservations\/release/)
+assert.match(api, /releaseDeviceCodeReservationFirstCheck/)
 assert.match(api, /verifier-verify-and-assign/)
 assert.doesNotMatch(api, /verifier-verify['"]/)
 assert.doesNotMatch(api, /preview-device-codes|batch-assign-codes|firstcheck\/assign-code/)
 
 assert.match(types, /interface DeviceCodeReservationRequest/)
+assert.match(types, /interface DeviceCodeReservationReleaseRequest/)
 assert.match(types, /interface VerifierVerifyAndAssignRequest/)
 assert.match(types, /qualifiedDevices: QualifiedFirstCheckDeviceRequest\[\]/)
 assert.doesNotMatch(types, /interface AssignCodeRequest|interface BatchAssignCodesRequest|interface DeviceCodePreview/)
 
 assert.match(dialog, /reserveDeviceCodesFirstCheck/)
+assert.match(dialog, /releaseDeviceCodeReservationFirstCheck/)
+assert.match(dialog, /releaseReservationIfPresent/)
 assert.match(dialog, /verifierVerifyAndAssignFirstCheck/)
 assert.match(dialog, /FirstCheckQualifiedDeviceTable/)
 assert.match(dialog, /reservationId/)
@@ -32,4 +37,3 @@ assert.doesNotMatch(verifierView, /FirstCheckAssignCodeDialog|assignOpen|待赋�
 assert.doesNotMatch(verifierModel, /assign_code/)
 assert.doesNotMatch(workflow.match(/export const firstCheckNodes:[\s\S]*?\n\]/)?.[0] || '', /assign_code/)
 assert.equal(existsSync(new URL('../src/views/firstcheck/components/FirstCheckAssignCodeDialog.vue', import.meta.url)), false)
-

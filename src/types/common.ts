@@ -4,6 +4,25 @@ export interface ApiResponse<T> {
   data: T
 }
 
+/** MySQL BIGINT/snowflake identifiers stay strings across every frontend boundary. */
+export type EntityId = string
+
+/** Workflow row versions are concurrency tokens, not entity identifiers. */
+export type RowVersion = number | string
+
+/**
+ * Normalize legacy safe numeric IDs without allowing an already-rounded BIGINT
+ * to silently select the wrong business record.
+ */
+export function normalizeEntityId(value: unknown): EntityId {
+  if (typeof value === 'string' && value.trim()) return value.trim()
+  if (typeof value === 'number') {
+    if (Number.isSafeInteger(value)) return String(value)
+    throw new TypeError('Unsafe numeric entity id')
+  }
+  throw new TypeError('Entity id is required')
+}
+
 export interface PageResult<T> {
   records: T[]
   total: number
@@ -35,6 +54,8 @@ export interface LoginUser {
   roles: string[]
   deptId: string
   deptName: string
+  groupId: string
+  groupName: string
   homePath: string
 }
 

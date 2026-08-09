@@ -23,6 +23,7 @@ import {
   updateDeviceStorageLocation
 } from '@/api/device'
 import { useSessionStore } from '@/stores/session'
+import type { EntityId } from '@/types/common'
 import type {
   AttachmentCaseGroupVO,
   BusinessCaseDetailVO,
@@ -375,7 +376,7 @@ async function loadBusinessEvents(deviceCode?: string) {
   }
 }
 
-async function openCaseDetail(caseId: string | number) {
+async function openCaseDetail(caseId: EntityId) {
   const deviceId = activeDevice.value?.id
   if (!deviceId) {
     message.error('当前设备缺少主键，无法加载设备履历附件')

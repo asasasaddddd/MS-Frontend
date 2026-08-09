@@ -7,6 +7,8 @@ import {
   generatePeriodicTestPlan,
   getPeriodicTask,
   managerForwardConfirmPeriodic,
+  submitPeriodicResponsibleScrapConfirm,
+  submitPeriodicResponsibleScrapTrackingDecision,
   submitPeriodicJudgement,
   submitPeriodicScrapDisposal,
   submitPeriodicExceptionChange,
@@ -26,6 +28,8 @@ import type {
   PeriodicExceptionChangeSubmitRequest,
   PeriodicJudgementRequest,
   PeriodicManagerForwardConfirmRequest,
+  PeriodicResponsibleScrapConfirmRequest,
+  PeriodicResponsibleScrapTrackingDecisionRequest,
   PeriodicScrapDisposalRequest,
   PeriodicSupplierFillInfoRequest,
   PeriodicTestPlanScenario,
@@ -40,7 +44,9 @@ import PeriodicExternalVerifyDialog from './PeriodicExternalVerifyDialog.vue'
 import PeriodicForwardConfirmDialog from './PeriodicForwardConfirmDialog.vue'
 import PeriodicJudgementDialog from './PeriodicJudgementDialog.vue'
 import PeriodicPlanSummary from './PeriodicPlanSummary.vue'
+import PeriodicResponsibleScrapConfirmDialog from './PeriodicResponsibleScrapConfirmDialog.vue'
 import PeriodicScrapDisposalDialog from './PeriodicScrapDisposalDialog.vue'
+import PeriodicScrapTrackingDecisionDialog from './PeriodicScrapTrackingDecisionDialog.vue'
 import PeriodicSupplierFillDialog from './PeriodicSupplierFillDialog.vue'
 import PeriodicTaskTable from './PeriodicTaskTable.vue'
 import PeriodicVerifyDialog from './PeriodicVerifyDialog.vue'
@@ -105,6 +111,8 @@ const supplierFillOpen = ref(false)
 const judgementOpen = ref(false)
 /** 外委检定员报废处置弹窗是否打开。 */
 const scrapDisposalOpen = ref(false)
+const scrapConfirmOpen = ref(false)
+const scrapTrackingDecisionOpen = ref(false)
 const forwardOpen = ref(false)
 const confirmOpen = ref(false)
 const exceptionOpen = ref(false)
@@ -116,6 +124,8 @@ const statusOptions = computed(() => [
   { label: '系统下发', value: 'system_issue' },
   { label: '管理员异常分流', value: 'admin_exception_route' },
   { label: '自检检定', value: 'self_verify' },
+  { label: '责任工程师确认正常报废', value: 'responsible_scrap_confirm' },
+  { label: '责任工程师判定不合格追踪', value: 'responsible_scrap_tracking_decision' },
   { label: '外扩填写通用设备信息', value: 'external_common_fill' },
   { label: '外委二次判定', value: 'verifier_second_judge' },
   { label: '责任工程师二次判定', value: 'responsible_second_judge' },
@@ -360,6 +370,16 @@ async function openProcess(task: PeriodicTaskVO) {
   if (action === 'judgement') {
     if (!await loadAuthoritativeTask(task)) return
     judgementOpen.value = true
+    return
+  }
+  if (action === 'scrap-confirm') {
+    if (!await loadAuthoritativeTask(task)) return
+    scrapConfirmOpen.value = true
+    return
+  }
+  if (action === 'scrap-tracking-decision') {
+    if (!await loadAuthoritativeTask(task)) return
+    scrapTrackingDecisionOpen.value = true
     return
   }
   if (action === 'scrap-disposal') {
@@ -615,6 +635,23 @@ async function handleScrapDisposalSubmit(payload: PeriodicScrapDisposalRequest) 
   })
 }
 
+async function handleScrapConfirmSubmit(payload: PeriodicResponsibleScrapConfirmRequest) {
+  await runSubmit(activeTask.value, () => submitPeriodicResponsibleScrapConfirm(payload), '报废确认已提交', () => {
+    scrapConfirmOpen.value = false
+  })
+}
+
+async function handleScrapTrackingDecisionSubmit(payload: PeriodicResponsibleScrapTrackingDecisionRequest) {
+  await runSubmit(
+    activeTask.value,
+    () => submitPeriodicResponsibleScrapTrackingDecision(payload),
+    '不合格追踪判定已提交',
+    () => {
+      scrapTrackingDecisionOpen.value = false
+    }
+  )
+}
+
 async function submitForward(payload: Omit<PeriodicManagerForwardConfirmRequest, 'periodicTaskId' | 'taskId' | 'rowVersion'>) {
   const task = activeTask.value
   if (!task) return
@@ -779,6 +816,18 @@ watch(routePlanId, () => {
       :task="activeTask"
       :submitting="submitting"
       @submit="handleScrapDisposalSubmit"
+    />
+    <PeriodicResponsibleScrapConfirmDialog
+      v-model:open="scrapConfirmOpen"
+      :task="activeTask"
+      :submitting="submitting"
+      @submit="handleScrapConfirmSubmit"
+    />
+    <PeriodicScrapTrackingDecisionDialog
+      v-model:open="scrapTrackingDecisionOpen"
+      :task="activeTask"
+      :submitting="submitting"
+      @submit="handleScrapTrackingDecisionSubmit"
     />
     <PeriodicForwardConfirmDialog
       v-model:open="forwardOpen"

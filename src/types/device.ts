@@ -1,4 +1,4 @@
-import type { EntityId } from '@/types/periodic'
+import type { EntityId } from '@/types/common'
 
 export interface DeviceVO {
   id: EntityId

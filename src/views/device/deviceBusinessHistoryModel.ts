@@ -4,12 +4,13 @@ import type {
   CaseAttachmentFileVO,
   DeviceBusinessEventVO
 } from '@/types/device'
+import type { EntityId } from '@/types/common'
 
 export type HistoryTagColor = 'red' | 'orange' | 'green' | 'blue' | 'default'
 
 export interface BusinessEventRow {
   key: string
-  caseId: string | number
+  caseId: EntityId
   typeText: string
   businessNo: string
   title: string

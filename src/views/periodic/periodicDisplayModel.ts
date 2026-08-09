@@ -14,6 +14,8 @@ export type PeriodicTaskAction =
   | 'external-verify'
   | 'judgement'
   | 'scrap-disposal'
+  | 'scrap-confirm'
+  | 'scrap-tracking-decision'
   | 'manager-forward'
   | 'confirm'
 
@@ -67,6 +69,8 @@ const periodicNodeActionMap: Readonly<Record<string, { code: string; action: Per
   self_verify: { code: 'SUBMIT', action: 'verify' },
   external_common_fill: { code: 'SUBMIT', action: 'supplier-fill' },
   verifier_second_judge: { code: 'JUDGE', action: 'judgement' },
+  responsible_scrap_confirm: { code: 'APPROVE_REJECT', action: 'scrap-confirm' },
+  responsible_scrap_tracking_decision: { code: 'JUDGE', action: 'scrap-tracking-decision' },
   responsible_second_judge: { code: 'JUDGE', action: 'judgement' },
   responsible_third_judge: { code: 'JUDGE', action: 'judgement' },
   verifier_third_judge: { code: 'JUDGE', action: 'judgement' },
@@ -266,6 +270,8 @@ function nodeDisplayName(value?: string) {
     system_issue: '系统下发',
     admin_exception_route: '管理员异常分流',
     self_verify: '自检检定',
+    responsible_scrap_confirm: '责任工程师确认正常报废',
+    responsible_scrap_tracking_decision: '责任工程师判定是否进行不合格追踪',
     external_common_fill: '外扩账号填写通用设备检定信息',
     verifier_second_judge: '外委检定员二次判定',
     responsible_second_judge: '责任工程师二次判定',
@@ -323,6 +329,8 @@ export function periodicTagColor(nodeOrStatus?: string): PeriodicTagColor {
     [
       'admin_exception_route',
       'admin_take_back',
+      'responsible_scrap_confirm',
+      'responsible_scrap_tracking_decision',
       'external_common_fill',
       'external_uncommon_fill',
       'manager_forward_confirm',

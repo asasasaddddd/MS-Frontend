@@ -12,3 +12,8 @@ assert.match(appShellSource, /narrowViewportQuery\.addEventListener\('change', s
 assert.match(appShellSource, /removeEventListener\('change', syncNarrowViewport\)/)
 assert.match(appShellSource, /\.app-main\s*\{[^}]*min-width:\s*0;/s)
 assert.match(appShellSource, /@media \(max-width: 600px\)/)
+assert.match(appShellSource, /\.operator-identity\s*\{[^}]*text-overflow:\s*ellipsis;/s)
+assert.match(appShellSource, /\.role-switch-button\s*\{[^}]*height:\s*40px;/s)
+assert.match(appShellSource, /\.role-switch-label\s*\{[^}]*min-width:\s*0;[^}]*overflow:\s*hidden;[^}]*text-overflow:\s*ellipsis;/s)
+assert.match(appShellSource, /@media \(max-width: 600px\)[\s\S]*?\.operator-identity/s)
+assert.match(appShellSource, /@media \(max-width: 600px\)[\s\S]*?\.role-switch-button/s)

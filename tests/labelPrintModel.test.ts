@@ -51,6 +51,11 @@ assert.equal(labelViewSource.includes('URL.createObjectURL'), true)
 assert.match(labelApiSource, /\/label\/supplier\/firstcheck\/unprinted/)
 assert.match(labelApiSource, /\/label\/supplier\/firstcheck\/printed/)
 assert.match(labelViewSource, /session\.user\?\.roleCode === 'SUPPLIER'/)
+assert.match(labelViewSource, /title:\s*['"]来源事项['"]/)
+assert.match(labelViewSource, /column\.key === ['"]sourceLabel['"]/)
+assert.match(labelViewSource, />来源事项</)
+assert.doesNotMatch(labelViewSource, /来源流程/)
+assert.match(labelViewSource, /record\.sourceLabel/)
 assert.match(labelViewSource, /record\.sourceDetail\?\.businessNo/)
 assert.match(labelViewSource, /row\.sourceDetail\?\.purchaseOrderNo/)
 assert.match(labelViewSource, /row\.sourceDetail\?\.hasAttachment \? '有附件' : '无附件'/)
@@ -60,3 +65,28 @@ assert.match(
   /await printLabelRecord\(row\.id\)[\s\S]*await downloadLabelPdf\(row\.id\)/,
   '必须先登记真实打印并取得最终签名，再下载最新标签PDF'
 )
+
+assert.match(
+  labelViewSource,
+  /const workflowIdentity = computed\(\(\) => \{[\s\S]*employeeId[\s\S]*roleCode[\s\S]*\}\)/,
+  '标签列表必须按工号和当前角色建立加载身份'
+)
+assert.match(
+  labelViewSource,
+  /watch\(workflowIdentity, \(\) => \{\s*void loadRows\(\)\s*\}, \{ immediate: true \}\)/,
+  '切换自检或外委角色后必须重新加载标签条目'
+)
+assert.doesNotMatch(
+  labelViewSource,
+  /onMounted\(loadRows\)/,
+  '标签列表不能只在首次挂载时加载，避免角色切换继续显示旧角色数据'
+)
+assert.match(labelViewSource, /let rowLoadGeneration = 0/)
+assert.match(labelViewSource, /let rowLoadController: AbortController \| undefined/)
+assert.match(
+  labelViewSource,
+  /generation !== rowLoadGeneration\s*\|\|\s*activeController\.signal\.aborted\s*\|\|\s*workflowIdentity\.value !== requestedIdentity/,
+  '旧角色请求返回时不得覆盖当前角色的标签列表'
+)
+assert.match(labelApiSource, /listUnprintedLabels\(sourceType\?: string, signal\?: AbortSignal\)/)
+assert.match(labelApiSource, /listSupplierFirstCheckUnprintedLabels\(signal\?: AbortSignal\)/)

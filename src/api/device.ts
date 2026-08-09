@@ -1,5 +1,5 @@
 import { request } from '@/api/request'
-import type { PageResult } from '@/types/common'
+import type { EntityId, PageResult } from '@/types/common'
 import type {
   BusinessCaseDetailVO,
   DeviceBusinessEventVO,
@@ -29,7 +29,7 @@ export function getDeviceByCode(deviceCode: string) {
   })
 }
 
-export function updateDeviceLedger(deviceId: string | number, data: DeviceLedgerUpdateRequest) {
+export function updateDeviceLedger(deviceId: EntityId, data: DeviceLedgerUpdateRequest) {
   return request<void>({
     url: `/device/ledger/${encodeURIComponent(String(deviceId))}`,
     method: 'PUT',
@@ -38,7 +38,7 @@ export function updateDeviceLedger(deviceId: string | number, data: DeviceLedger
 }
 
 export function updateDeviceStorageLocation(
-  deviceId: string | number,
+  deviceId: EntityId,
   data: DeviceStorageLocationUpdateRequest
 ) {
   return request<void>({
@@ -55,7 +55,7 @@ export function listDeviceBusinessEvents(deviceCode: string) {
   })
 }
 
-export function getBusinessCaseDetail(caseId: string | number) {
+export function getBusinessCaseDetail(caseId: EntityId) {
   return request<BusinessCaseDetailVO>({
     url: `/business-cases/${encodeURIComponent(String(caseId))}`,
     method: 'GET'

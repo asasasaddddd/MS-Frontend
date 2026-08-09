@@ -6,14 +6,15 @@ import { previewTaskCandidates } from '@/api/nodePermission'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import { useSessionStore } from '@/stores/session'
 import type { AttachmentId, FirstCheckOrder, ManageCategory } from '@/types/firstcheck'
+import type { EntityId, RowVersion } from '@/types/common'
 import type { RoleScopeType, TaskCandidatePreviewQuery, TaskCandidateVO } from '@/types/nodePermission'
 import { latestFirstCheckReturnFeedback } from '@/views/firstcheck/firstCheckReturnModel'
 
 const props = defineProps<{
   open: boolean
   order?: FirstCheckOrder
-  taskId?: string | number
-  taskRowVersion?: string | number
+  taskId?: EntityId
+  taskRowVersion?: RowVersion
   allowedActions: string[]
 }>()
 
@@ -80,8 +81,8 @@ interface ResponsibilityOrganization {
 interface SubmitRequestIdentity {
   serial: number
   orderId: FirstCheckOrder['id']
-  taskId: string | number
-  taskRowVersion: string | number
+  taskId: EntityId
+  taskRowVersion: RowVersion
 }
 
 function invalidateSubmitRequest() {

@@ -7,6 +7,7 @@ function source(path: string) {
 
 const samplingApiSource = source('../src/api/sampling.ts')
 const workspaceTodoSource = source('../src/views/WorkspaceTodoView.vue')
+const workspaceTodoAdapterSource = source('../src/views/workspaceTodoAdapters.ts')
 const samplingWorkspaceSource = source('../src/views/sampling/components/SamplingTaskWorkspace.vue')
 
 assert.match(
@@ -20,10 +21,11 @@ assert.match(
   '抽检详情接口必须把统一工作流任务ID作为 taskId query 参数传给后端授权'
 )
 assert.match(
-  workspaceTodoSource,
+  workspaceTodoAdapterSource,
   /getSamplingTask\(task\.businessId,\s*task\.taskId,\s*signal\)/,
   '总待办聚合加载抽检详情时必须携带 workflow taskId，否则抽检入口只剩汇总计数'
 )
+assert.match(workspaceTodoSource, /loadTodoModuleDetail/)
 assert.match(
   samplingWorkspaceSource,
   /getSamplingTask\(task\.businessId,\s*task\.taskId,\s*signal\)/,

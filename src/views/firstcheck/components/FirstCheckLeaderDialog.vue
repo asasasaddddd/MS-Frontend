@@ -4,12 +4,13 @@ import { Modal, message } from 'ant-design-vue'
 import { deptLeaderApproveFirstCheck, deptLeaderReturnFirstCheck } from '@/api/firstcheck'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
 import type { FirstCheckOrder } from '@/types/firstcheck'
+import type { EntityId, RowVersion } from '@/types/common'
 
 const props = defineProps<{
   open: boolean
   order?: FirstCheckOrder
-  taskId?: string | number
-  taskRowVersion?: string | number
+  taskId?: EntityId
+  taskRowVersion?: RowVersion
   allowedActions: string[]
 }>()
 

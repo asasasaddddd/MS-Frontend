@@ -1,4 +1,6 @@
-export type EntityId = string | number
+import type { EntityId, RowVersion } from '@/types/common'
+
+export type { EntityId } from '@/types/common'
 
 export type PeriodicTestPlanScenario = 'self' | 'external_common' | 'external_non_common'
 
@@ -7,6 +9,8 @@ export type PeriodicNodeCode =
   | 'system_issue'
   | 'admin_exception_route'
   | 'self_verify'
+  | 'responsible_scrap_confirm'
+  | 'responsible_scrap_tracking_decision'
   | 'external_common_fill'
   | 'verifier_second_judge'
   | 'responsible_second_judge'
@@ -37,26 +41,6 @@ export type PeriodicConfirmResult = 'APPROVE' | 'REJECT' | 'PASS' | 'RETURN' | s
 /** 周检多轮判定接口允许提交的判定结果。 */
 export type PeriodicJudgementResult = 'qualified' | 'unqualified'
 
-export interface PeriodicPlanVO {
-  id: EntityId
-  planNo?: string
-  planYear?: number
-  planMonth?: number
-  planName?: string
-  ownerId?: string
-  ownerName?: string
-  deptId?: string
-  deptName?: string
-  planStartDate?: string
-  planEndDate?: string
-  deviceCount?: number
-  completedCount?: number
-  status?: string
-  statusName?: string
-  generatedAt?: string
-  remark?: string
-}
-
 /** 周检外委通用设备的一轮正式判定记录。 */
 export interface PeriodicJudgementRecordVO {
   id: EntityId
@@ -75,7 +59,7 @@ export interface PeriodicTaskVO {
   id: EntityId
   workflowTaskId?: EntityId
   processInstanceId?: EntityId
-  rowVersion?: EntityId
+  rowVersion?: RowVersion
   allowedActions?: string[]
   planId?: EntityId
   taskNo?: string
@@ -197,7 +181,7 @@ export interface PeriodicScanRequest {
 export interface PeriodicVerificationRecordRequest {
   periodicTaskId: EntityId
   taskId: EntityId
-  rowVersion: EntityId
+  rowVersion: RowVersion
   reportNo?: string
   verificationTime?: string
   verificationUnit?: string
@@ -224,7 +208,7 @@ export interface PeriodicVerificationRecordRequest {
 export interface PeriodicManagerForwardConfirmRequest {
   periodicTaskId: EntityId
   taskId: EntityId
-  rowVersion: EntityId
+  rowVersion: RowVersion
   confirmerId: string
   confirmerName: string
   opinion?: string
@@ -233,7 +217,7 @@ export interface PeriodicManagerForwardConfirmRequest {
 export interface PeriodicConfirmerConfirmRequest {
   periodicTaskId: EntityId
   taskId: EntityId
-  rowVersion: EntityId
+  rowVersion: RowVersion
   confirmResult: PeriodicConfirmResult
   opinion?: string
 }
@@ -242,7 +226,7 @@ export interface PeriodicConfirmerConfirmRequest {
 export interface PeriodicExceptionChangeItem {
   periodicTaskId: EntityId
   taskId: EntityId
-  rowVersion: EntityId
+  rowVersion: RowVersion
   deviceId?: EntityId
   deviceCode?: string
   newStatus?: string
@@ -261,8 +245,15 @@ export interface PeriodicExceptionChangeItem {
 }
 
 /** 周检异常节点提交到状态变更模块的批量申请。 */
+export type PeriodicExceptionFlowType =
+  | 'seal'
+  | 'defer'
+  | 'abnormal_scrap'
+  | 'category'
+  | 'cycle'
+
 export interface PeriodicExceptionChangeSubmitRequest {
-  changeType: string
+  changeType: PeriodicExceptionFlowType
   sourceType?: 'periodic'
   sourceId?: EntityId
   applyDeptId?: string
@@ -276,7 +267,7 @@ export interface PeriodicExceptionChangeSubmitRequest {
 export interface PeriodicSupplierFillInfoRequest {
   periodicTaskId: EntityId
   taskId: EntityId
-  rowVersion: EntityId
+  rowVersion: RowVersion
   verificationDate: string
   result: PeriodicVerificationResult
   verificationUnit?: string
@@ -289,7 +280,7 @@ export interface PeriodicSupplierFillInfoRequest {
 export interface PeriodicVerifierFillInfoRequest {
   periodicTaskId: EntityId
   taskId: EntityId
-  rowVersion: EntityId
+  rowVersion: RowVersion
   verificationDate: string
   certificateAttachmentGroupId?: EntityId
   verificationUnit?: string
@@ -300,7 +291,7 @@ export interface PeriodicVerifierFillInfoRequest {
 export interface PeriodicJudgementRequest {
   periodicTaskId: EntityId
   taskId: EntityId
-  rowVersion: EntityId
+  rowVersion: RowVersion
   judgeResult: PeriodicJudgementResult
   opinion?: string
 }
@@ -309,7 +300,27 @@ export interface PeriodicJudgementRequest {
 export interface PeriodicScrapDisposalRequest {
   periodicTaskId: EntityId
   taskId: EntityId
-  rowVersion: EntityId
+  rowVersion: RowVersion
   scrapReason: string
   opinion?: string
 }
+
+export interface PeriodicResponsibleScrapConfirmRequest {
+  periodicTaskId: EntityId
+  taskId: EntityId
+  rowVersion: RowVersion
+  approved: boolean
+  opinion?: string
+}
+
+export interface PeriodicResponsibleScrapTrackingDecisionRequest {
+  periodicTaskId: EntityId
+  taskId: EntityId
+  rowVersion: RowVersion
+  trackingRequired: boolean
+  opinion?: string
+}
+
+export type PeriodicResponsibleScrapDecisionRequest =
+  | PeriodicResponsibleScrapConfirmRequest
+  | PeriodicResponsibleScrapTrackingDecisionRequest

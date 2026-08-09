@@ -15,7 +15,21 @@ export interface LoginResponse {
   roles?: string[]
   deptId?: string
   deptName?: string
+  groupId?: string
+  groupName?: string
   homePath?: string
+}
+
+export interface CurrentUserResponse {
+  userId?: string
+  employeeId: string
+  employeeName: string
+  role: string
+  roles?: string[]
+  deptId?: string
+  deptName?: string
+  groupId?: string
+  groupName?: string
 }
 
 export function login(payload: LoginRequest) {
@@ -34,7 +48,7 @@ export function logout() {
 }
 
 export function fetchCurrentUser() {
-  return request<LoginUser>({
+  return request<CurrentUserResponse>({
     method: 'GET',
     url: '/auth/me'
   })
@@ -51,6 +65,8 @@ export function toLoginUser(response: LoginResponse): LoginUser {
     roles,
     deptId: response.deptId || '',
     deptName: response.deptName || '',
+    groupId: response.groupId || '',
+    groupName: response.groupName || '',
     homePath: response.homePath || '/todo'
   }
 }

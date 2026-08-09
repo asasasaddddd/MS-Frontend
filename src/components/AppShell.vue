@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons-vue'
+import { DownOutlined, MenuFoldOutlined, MenuUnfoldOutlined } from '@ant-design/icons-vue'
 import { logout as logoutApi } from '@/api/auth'
+import { runRoleSwitchTransaction } from '@/components/appShellRoleSwitch'
 import TodoNotificationBell from '@/components/workflow/TodoNotificationBell.vue'
 import { useNavSections, findNavItem, findNavItemForRoleDisplay, getFirstNavPathForRole } from '@/composables/useNavSections'
 import { useAppStore } from '@/stores/app'
@@ -23,6 +24,8 @@ const currentRoleNavCodes = computed(() => roleCode.value ? [roleCode.value] : [
 const sections = useNavSections(currentRoleNavCodes, roleCode)
 const selectedKeys = computed(() => [route.path])
 const openKeys = ref<string[]>([])
+const roleSwitching = ref(false)
+const viewActive = ref(true)
 /** 当前视口是否必须使用窄屏折叠侧栏，避免固定侧栏覆盖业务内容。 */
 const narrowViewport = ref(false)
 /** 桌面沿用用户偏好，窄屏始终使用 72px 折叠侧栏。 */
@@ -46,13 +49,20 @@ const breadcrumbText = computed(() => {
   }
   return `首页 / 工作台 / ${pageTitle.value}`
 })
-const roleOptions = computed(() =>
-  userRoleCodes.value.map((code) => ({
-    label: `${session.user?.employeeName || session.user?.employeeId || ''} · ${roleNameMap[code] || code}`,
-    value: code
-  }))
-)
-const operatorSelectorLabel = computed(() => session.user?.employeeName || session.user?.employeeId || '-')
+const operatorName = computed(() => session.user?.employeeName || session.user?.employeeId || '-')
+const operatorDepartment = computed(() => session.user?.deptName || '-')
+const operatorGroup = computed(() => session.user?.groupName || '-')
+const currentRoleName = computed(() => roleNameMap[roleCode.value || ''] || roleCode.value || '-')
+const roleMenuItems = computed(() => userRoleCodes.value.map((code) => ({
+  key: code,
+  label: roleNameMap[code] || code,
+  disabled: code === roleCode.value
+})))
+const pageIdentityKey = computed(() => [
+  route.fullPath,
+  session.user?.employeeId || '',
+  roleCode.value || ''
+].join('|'))
 
 watch(
   () => [session.user?.employeeId, session.user?.roleCode] as const,
@@ -69,19 +79,65 @@ function syncNarrowViewport(event: MediaQueryListEvent | MediaQueryList) {
   narrowViewport.value = event.matches
 }
 
-function handleRoleChange(nextRole: string) {
-  const nextItem = findNavItemForRoleDisplay(route.path, nextRole)
-  session.switchRole(nextRole)
+async function handleRoleChange(nextRole: string) {
+  if (roleSwitching.value || nextRole === roleCode.value) return
+
+  const previousRole = roleCode.value
+  if (!previousRole) return
+
+  const previousFullPath = route.fullPath
+  const currentPath = route.path
+  const nextItem = findNavItemForRoleDisplay(currentPath, nextRole)
   const nextPath = nextItem?.roles.some((role) => role === nextRole)
     ? nextItem.path
     : getFirstNavPathForRole(nextRole)
-  if (nextPath && nextPath !== route.path) {
-    router.push(nextPath)
-  }
+
+  await runRoleSwitchTransaction({
+    previousRole,
+    nextRole,
+    pause: () => {
+      viewActive.value = false
+      roleSwitching.value = true
+    },
+    flush: () => nextTick(),
+    switchRole: (role) => session.switchRole(role),
+    navigate: async () => {
+      if (!nextPath || nextPath === currentPath) return
+      const navigationFailure = await router.push(nextPath)
+      if (navigationFailure) {
+        throw navigationFailure
+      }
+    },
+    rollbackNavigate: async () => {
+      if (route.fullPath === previousFullPath) return
+      const rollbackFailure = await router.replace(previousFullPath)
+      if (rollbackFailure) {
+        throw rollbackFailure
+      }
+    },
+    resume: () => {
+      viewActive.value = true
+      roleSwitching.value = false
+    }
+  })
+
   message.success(`已切换为${roleNameMap[nextRole] || nextRole}`)
 }
 
+async function handleRoleMenuClick({ key }: { key: string | number }) {
+  const nextRole = String(key)
+  if (roleSwitching.value || nextRole === roleCode.value) return
+
+  try {
+    await handleRoleChange(nextRole)
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : '未知错误'
+    message.error(`角色切换失败：${reason}`)
+  }
+}
+
 function handleMenuClick({ key }: { key: string }) {
+  if (roleSwitching.value) return
   if (key && key !== route.path) {
     router.push(key)
   }
@@ -92,6 +148,7 @@ function handleOpenChange(keys: unknown[]) {
 }
 
 async function handleLogout() {
+  if (roleSwitching.value) return
   try {
     await logoutApi()
   } catch {
@@ -141,11 +198,19 @@ onBeforeUnmount(() => {
         @openChange="handleOpenChange"
         @click="handleMenuClick"
       >
-        <a-sub-menu v-for="section in sections" :key="section.key">
+        <a-sub-menu
+          v-for="section in sections"
+          :key="section.key"
+          :disabled="roleSwitching"
+        >
           <template #title>
             <span>{{ section.title }}</span>
           </template>
-          <a-menu-item v-for="item in section.items" :key="item.path">
+          <a-menu-item
+            v-for="item in section.items"
+            :key="item.path"
+            :disabled="roleSwitching"
+          >
             {{ item.title }}
           </a-menu-item>
         </a-sub-menu>
@@ -166,24 +231,50 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="header-right">
-          <TodoNotificationBell />
-          <a-select
-            class="role-select"
-            :value="roleCode"
-            :options="roleOptions"
-            :disabled="roleOptions.length <= 1"
-            @change="handleRoleChange"
-          >
-            <template #labelRender>
-              <span>{{ operatorSelectorLabel }}</span>
+          <span class="notification-bell-slot">
+            <TodoNotificationBell v-if="!roleSwitching" />
+          </span>
+          <a-tooltip placement="bottom">
+            <template #title>
+              <div class="operator-tooltip">
+                <div>部门：{{ operatorDepartment }}</div>
+                <div>组：{{ operatorGroup }}</div>
+              </div>
             </template>
-          </a-select>
-          <a-button class="logout-button" @click="handleLogout">退出</a-button>
+            <span class="operator-identity-trigger">
+              <span class="operator-identity" aria-hidden="true">{{ operatorName }}</span>
+              <span class="sr-only">
+                姓名：{{ operatorName }}，部门：{{ operatorDepartment }}，组：{{ operatorGroup }}
+              </span>
+            </span>
+          </a-tooltip>
+          <a-dropdown
+            placement="bottomRight"
+            :trigger="['click']"
+            :disabled="roleMenuItems.length <= 1 || roleSwitching"
+          >
+            <a-button
+              class="role-switch-button"
+              :loading="roleSwitching"
+              aria-haspopup="menu"
+            >
+              <span class="role-switch-label">{{ currentRoleName }}</span>
+              <DownOutlined />
+            </a-button>
+            <template #overlay>
+              <a-menu :items="roleMenuItems" @click="handleRoleMenuClick" />
+            </template>
+          </a-dropdown>
+          <a-button
+            class="logout-button"
+            :disabled="roleSwitching"
+            @click="handleLogout"
+          >退出</a-button>
         </div>
       </a-layout-header>
 
       <a-layout-content class="app-content">
-        <router-view :key="route.fullPath" />
+        <router-view v-if="viewActive" :key="pageIdentityKey" />
       </a-layout-content>
     </a-layout>
   </a-layout>
@@ -314,20 +405,62 @@ onBeforeUnmount(() => {
   line-height: 1.2;
 }
 
-.role-select {
-  width: 280px;
+.notification-bell-slot {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  flex: 0 0 auto;
 }
 
-.role-select :deep(.ant-select-selector) {
-  height: 40px !important;
+.operator-identity-trigger {
+  min-width: 0;
+  display: inline-flex;
+}
+
+.operator-identity {
+  display: block;
+  max-width: 140px;
+  overflow: hidden;
+  color: #172033;
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.operator-tooltip {
+  display: grid;
+  gap: 4px;
+}
+
+.role-switch-button {
+  width: 132px;
+  height: 40px;
+  display: inline-flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   border-radius: 8px;
 }
 
-.role-select :deep(.ant-select-selection-item) {
-  color: #172033;
-  font-size: 14px;
-  line-height: 38px !important;
+.role-switch-label {
+  min-width: 0;
+  overflow: hidden;
+  flex: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .logout-button {
@@ -361,8 +494,12 @@ onBeforeUnmount(() => {
     gap: 8px;
   }
 
-  .role-select {
-    width: 180px;
+  .operator-identity {
+    max-width: 96px;
+  }
+
+  .role-switch-button {
+    width: 112px;
   }
 }
 
@@ -382,13 +519,20 @@ onBeforeUnmount(() => {
   }
 
   .header-right {
+    gap: 4px;
     justify-content: flex-end;
   }
 
-  .role-select {
-    width: auto;
-    min-width: 0;
-    flex: 1;
+  .operator-identity {
+    max-width: 88px;
+  }
+
+  .role-switch-button {
+    width: 108px;
+  }
+
+  .logout-button {
+    padding: 0 8px;
   }
 
   .app-content {

@@ -9,14 +9,15 @@ import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
 import { useSessionStore } from '@/stores/session'
 import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { WorkflowTask } from '@/types/workflow'
+import type { EntityId, RowVersion } from '@/types/common'
 import { isPendingWorkflowTask, matchesBusinessType, workflowNodeGroups } from '@/workflows/metrologyWorkflow'
 import FirstCheckEngineerDialog from '@/views/firstcheck/components/FirstCheckEngineerDialog.vue'
 import FirstCheckHistoryPanel from '@/views/firstcheck/components/FirstCheckHistoryPanel.vue'
 
 interface EngineerRow {
   key: string
-  taskId: string | number
-  taskRowVersion: string | number
+  taskId: EntityId
+  taskRowVersion: RowVersion
   allowedActions: string[]
   nodeCode: string
   order: FirstCheckOrder
