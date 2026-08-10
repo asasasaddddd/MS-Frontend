@@ -205,6 +205,7 @@ watch(
     width="95vw"
     wrap-class-name="periodic-verification-dialog"
     :footer="null"
+    :closable="false"
     :destroy-on-close="true"
     @cancel="close"
   >

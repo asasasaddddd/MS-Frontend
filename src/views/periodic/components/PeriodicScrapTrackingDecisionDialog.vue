@@ -72,7 +72,7 @@ watch(
 </script>
 
 <template>
-  <a-modal :open="open" width="760px" :footer="null" :destroy-on-close="true" @cancel="close">
+  <a-modal :open="open" width="760px" :footer="null" :closable="false" :destroy-on-close="true" @cancel="close">
     <template #title>
       <div class="dialog-title">
         <div>

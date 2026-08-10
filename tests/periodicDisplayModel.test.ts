@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import {
+  buildPeriodicPlanPickerItems,
   buildPeriodicPlanTodoGroups,
   displayValue,
   getPeriodicTableColumns,
@@ -165,6 +166,57 @@ const todoGroups = buildPeriodicPlanTodoGroups([
 assert.equal(todoGroups.length, 2)
 assert.equal(todoGroups.find((group) => group.planId === '2073579908903317500')?.deviceCount, 2)
 assert.equal(todoGroups.find((group) => group.planId === '2073579908903317501')?.deviceCount, 1)
+
+const pickerTasks: PeriodicTaskVO[] = [
+  ...Array.from({ length: 10 }, (_, index) => ({
+    ...exceptionRouteTask,
+    id: `P1-${index + 1}`,
+    planId: 'P1',
+    taskNo: `ZJ-202608-${String(index + 1).padStart(4, '0')}`,
+    currentNodeName: '管理员异常分流'
+  })),
+  ...Array.from({ length: 10 }, (_, index) => ({
+    ...exceptionRouteTask,
+    id: `P2-${index + 1}`,
+    planId: 'P2',
+    taskNo: `ZJ-202609-${String(index + 1).padStart(4, '0')}`,
+    currentNodeName: '待接收'
+  })),
+  ...Array.from({ length: 10 }, (_, index) => ({
+    ...exceptionRouteTask,
+    id: `P3-${index + 1}`,
+    planId: 'P3',
+    taskNo: `ZJ-202610-${String(index + 1).padStart(4, '0')}`,
+    currentNodeName: index === 0 ? '待接收' : '自检检定'
+  })),
+  {
+    ...exceptionRouteTask,
+    id: 'ORPHAN',
+    planId: undefined,
+    taskNo: 'ORPHAN-0001'
+  }
+]
+
+assert.deepEqual(buildPeriodicPlanPickerItems(pickerTasks), [
+  {
+    planId: 'P1',
+    planNo: 'ZJ-202608-',
+    currentNodeSummary: '管理员异常分流',
+    deviceCount: 10
+  },
+  {
+    planId: 'P2',
+    planNo: 'ZJ-202609-',
+    currentNodeSummary: '待接收',
+    deviceCount: 10
+  },
+  {
+    planId: 'P3',
+    planNo: 'ZJ-202610-',
+    currentNodeSummary: '待接收 / 自检检定',
+    deviceCount: 10
+  }
+])
 
 assert.deepEqual(
   getPeriodicTableColumns('admin').map((column) => column.title),

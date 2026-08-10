@@ -7,7 +7,7 @@ assert.doesNotMatch(workspace, /const metrics = computed/)
 
 const todoStart = workspace.indexOf('const changeTodoEntries')
 const historyStart = workspace.indexOf('const changeHistoryEntries')
-const historyEnd = workspace.indexOf('function derivePeriodicPlanLabel')
+const historyEnd = workspace.indexOf('const periodicTodoEntries')
 
 assert.ok(todoStart >= 0, '缺少状态变更当前待办构造逻辑')
 assert.ok(historyStart > todoStart, '缺少状态变更已办构造逻辑')

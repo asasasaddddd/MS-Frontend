@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
 import type { SelectProps } from 'ant-design-vue'
 import { listUnifiedScanInbox } from '@/api/scan'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
+import PeriodicPlanPickerDialog from '@/views/periodic/components/PeriodicPlanPickerDialog.vue'
 import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
 import { hasWorkflowAction, useWorkflowTask, type WorkflowBoundDetail } from '@/composables/useWorkflowTask'
 import { roleNameMap, type RoleCode } from '@/types/common'
@@ -20,7 +22,10 @@ import {
   matchesBusinessType
 } from '@/workflows/metrologyWorkflow'
 import {
+  buildPeriodicPlanSubtitle,
+  buildPeriodicPlanPickerItems,
   buildPeriodicPlanTodoGroups,
+  derivePeriodicPlanLabel,
   mergePeriodicTaskPhysicalActions
 } from '@/views/periodic/periodicDisplayModel'
 import { changeTypeName } from '@/views/change/changeDisplayModel'
@@ -69,6 +74,7 @@ const session = useSessionStore()
 const activeBucket = ref<'todo' | 'history'>('todo')
 const selectedType = ref<TodoType>(workspaceTodoTypeFromQuery(route.query.type))
 const keyword = ref('')
+const periodicPlanPickerOpen = ref(false)
 const periodicTasks = ref<PeriodicTaskVO[]>([])
 const periodicHistoryTasks = ref<PeriodicTaskVO[]>([])
 const samplingTasks = ref<SamplingTaskVO[]>([])
@@ -112,6 +118,10 @@ const roleLabel = computed(() => {
   return roleNameMap[role] || session.user?.roleName || role || '-'
 })
 const launchActions = computed(() => getWorkspaceLaunchActions(roleCode.value))
+const periodicPlanPickerItems = computed(() => buildPeriodicPlanPickerItems(periodicTasks.value))
+const periodicPlanPickerDeviceCount = computed(() =>
+  periodicPlanPickerItems.value.reduce((sum, item) => sum + item.deviceCount, 0)
+)
 
 const filterOptions: SelectProps['options'] = [
   { label: '全部类型', value: 'all' },
@@ -246,27 +256,6 @@ const changeHistoryEntries = computed<TodoDefinition[]>(() => {
     })
 })
 
-function derivePeriodicPlanLabel(planId: string, tasks: PeriodicTaskVO[]) {
-  const taskNo = tasks.find((task) => task.taskNo)?.taskNo?.trim()
-  if (taskNo && taskNo.length > 4) {
-    return taskNo.replace(/\d{4}$/, '') || taskNo
-  }
-  return planId.replace(/^task-/, '')
-}
-
-function buildPeriodicPlanSubtitle(tasks: PeriodicTaskVO[]) {
-  const nodes = Array.from(
-    new Set(
-      tasks
-        .map((task) => task.currentNodeName || task.currentNode)
-        .filter((value): value is string => Boolean(value))
-    )
-  )
-  if (nodes.length === 0) return `共 ${tasks.length} 台设备`
-  const nodeText = nodes.slice(0, 2).join(' / ')
-  return `共 ${tasks.length} 台设备 · ${nodeText}${nodes.length > 2 ? ' 等' : ''}`
-}
-
 const periodicTodoEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
   if (!currentRole) return []
@@ -305,6 +294,10 @@ const periodicTodoEntries = computed<TodoDefinition[]>(() => {
     query: routeTarget.query
   }]
 })
+
+const periodicPlanPickerIncomplete = computed(() =>
+  (periodicTodoEntries.value[0]?.count || 0) > periodicPlanPickerDeviceCount.value
+)
 
 const periodicHistoryEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
@@ -531,7 +524,28 @@ function resetFilter() {
   keyword.value = ''
 }
 
+function openPeriodicPlan(planId: string) {
+  const currentRole = roleCode.value
+  const routeTarget = currentRole
+    ? getTodoModuleAdapter('periodic').todoRoute(currentRole)
+    : undefined
+  if (!routeTarget || routeTarget.path === '/todo') {
+    message.error('当前角色没有可进入的周检工作台')
+    return
+  }
+
+  periodicPlanPickerOpen.value = false
+  void router.push({
+    path: routeTarget.path,
+    query: { ...(routeTarget.query || {}), planId }
+  })
+}
+
 function openTodo(item: TodoDefinition) {
+  if (activeBucket.value === 'todo' && item.key === 'periodic-todo-summary') {
+    periodicPlanPickerOpen.value = true
+    return
+  }
   const currentRole = roleCode.value
   const path = currentRole ? item.routeByRole[currentRole] : undefined
   if (path) {
@@ -544,6 +558,7 @@ let workspaceLoadId = 0
 
 /** 清空上一激活角色的待办、已办及详情快照。 */
 function clearWorkspaceSummary() {
+  periodicPlanPickerOpen.value = false
   workflowTasks.value = []
   workflowHistoryTasks.value = []
   periodicTasks.value = []
@@ -702,6 +717,13 @@ watch(
       />
     </a-card>
 
+    <PeriodicPlanPickerDialog
+      v-model:open="periodicPlanPickerOpen"
+      :items="periodicPlanPickerItems"
+      :incomplete="periodicPlanPickerIncomplete"
+      @select="openPeriodicPlan"
+    />
+
   </section>
 </template>
 
@@ -774,6 +796,10 @@ watch(
   color: #172033;
   font-size: 18px;
   font-weight: 800;
+}
+
+.workspace-task-tabs :deep(.ant-tabs-nav) {
+  padding: 0 18px;
 }
 
 .task-filter {

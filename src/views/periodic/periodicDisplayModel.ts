@@ -33,6 +33,13 @@ export interface PeriodicPlanTodoGroup {
   deviceCount: number
 }
 
+export interface PeriodicPlanPickerItem {
+  planId: string
+  planNo: string
+  currentNodeSummary: string
+  deviceCount: number
+}
+
 export type PeriodicDisplayRowWithMeta = PeriodicDisplayRow & {
   tagColor: PeriodicTagColor
 }
@@ -414,6 +421,44 @@ export function buildPeriodicPlanTodoGroups(tasks: PeriodicTaskVO[]): PeriodicPl
     planId,
     tasks: planTasks,
     deviceCount: planTasks.length
+  }))
+}
+
+export function derivePeriodicPlanLabel(planId: string, tasks: PeriodicTaskVO[]) {
+  const taskNo = tasks.find((task) => task.taskNo)?.taskNo?.trim()
+  if (taskNo && taskNo.length > 4) {
+    return taskNo.replace(/\d{4}$/, '') || taskNo
+  }
+  return planId.replace(/^task-/, '')
+}
+
+function periodicPlanNodeSummary(tasks: PeriodicTaskVO[]) {
+  const nodes = Array.from(
+    new Set(
+      tasks
+        .map((task) => task.currentNodeName || task.currentNode)
+        .filter((value): value is string => Boolean(value))
+    )
+  )
+  if (nodes.length === 0) return '-'
+  return `${nodes.slice(0, 2).join(' / ')}${nodes.length > 2 ? ' 等' : ''}`
+}
+
+export function buildPeriodicPlanSubtitle(tasks: PeriodicTaskVO[]) {
+  const deviceText = `共 ${tasks.length} 台设备`
+  const nodeSummary = periodicPlanNodeSummary(tasks)
+  return nodeSummary === '-' ? deviceText : `${deviceText} · ${nodeSummary}`
+}
+
+export function buildPeriodicPlanPickerItems(tasks: PeriodicTaskVO[]): PeriodicPlanPickerItem[] {
+  const authoritativeTasks = tasks.filter(
+    (task) => task.planId !== undefined && task.planId !== null && task.planId !== ''
+  )
+  return buildPeriodicPlanTodoGroups(authoritativeTasks).map(({ planId, tasks: planTasks, deviceCount }) => ({
+    planId,
+    planNo: derivePeriodicPlanLabel(planId, planTasks),
+    currentNodeSummary: periodicPlanNodeSummary(planTasks),
+    deviceCount
   }))
 }
 

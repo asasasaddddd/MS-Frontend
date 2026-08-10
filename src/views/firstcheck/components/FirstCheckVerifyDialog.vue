@@ -487,6 +487,7 @@ onUnmounted(stopReservationClock)
     class="firstcheck-verify-dialog"
     width="95vw"
     :footer="null"
+    :closable="false"
     :destroy-on-close="true"
     @cancel="cancel"
   >
