@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "test": "node tests/run-contract-tests.mjs",
+    "test:e2e:pda": "playwright test tests/e2e/pda-scan.spec.ts",
     "build": "vue-tsc --noEmit -p tsconfig.json && vite build",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "preview": "vite preview --host 127.0.0.1"
@@ -20,6 +21,7 @@
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.2",
     "@types/node": "^22.10.2",
     "@vitejs/plugin-vue": "^5.2.1",
     "typescript": "^5.7.3",

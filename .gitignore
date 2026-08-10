@@ -3,6 +3,8 @@ dist/
 .codex-*-build-*/
 .codex-*.log
 dist*.zip
+test-results/
+playwright-report/
 .codex-vite.log
 *.tsbuildinfo
 vite.config.js
