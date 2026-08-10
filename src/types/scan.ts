@@ -152,6 +152,7 @@ export interface ChangeScanRequest {
 
 export interface UnifiedScanSubmitRequest {
   scanCode: string
+  scanContent: string
   opinion?: string
 }
 
