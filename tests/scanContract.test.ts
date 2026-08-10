@@ -369,13 +369,17 @@ assert.equal(scan.scanActionName('periodic-external-send-out'), '外委送出')
 const periodicTakeBack = rows.find((row) => row.taskId === '2006')!
 assert.equal(periodicTakeBack.scanAction, 'periodic-manager-take-back')
 assert.equal(periodicTakeBack.scanScene, 'periodic_take_back')
-await scan.submitUnifiedScan(periodicTakeBack, { scanCode: 'JL-2006', opinion: 'taken back' })
+await scan.submitUnifiedScan(periodicTakeBack, {
+  scanCode: 'JL-2006',
+  scanContent: '{"deviceCode":"JL-2006"}',
+  opinion: 'taken back'
+})
 const periodicTakeBackSubmit = scanRequestCalls.find(
   (call) => call.url === '/periodic/manager-take-back'
 )
 assert.equal(periodicTakeBackSubmit?.data.taskId, '2006')
 assert.equal(periodicTakeBackSubmit?.data.scanCode, 'JL-2006')
-assert.equal(periodicTakeBackSubmit?.data.scanContent, 'JL-2006')
+assert.equal(periodicTakeBackSubmit?.data.scanContent, '{"deviceCode":"JL-2006"}')
 
 const normalizedChangeRows = rows.filter((row) => row.businessType === 'change')
 assert.deepEqual(
@@ -400,6 +404,7 @@ assert.deepEqual(
 for (const row of normalizedChangeRows) {
   await scan.submitUnifiedScan(row, {
     scanCode: ` ${row.deviceCode} `,
+    scanContent: `https://meter.example.com/device?deviceCode=${row.deviceCode}`,
     opinion: 'physical handover'
   })
 }
@@ -422,6 +427,9 @@ assert.deepEqual(
   changeRows.map((row) => [row.orderId, row.itemId, row.deviceId])
 )
 assert.equal(changeSubmitCalls.every((call) => call.data.scanCode === call.data.scanCode.trim()), true)
+assert.equal(changeSubmitCalls.every(
+  (call) => call.data.scanContent === `https://meter.example.com/device?deviceCode=${call.data.scanCode}`
+), true)
 const transferReceiveCall = changeSubmitCalls.find((call) => call.url === '/change/transfer-receive')
 assert.deepEqual(
   [transferReceiveCall?.data.taskId, transferReceiveCall?.data.rowVersion],
@@ -436,16 +444,20 @@ const unauthorizedRow = {
 }
 const callsBeforeUnauthorizedSubmit = scanRequestCalls.length
 await assert.rejects(
-  scan.submitUnifiedScan(unauthorizedRow, { scanCode: 'FC-1001' }),
+  scan.submitUnifiedScan(unauthorizedRow, { scanCode: 'FC-1001', scanContent: 'FC-1001' }),
   /not authorized|unauthorized|无权|权限/i
 )
 assert.equal(scanRequestCalls.length, callsBeforeUnauthorizedSubmit)
 
 const largeIdRow = rows.find((row) => row.orderId === largeFirstCheckOrderId)!
-await scan.submitUnifiedScan(largeIdRow, { scanCode: ' FC-1001 ' })
+await scan.submitUnifiedScan(largeIdRow, {
+  scanCode: ' FC-1001 ',
+  scanContent: '{"temporaryCode":"FC-1001"}'
+})
 const largeIdSubmit = scanRequestCalls.find((call) => call.url === '/scan/firstcheck/receive')
 assert.equal(largeIdSubmit?.data.orderId, largeFirstCheckOrderId)
 assert.equal(largeIdSubmit?.data.scanCode, 'FC-1001')
+assert.equal(largeIdSubmit?.data.scanContent, '{"temporaryCode":"FC-1001"}')
 
 const inboxFixtures = new Map([
   ['/scan/firstcheck/inbox', firstCheckRows.slice(0, 1)],
@@ -483,4 +495,8 @@ assert.match(scanViewSource, /rowsController\?\.abort\(\)/)
 assert.match(scanViewSource, /routeRequestKey/)
 assert.match(scanViewSource, /watch\(\s*\[workflowIdentity, routeRequestKey\]/)
 assert.match(scanViewSource, /onActivated\(/)
+assert.match(scanViewSource, /matchPdaScan/)
+assert.match(scanViewSource, /parseScanContent/)
+assert.match(scanViewSource, /submitUnifiedScan/)
+assert.match(scanViewSource, /@keydown\.enter\.prevent="submitPdaBuffer"/)
 assert.doesNotMatch(scanViewSource, /VERIFIER_SELF|VERIFIER_EXTERNAL|MEASURE_ADMIN|EXTERNAL_OPERATOR/)

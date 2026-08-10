@@ -1,4 +1,5 @@
 import { request } from '@/api/request'
+import { getClientRuntime } from '@/platform/pdaClient'
 import {
   externalSendOutPeriodic,
   managerTakeBackPeriodic,
@@ -78,13 +79,14 @@ export const firstCheckScanActionName = scanActionName
 
 function buildScanRequest(input: FirstCheckScanRequest): FirstCheckScanRequest {
   const scanCode = input.scanCode.trim()
+  const client = getClientRuntime()
   return {
     ...input,
     scanCode,
     scanContent: input.scanContent || scanCode,
     scanLocation: input.scanLocation || '\u73b0\u573a\u626b\u7801',
-    clientType: input.clientType || 'web',
-    terminalCode: input.terminalCode || 'WEB'
+    clientType: input.clientType || client.clientType,
+    terminalCode: input.terminalCode || client.terminalCode
   }
 }
 
@@ -216,12 +218,18 @@ export function submitUnifiedScan(row: UnifiedScanInboxItem, payload: UnifiedSca
     return submitFirstCheckScan(row.scanAction, {
       orderId: row.orderId,
       scanCode: payload.scanCode,
+      scanContent: payload.scanContent,
       opinion: payload.opinion
     })
   }
   if (row.businessType === 'periodic') {
     if (!row.taskId) return Promise.reject(new Error('Missing periodic task ID'))
-    const requestPayload = { taskId: row.taskId, scanCode: payload.scanCode, opinion: payload.opinion }
+    const requestPayload = {
+      taskId: row.taskId,
+      scanCode: payload.scanCode,
+      scanContent: payload.scanContent,
+      opinion: payload.opinion
+    }
     if (row.scanAction === 'periodic-verifier-receive') return verifierReceivePeriodic(requestPayload)
     if (row.scanAction === 'periodic-external-send-out') return externalSendOutPeriodic(requestPayload)
     if (row.scanAction === 'periodic-send-out-return') return sendOutReturnPeriodic(requestPayload)
@@ -245,6 +253,7 @@ export function submitUnifiedScan(row: UnifiedScanInboxItem, payload: UnifiedSca
       taskId: row.taskId,
       rowVersion: row.rowVersion,
       scanCode: payload.scanCode,
+      scanContent: payload.scanContent,
       opinion: payload.opinion
     }
     if (row.scanAction === 'change-verifier-receive') return verifierReceiveChangeDevice(requestPayload)

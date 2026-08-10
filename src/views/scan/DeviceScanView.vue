@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onActivated, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import {
@@ -11,6 +11,9 @@ import {
 import type { UnifiedScanInboxItem } from '@/types/scan'
 import { roleNameMap } from '@/types/common'
 import { useSessionStore } from '@/stores/session'
+import { hidePdaSoftKeyboard, isClientOnline, isPdaClient } from '@/platform/pdaClient'
+import { matchPdaScan } from '@/views/scan/pdaScanModel'
+import { parseScanContent } from '@/views/scan/scanCodeParser'
 import {
   matchesScanRouteList,
   shouldFocusScanRoute,
@@ -32,6 +35,9 @@ const scanOpen = ref(false)
 const failOpen = ref(false)
 const activeRow = ref<UnifiedScanInboxItem>()
 const routeFocused = ref(false)
+const pdaInput = ref<HTMLInputElement>()
+const pdaBuffer = ref('')
+const online = ref(isClientOnline())
 
 const scanForm = reactive({
   scanCode: '',
@@ -45,6 +51,7 @@ const failInfo = reactive({
 })
 
 const roleCode = computed(() => session.user?.roleCode || '')
+const pdaMode = computed(() => isPdaClient())
 const workflowIdentity = computed(() => {
   const user = session.user
   return user ? `${user.employeeId}|${user.roleCode}` : ''
@@ -154,6 +161,18 @@ function resetFilter() {
   nodeFilter.value = 'all'
 }
 
+async function focusPdaInput() {
+  if (!pdaMode.value || failOpen.value || scanOpen.value) return
+  await nextTick()
+  const focused = document.activeElement
+  if (focused instanceof HTMLTextAreaElement) return
+  if (focused instanceof HTMLInputElement && focused !== pdaInput.value) {
+    if (focused.closest('.ant-modal')) return
+  }
+  pdaInput.value?.focus({ preventScroll: true })
+  hidePdaSoftKeyboard()
+}
+
 function openScan(row?: UnifiedScanInboxItem) {
   const target = row || pendingRows.value[0]
   if (!target) {
@@ -174,11 +193,22 @@ function openScan(row?: UnifiedScanInboxItem) {
   scanOpen.value = true
 }
 
-function showFailure(error: unknown) {
-  failInfo.code = scanForm.scanCode || activeRow.value?.scanCode || activeRow.value?.deviceCode || ''
-  failInfo.deviceName = activeRow.value?.deviceName || '-'
+function showFailure(error: unknown, row = activeRow.value, scanCode = scanForm.scanCode) {
+  failInfo.code = scanCode || row?.scanCode || row?.deviceCode || ''
+  failInfo.deviceName = row?.deviceName || '-'
   failInfo.message = error instanceof Error ? error.message : '该设备不在扫码范围内'
   failOpen.value = true
+}
+
+function closeFailure() {
+  failOpen.value = false
+  void focusPdaInput()
+}
+
+function isAuthoritativeScanConflict(error: unknown) {
+  const value = error instanceof Error ? error.message : String(error || '')
+  return value.includes('WORKFLOW_TASK_VERSION_CONFLICT')
+    || value.includes('TASK_ALREADY_HANDLED')
 }
 
 async function focusRouteTarget() {
@@ -193,7 +223,11 @@ async function focusRouteTarget() {
     return
   }
   bucket.value = 'pending'
-  openScan(target)
+  if (pdaMode.value) {
+    await focusPdaInput()
+  } else {
+    openScan(target)
+  }
 }
 
 let rowsLoadId = 0
@@ -210,6 +244,7 @@ async function loadRows() {
     if (loadId !== rowsLoadId || controller.signal.aborted) return
     rows.value = nextRows
     await focusRouteTarget()
+    await focusPdaInput()
   } catch (error) {
     if (loadId !== rowsLoadId || controller.signal.aborted) return
     rows.value = []
@@ -235,6 +270,7 @@ async function submitScan() {
   try {
     await submitUnifiedScan(row, {
       scanCode: scanForm.scanCode,
+      scanContent: scanForm.scanCode,
       opinion: scanForm.opinion
     })
     message.success(`${scanActionName(row.scanAction)}扫码成功`)
@@ -256,18 +292,97 @@ async function submitScan() {
   }
 }
 
+async function submitPdaBuffer() {
+  if (submitting.value) {
+    pdaBuffer.value = ''
+    return
+  }
+  const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false
+  online.value = !browserOffline && isClientOnline()
+  if (!online.value) {
+    pdaBuffer.value = ''
+    message.error('网络已断开，业务扫码已停用')
+    await focusPdaInput()
+    return
+  }
+
+  const parsed = parseScanContent(pdaBuffer.value)
+  pdaBuffer.value = ''
+  if (!parsed.normalizedCode) {
+    message.warning('未识别到有效扫码编号')
+    await focusPdaInput()
+    return
+  }
+  const matched = matchPdaScan(parsed.normalizedCode, pendingRows.value)
+  if (matched.kind === 'none') {
+    message.warning('当前角色没有该设备的待扫码任务')
+    await focusPdaInput()
+    return
+  }
+  if (matched.kind === 'ambiguous') {
+    message.error('扫码编号对应多个活动任务，数据一致性异常')
+    await focusPdaInput()
+    return
+  }
+
+  activeRow.value = matched.row
+  submitting.value = true
+  try {
+    await submitUnifiedScan(matched.row, {
+      scanCode: parsed.normalizedCode,
+      scanContent: parsed.raw,
+      opinion: `${scanActionName(matched.row.scanAction)}扫码处理`
+    })
+    message.success(`${scanActionName(matched.row.scanAction)}扫码成功`)
+    await loadRows()
+    activeRow.value = undefined
+  } catch (error) {
+    showFailure(error, matched.row, parsed.normalizedCode)
+    if (isAuthoritativeScanConflict(error)) await loadRows()
+  } finally {
+    submitting.value = false
+    if (!failOpen.value) await focusPdaInput()
+  }
+}
+
+function updateOnlineStatus() {
+  online.value = isClientOnline()
+  if (online.value) void focusPdaInput()
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible') void focusPdaInput()
+}
+
 watch([workflowIdentity, routeRequestKey], () => {
   routeFocused.value = false
   rows.value = []
   void loadRows()
 }, { immediate: true })
 
+watch(failOpen, (open) => {
+  if (!open) void focusPdaInput()
+})
+
 onActivated(() => {
   routeFocused.value = false
   void loadRows()
+  void focusPdaInput()
 })
 
-onBeforeUnmount(() => rowsController?.abort())
+onMounted(() => {
+  window.addEventListener('online', updateOnlineStatus)
+  window.addEventListener('offline', updateOnlineStatus)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  void focusPdaInput()
+})
+
+onBeforeUnmount(() => {
+  rowsController?.abort()
+  window.removeEventListener('online', updateOnlineStatus)
+  window.removeEventListener('offline', updateOnlineStatus)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+})
 </script>
 
 <template>
@@ -283,7 +398,24 @@ onBeforeUnmount(() => rowsController?.abort())
       </a-card>
     </div>
 
-    <a-card class="panel" :bordered="false">
+    <a-card v-if="pdaMode" class="panel pda-station" :bordered="false">
+      <a-alert
+        :type="online ? 'success' : 'error'"
+        :message="online ? '准备扫码，请按设备侧键' : '网络已断开，业务扫码已停用'"
+        show-icon
+      />
+      <input
+        ref="pdaInput"
+        v-model="pdaBuffer"
+        class="pda-capture-input"
+        inputmode="none"
+        autocomplete="off"
+        aria-label="PDA 扫码输入"
+        @keydown.enter.prevent="submitPdaBuffer"
+      />
+    </a-card>
+
+    <a-card v-if="!pdaMode" class="panel" :bordered="false">
       <template #title><h2>筛选方案</h2></template>
       <div class="filter-section">
         <label>
@@ -319,7 +451,7 @@ onBeforeUnmount(() => rowsController?.abort())
               ]"
             />
             <span>扫码核对成功：<strong>{{ scannedRows.length }}</strong> 台</span>
-            <a-button class="scan-btn" @click="openScan()">扫码</a-button>
+            <a-button v-if="!pdaMode" class="scan-btn" @click="openScan()">扫码</a-button>
           </div>
         </div>
       </template>
@@ -345,14 +477,15 @@ onBeforeUnmount(() => rowsController?.abort())
           <template v-else-if="column.key === 'deviceName'">{{ display(record.deviceName) }}</template>
           <template v-else-if="column.key === 'useDeptName'">{{ display(record.useDeptName) }}</template>
           <template v-else-if="column.key === 'action'">
-            <a-button v-if="!record.scanned && isUnifiedScanActionAllowed(record)" type="link" class="code-link" @click="openScan(record)">扫码</a-button>
+            <a-button v-if="!pdaMode && !record.scanned && isUnifiedScanActionAllowed(record)" type="link" class="code-link" @click="openScan(record)">扫码</a-button>
+            <span v-else-if="!record.scanned" class="muted">待扫码</span>
             <span v-else class="muted">已扫码</span>
           </template>
         </template>
       </a-table>
     </a-card>
 
-    <a-modal v-model:open="scanOpen" title="扫码" width="560px" :footer="null" :destroy-on-close="true">
+    <a-modal v-if="!pdaMode" v-model:open="scanOpen" title="扫码" width="560px" :footer="null" :destroy-on-close="true">
       <div v-if="activeRow" class="scan-dialog">
         <a-alert type="info" :message="scanHint(activeRow)" show-icon />
         <div class="scan-info">
@@ -379,13 +512,13 @@ onBeforeUnmount(() => rowsController?.abort())
       </div>
     </a-modal>
 
-    <a-modal v-model:open="failOpen" title="扫码失败" width="420px" :footer="null">
+    <a-modal v-model:open="failOpen" title="扫码失败" width="420px" :footer="null" @cancel="closeFailure">
       <div class="fail-body">
         <div><span>编号：</span><strong>{{ display(failInfo.code) }}</strong></div>
         <div><span>设备名称：</span><strong>{{ display(failInfo.deviceName) }}</strong></div>
         <div class="error-msg">报错信息：{{ failInfo.message || '该设备不在扫码范围内' }}</div>
         <div class="dialog-actions">
-          <a-button type="primary" @click="failOpen = false">知道了</a-button>
+          <a-button type="primary" @click="closeFailure">知道了</a-button>
         </div>
       </div>
     </a-modal>
@@ -428,6 +561,21 @@ onBeforeUnmount(() => rowsController?.abort())
 }
 
 .panel {
+  overflow: hidden;
+}
+
+.pda-station :deep(.ant-card-body) {
+  position: relative;
+  padding: 14px;
+}
+
+.pda-capture-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
   overflow: hidden;
 }
 
