@@ -96,6 +96,23 @@ export interface UserRoleScopePreviewVO {
   warnings: string[]
 }
 
+export interface UserRoleScopeMatrixEntry {
+  scopeOrgId: string
+  roleCodes: string[]
+}
+
+export interface UserRoleScopeMatrixRequest {
+  matrixVersion: string
+  entries: UserRoleScopeMatrixEntry[]
+}
+
+export interface UserRoleScopeMatrixVO {
+  employeeId: string
+  matrixVersion: string
+  entries: UserRoleScopeMatrixEntry[]
+  activeLegacyNodeGrantCount: number
+}
+
 export interface EffectivePermissionItemVO {
   roleCode: string
   permissionCode: string

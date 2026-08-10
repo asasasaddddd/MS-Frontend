@@ -8,6 +8,8 @@ import type {
   TaskCandidatePreviewQuery,
   TaskCandidateVO,
   UserRoleScopePreviewVO,
+  UserRoleScopeMatrixRequest,
+  UserRoleScopeMatrixVO,
   UserRoleScopeRequest,
   UserRoleScopeVO
 } from '@/types/nodePermission'
@@ -61,6 +63,24 @@ export function listUserRoleScopes(userId: string) {
   return request<UserRoleScopeVO[]>({
     url: `/system/users/${encodeURIComponent(userId)}/role-scopes`,
     method: 'GET'
+  })
+}
+
+export function getUserRoleScopeMatrix(userId: string) {
+  return request<UserRoleScopeMatrixVO>({
+    url: `/system/users/${encodeURIComponent(userId)}/role-scope-matrix`,
+    method: 'GET'
+  })
+}
+
+export function replaceUserRoleScopeMatrix(
+  userId: string,
+  data: UserRoleScopeMatrixRequest
+) {
+  return request<UserRoleScopeMatrixVO>({
+    url: `/system/users/${encodeURIComponent(userId)}/role-scope-matrix`,
+    method: 'PUT',
+    data
   })
 }
 
