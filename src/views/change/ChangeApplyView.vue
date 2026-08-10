@@ -8,14 +8,15 @@ import type { ChangeSubmitRequest, ChangeType } from '@/types/change'
 import type { DeviceVO } from '@/types/device'
 import {
   changeTypeMetas,
-  currentDeviceStatusColor,
-  currentDeviceStatusName,
-  deviceRowKey,
-  display,
-  formatDate,
   haveUniformOriginalCategory
 } from '@/views/change/changeDisplayModel'
 import ChangeApplyDialog from '@/views/change/components/ChangeApplyDialog.vue'
+import {
+  deviceLedgerDataColumns,
+  deviceRowKey,
+  mapDeviceLedgerRow,
+  type DeviceLedgerRow
+} from '@/views/device/deviceLedgerModel'
 
 const session = useSessionStore()
 
@@ -35,22 +36,21 @@ const query = reactive({
   total: 0
 })
 
-const ledgerColumns = [
-  { title: '设备编号', key: 'deviceCode', width: 150 },
-  { title: '设备名称', key: 'deviceName', width: 150 },
-  { title: '规格型号', key: 'modelSpec', width: 150 },
-  { title: '使用部门', key: 'deptName', width: 150 },
-  { title: '当前状态', key: 'deviceStatus', width: 120 },
-  { title: '最近校准日期', key: 'lastVerificationDate', width: 140 }
-]
+const ledgerColumns = [...deviceLedgerDataColumns]
 
 const selectedColumns = [
-  { title: '设备编号', key: 'deviceCode', width: 150 },
-  { title: '设备名称', key: 'deviceName', width: 150 },
-  { title: '规格型号', key: 'modelSpec', width: 150 },
-  { title: '当前状态', key: 'deviceStatus', width: 120 },
+  ...deviceLedgerDataColumns,
   { title: '操作', key: 'action', width: 90 }
 ]
+
+const ledgerRows = computed(() => {
+  const today = new Date().toISOString().slice(0, 10)
+  return devices.value.map((device) => mapDeviceLedgerRow(device, today))
+})
+const selectedRows = computed(() => {
+  const today = new Date().toISOString().slice(0, 10)
+  return selectedDevices.value.map((device) => mapDeviceLedgerRow(device, today))
+})
 
 const ledgerRowSelection = computed(() => ({
   selectedRowKeys: selectedLedgerKeys.value,
@@ -68,8 +68,8 @@ function resetFilter() {
   loadDevices()
 }
 
-function tableRowKey(record: DeviceVO) {
-  return deviceRowKey(record)
+function tableRowKey(record: DeviceVO | DeviceLedgerRow) {
+  return 'source' in record ? record.key : deviceRowKey(record)
 }
 
 function removeDevice(key: string) {
@@ -197,19 +197,30 @@ onMounted(() => {
             <p class="sub-title">已选设备</p>
             <a-table
               :columns="selectedColumns"
-              :data-source="selectedDevices"
+              :data-source="selectedRows"
               :pagination="false"
-              :scroll="{ x: 660 }"
+              :scroll="{ x: 1730 }"
               :row-key="tableRowKey"
               size="small"
             >
               <template #bodyCell="{ column, record }">
-                <template v-if="column.key === 'deviceCode'">{{ display(record.deviceCode) }}</template>
-                <template v-else-if="column.key === 'deviceName'">{{ display(record.deviceName) }}</template>
-                <template v-else-if="column.key === 'modelSpec'">{{ display(record.modelSpec) }}</template>
-                <template v-else-if="column.key === 'deviceStatus'">
-                  <a-tag :class="['tag', currentDeviceStatusColor(record)]">{{ currentDeviceStatusName(record) }}</a-tag>
+                <template v-if="column.key === 'deviceCode'">{{ record.deviceCode }}</template>
+                <template v-else-if="column.key === 'deviceName'">{{ record.deviceName }}</template>
+                <template v-else-if="['modelSpec', 'factoryCode', 'deptName', 'manufacturer'].includes(String(column.key))">
+                  {{ record[column.key] }}
                 </template>
+                <template v-else-if="column.key === 'categoryText'">
+                  <a-tag :class="['tag', record.categoryColor]">{{ record.categoryText }}</a-tag>
+                </template>
+                <template v-else-if="column.key === 'statusText'">
+                  <a-tag :class="['tag', record.statusColor]">{{ record.statusText }}</a-tag>
+                </template>
+                <template v-else-if="column.key === 'cycleText'">{{ record.cycleText }}</template>
+                <template v-else-if="column.key === 'validUntil'">
+                  <span :class="{ overdue: record.overdue }">{{ record.nextVerificationDate }}</span>
+                </template>
+                <template v-else-if="column.key === 'lastVerificationDate'">{{ record.lastVerificationDate }}</template>
+                <template v-else-if="column.key === 'methodText'">{{ record.methodText }}</template>
                 <template v-else-if="column.key === 'action'">
                   <a-button type="link" danger @click="removeDevice(tableRowKey(record))">移除</a-button>
                 </template>
@@ -233,7 +244,7 @@ onMounted(() => {
 
       <a-table
         :columns="ledgerColumns"
-        :data-source="devices"
+        :data-source="ledgerRows"
         :loading="loading"
         :pagination="{
           current: query.current,
@@ -244,18 +255,27 @@ onMounted(() => {
         }"
         :row-key="tableRowKey"
         :row-selection="ledgerRowSelection"
-        :scroll="{ x: 900 }"
+        :scroll="{ x: 1640 }"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'deviceCode'">{{ display(record.deviceCode) }}</template>
-          <template v-else-if="column.key === 'deviceName'">{{ display(record.deviceName) }}</template>
-          <template v-else-if="column.key === 'modelSpec'">{{ display(record.modelSpec) }}</template>
-          <template v-else-if="column.key === 'deptName'">{{ display(record.deptName) }}</template>
-          <template v-else-if="column.key === 'deviceStatus'">
-            <a-tag :class="['tag', currentDeviceStatusColor(record)]">{{ currentDeviceStatusName(record) }}</a-tag>
+          <template v-if="column.key === 'deviceCode'">{{ record.deviceCode }}</template>
+          <template v-else-if="column.key === 'deviceName'">{{ record.deviceName }}</template>
+          <template v-else-if="['modelSpec', 'factoryCode', 'deptName', 'manufacturer'].includes(String(column.key))">
+            {{ record[column.key] }}
           </template>
-          <template v-else-if="column.key === 'lastVerificationDate'">{{ formatDate(record.lastVerificationDate) }}</template>
+          <template v-else-if="column.key === 'categoryText'">
+            <a-tag :class="['tag', record.categoryColor]">{{ record.categoryText }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'statusText'">
+            <a-tag :class="['tag', record.statusColor]">{{ record.statusText }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'cycleText'">{{ record.cycleText }}</template>
+          <template v-else-if="column.key === 'validUntil'">
+            <span :class="{ overdue: record.overdue }">{{ record.nextVerificationDate }}</span>
+          </template>
+          <template v-else-if="column.key === 'lastVerificationDate'">{{ record.lastVerificationDate }}</template>
+          <template v-else-if="column.key === 'methodText'">{{ record.methodText }}</template>
         </template>
       </a-table>
     </section>
@@ -377,6 +397,11 @@ onMounted(() => {
 
 .tag {
   border-radius: 6px;
+}
+
+.overdue {
+  color: #d92d20;
+  font-weight: 700;
 }
 
 .tag.blue {

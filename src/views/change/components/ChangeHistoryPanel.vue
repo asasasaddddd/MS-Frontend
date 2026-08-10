@@ -4,7 +4,7 @@ import { message } from 'ant-design-vue'
 import { getChangeOrderDetail } from '@/api/change'
 import { getWorkflowTimeline, listWorkflowHistory } from '@/api/workflow'
 import AttachmentListButton from '@/components/AttachmentListButton.vue'
-import type { ChangeOrderVO } from '@/types/change'
+import type { ChangeItemVO, ChangeOrderVO } from '@/types/change'
 import type { WorkflowTask, WorkflowTimelineEntry } from '@/types/workflow'
 import { changeTypeName, display, formatDateTime } from '@/views/change/changeDisplayModel'
 
@@ -37,6 +37,16 @@ const columns = [
   { title: '操作', key: 'operation', fixed: 'right', width: 90 }
 ]
 
+const deviceColumns = [
+  { title: '计量编号', key: 'deviceCode', width: 140 },
+  { title: '设备名称', key: 'deviceName', width: 160 },
+  { title: '规格型号', key: 'modelSpec', width: 140 },
+  { title: '出厂编号', key: 'factoryCode', width: 140 },
+  { title: '使用部门', key: 'deptName', width: 160 },
+  { title: '变更前状态', key: 'oldStatus', width: 120 },
+  { title: '变更后状态', key: 'newStatus', width: 120 }
+]
+
 function actionName(action?: string) {
   const names: Record<string, string> = {
     approve: '同意',
@@ -50,6 +60,10 @@ function actionName(action?: string) {
 function openDetail(row: HistoryRow) {
   activeRow.value = row
   detailOpen.value = true
+}
+
+function deviceRowKey(item: ChangeItemVO) {
+  return String(item.id ?? item.deviceId ?? item.deviceCode ?? '')
 }
 
 async function loadRows() {
@@ -110,7 +124,7 @@ onMounted(loadRows)
       </a-table>
     </a-card>
 
-    <a-modal v-model:open="detailOpen" title="状态变更已办详情" width="960px" :footer="null">
+    <a-modal v-model:open="detailOpen" title="状态变更已办详情" width="1100px" :footer="null">
       <div v-if="activeRow" class="history-detail-grid">
         <div><span>变更单号</span><strong>{{ display(activeRow.order.orderNo) }}</strong></div>
         <div><span>当前流转节点</span><strong>{{ display(activeRow.task.currentNodeName || activeRow.task.currentNodeCode || activeRow.order.workflowStatus || activeRow.order.statusName) }}</strong></div>
@@ -124,6 +138,27 @@ onMounted(loadRows)
         <div>
           <span>申请附件</span>
           <AttachmentListButton :group-id="activeRow.order.attachmentGroupId" title="状态变更申请附件" size="small" />
+        </div>
+        <div class="full device-section">
+          <span>设备明细</span>
+          <a-table
+            :columns="deviceColumns"
+            :data-source="activeRow.order.items || []"
+            :pagination="false"
+            :row-key="deviceRowKey"
+            :scroll="{ x: 980 }"
+            size="small"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'deviceCode'">{{ display(record.deviceCode) }}</template>
+              <template v-else-if="column.key === 'deviceName'">{{ display(record.deviceName) }}</template>
+              <template v-else-if="column.key === 'modelSpec'">{{ display(record.modelSpec) }}</template>
+              <template v-else-if="column.key === 'factoryCode'">{{ display(record.factoryCode) }}</template>
+              <template v-else-if="column.key === 'deptName'">{{ display(record.deptName) }}</template>
+              <template v-else-if="column.key === 'oldStatus'">{{ display(record.oldStatus) }}</template>
+              <template v-else-if="column.key === 'newStatus'">{{ display(record.newStatus) }}</template>
+            </template>
+          </a-table>
         </div>
         <div class="full timeline-section">
           <span>流程轨迹</span>
@@ -152,6 +187,8 @@ onMounted(loadRows)
 .history-detail-grid .full { grid-column: 1 / -1; }
 .history-detail-grid span { display: block; margin-bottom: 8px; color: #667085; font-size: 12px; }
 .history-detail-grid strong { color: #172033; font-size: 15px; }
+.device-section { min-width: 0; }
+.device-section :deep(.ant-table-wrapper) { margin-top: 8px; }
 .timeline-section p { margin: 4px 0 0; color: #667085; }
 @media (max-width: 760px) { .history-detail-grid { grid-template-columns: 1fr; } .history-detail-grid .full { grid-column: auto; } }
 </style>

@@ -10,7 +10,7 @@ import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
 import { hasWorkflowAction, useWorkflowTask, type WorkflowBoundDetail } from '@/composables/useWorkflowTask'
 import { roleNameMap, type RoleCode } from '@/types/common'
 import type { WorkflowTask } from '@/types/workflow'
-import type { PeriodicTaskVO } from '@/types/periodic'
+import type { PeriodicTaskVO, PeriodicTodoPlanEntry } from '@/types/periodic'
 import type { SamplingTaskVO } from '@/types/sampling'
 import type { ProductSupportOrderVO } from '@/types/productSupport'
 import type { FirstCheckOrder } from '@/types/firstcheck'
@@ -48,6 +48,7 @@ import {
 } from '@/views/workspaceTodoModel'
 import {
   getTodoModuleAdapter,
+  loadPeriodicTodoPlanEntries,
   loadTodoModuleDetail
 } from '@/views/workspaceTodoAdapters'
 
@@ -77,6 +78,8 @@ const keyword = ref('')
 const periodicPlanPickerOpen = ref(false)
 const periodicTasks = ref<PeriodicTaskVO[]>([])
 const periodicHistoryTasks = ref<PeriodicTaskVO[]>([])
+const periodicTodoPlans = ref<PeriodicTodoPlanEntry[]>([])
+const periodicTodoPlanLoadFailed = ref(false)
 const samplingTasks = ref<SamplingTaskVO[]>([])
 const samplingHistoryTasks = ref<SamplingTaskVO[]>([])
 const productSupportTasks = ref<ProductSupportOrderVO[]>([])
@@ -118,10 +121,10 @@ const roleLabel = computed(() => {
   return roleNameMap[role] || session.user?.roleName || role || '-'
 })
 const launchActions = computed(() => getWorkspaceLaunchActions(roleCode.value))
-const periodicPlanPickerItems = computed(() => buildPeriodicPlanPickerItems(periodicTasks.value))
-const periodicPlanPickerDeviceCount = computed(() =>
-  periodicPlanPickerItems.value.reduce((sum, item) => sum + item.deviceCount, 0)
-)
+const periodicPlanPickerItems = computed(() => buildPeriodicPlanPickerItems(
+  periodicTasks.value,
+  periodicTodoPlans.value
+))
 
 const filterOptions: SelectProps['options'] = [
   { label: '全部类型', value: 'all' },
@@ -296,7 +299,7 @@ const periodicTodoEntries = computed<TodoDefinition[]>(() => {
 })
 
 const periodicPlanPickerIncomplete = computed(() =>
-  (periodicTodoEntries.value[0]?.count || 0) > periodicPlanPickerDeviceCount.value
+  periodicTodoPlanLoadFailed.value
 )
 
 const periodicHistoryEntries = computed<TodoDefinition[]>(() => {
@@ -563,6 +566,8 @@ function clearWorkspaceSummary() {
   workflowHistoryTasks.value = []
   periodicTasks.value = []
   periodicHistoryTasks.value = []
+  periodicTodoPlans.value = []
+  periodicTodoPlanLoadFailed.value = false
   samplingTasks.value = []
   samplingHistoryTasks.value = []
   productSupportTasks.value = []
@@ -584,12 +589,17 @@ async function loadWorkflowSummary() {
   if (!requestedRole) return
   if (!shouldShowWorkspaceTaskSections(requestedRole)) return
 
-  const [workflowResult, scanInboxResult] = await Promise.allSettled([
+  const [workflowResult, scanInboxResult, periodicTodoPlanResult] = await Promise.allSettled([
     refreshWorkflowTasks(),
-    listUnifiedScanInbox()
+    listUnifiedScanInbox(),
+    loadPeriodicTodoPlanEntries()
   ])
   if (!isCurrentWorkspaceLoad(loadId, requestedRole)) return
   scanInboxRows.value = scanInboxResult.status === 'fulfilled' ? scanInboxResult.value : []
+  periodicTodoPlans.value = periodicTodoPlanResult.status === 'fulfilled'
+    ? periodicTodoPlanResult.value
+    : []
+  periodicTodoPlanLoadFailed.value = periodicTodoPlanResult.status === 'rejected'
   if (workflowResult.status === 'rejected') return
 
   const allTasks = [...workflowTasks.value, ...workflowHistoryTasks.value]

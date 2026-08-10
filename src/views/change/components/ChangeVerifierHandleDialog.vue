@@ -9,6 +9,7 @@ import type { ChangeOrderVO, ChangeVerifierHandleRequest } from '@/types/change'
 import {
   buildChangeVerifierHandleRequest,
   changeVerifierReason,
+  hasPersistedVerificationDecision,
   resolveChangeVerifierDialog,
   shouldShowChangeVerifierInspectionFields,
   validateChangeVerifierForm,
@@ -192,7 +193,9 @@ watch(
     const currentItem = item.value
     form.reason = changeVerifierReason(props.order)
     form.verificationRequired = config.value.showVerificationDecision
-      ? undefined
+      ? hasPersistedVerificationDecision(props.order)
+        ? 1
+        : undefined
       : config.value.showVerification
         ? 1
         : 0

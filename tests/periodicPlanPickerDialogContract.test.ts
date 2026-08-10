@@ -17,7 +17,9 @@ for (const label of ['周检待办单据', '周检单号', '当前节点', '条�
   assert.match(dialog, new RegExp(label))
 }
 assert.match(dialog, /当前角色暂时无周检待办单据/)
-assert.match(dialog, /部分周检详情加载失败，请刷新后重试/)
+assert.match(dialog, /周检单据入口加载失败，请检查后端接口/)
+assert.match(dialog, /type="error"/)
+assert.match(dialog, /v-else-if="!incomplete"/)
 assert.match(dialog, /:pagination="false"/)
 assert.match(dialog, /:scroll="\{ x: 680 \}"/)
 assert.match(dialog, /destroy-on-close/)

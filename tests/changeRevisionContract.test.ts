@@ -17,12 +17,25 @@ const revision = {
   items: [{ deviceId: '2080000000000000004' }]
 }
 
+const cancellation = {
+  ...identity,
+  reason: '业务不再需要变更'
+}
+
 assert.equal(changeContract.changeEndpoint('revise' as never), '/change/revise')
 assert.equal(typeof (changeContract as Record<string, unknown>).buildChangeReviseRequest, 'function')
 assert.deepEqual(
   (changeContract as unknown as { buildChangeReviseRequest: (input: typeof revision) => typeof revision })
     .buildChangeReviseRequest(revision),
   revision
+)
+assert.equal(changeContract.changeEndpoint('cancelRevision' as never), '/change/cancel-revision')
+assert.equal(typeof (changeContract as Record<string, unknown>).buildChangeCancelRevisionRequest, 'function')
+assert.deepEqual(
+  (changeContract as unknown as {
+    buildChangeCancelRevisionRequest: (input: typeof cancellation) => typeof cancellation
+  }).buildChangeCancelRevisionRequest(cancellation),
+  cancellation
 )
 
 const typeSource = readFileSync(new URL('../src/types/change.ts', import.meta.url), 'utf8')
@@ -46,23 +59,37 @@ assert.match(
   typeSource,
   /interface ChangeReviseRequest \{[\s\S]*?orderId:\s*EntityId[\s\S]*?taskId:\s*EntityId[\s\S]*?rowVersion:\s*RowVersion[\s\S]*?reason\?:\s*string[\s\S]*?remark\?:\s*string[\s\S]*?attachmentGroupId\?:\s*EntityId[\s\S]*?opinion:\s*string[\s\S]*?items:\s*ChangeItemSubmitRequest\[\]/
 )
+assert.match(
+  typeSource,
+  /interface ChangeCancelRevisionRequest \{[\s\S]*?orderId:\s*EntityId[\s\S]*?taskId:\s*EntityId[\s\S]*?rowVersion:\s*RowVersion[\s\S]*?reason:\s*string/
+)
 assert.match(apiSource, /function reviseChange\([\s\S]*changeEndpoint\('revise'\)[\s\S]*buildChangeReviseRequest\(data\)/)
+assert.match(
+  apiSource,
+  /function cancelRevisionChange\([\s\S]*changeEndpoint\('cancelRevision'\)[\s\S]*buildChangeCancelRevisionRequest\(data\)/
+)
 assert.match(workflowSource, /code:\s*'manager_revise'[\s\S]*module:\s*'change'[\s\S]*RESUBMIT[\s\S]*\/api\/change\/revise/)
 assert.match(workflowSource, /receiveAdmin:\s*\[[^\]]*'manager_revise'[^\]]*'receive_admin_confirm'/)
 assert.match(displaySource, /CHANGE_REVISE_ACTION\s*=\s*'RESUBMIT'/)
 assert.match(displaySource, /manager_revise:\s*'[^']+'/)
 assert.match(adminSource, /reviseChange/)
+assert.match(adminSource, /cancelRevisionChange/)
 assert.match(adminSource, /ChangeApplyDialog/)
 assert.match(adminSource, /row\.nodeCode\s*===\s*'manager_revise'/)
 assert.match(adminSource, /taskId:\s*order\.taskId/)
 assert.match(adminSource, /rowVersion:\s*order\.rowVersion/)
 assert.match(adminSource, /items:\s*payload\.items/)
 assert.match(adminSource, /opinion:\s*payload\.opinion/)
+assert.match(adminSource, /function handleCancelRevision\([\s\S]*cancelRevisionChange\([\s\S]*orderId:\s*order\.id[\s\S]*taskId:\s*order\.taskId[\s\S]*rowVersion:\s*order\.rowVersion/)
+assert.match(adminSource, /@terminate="handleCancelRevision"/)
 assert.match(adminSource, /originalDeviceIds[\s\S]*revisedDeviceIds/)
 assert.match(
   applyDialogSource,
   /v-if="order" class="revision-device-list"[\s\S]*v-for="device in devices"[\s\S]*display\(device\.deviceCode\)/
 )
+assert.match(applyDialogSource, /'terminate': \[\]/)
+assert.match(applyDialogSource, /<a-popconfirm[\s\S]*@confirm="terminate"/)
+assert.match(applyDialogSource, /终止申请/)
 
 assert.doesNotMatch(applyDialogSource, /precheckRequired:\s*(?:undefined as )?number \| undefined/)
 assert.doesNotMatch(applyDialogSource, /verificationMethod:\s*undefined as string \| undefined/)

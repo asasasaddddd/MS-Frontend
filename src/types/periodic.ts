@@ -115,6 +115,19 @@ export interface PeriodicTaskVO {
   judgementRecords?: PeriodicJudgementRecordVO[]
 }
 
+export interface PeriodicTodoPlanEntry {
+  planId: EntityId
+  planNo?: string
+  planName?: string
+  deviceCount?: number
+  completedCount?: number
+  pendingCount?: number
+  status?: string
+  statusName?: string
+  currentNodeSummary?: string
+  generatedAt?: string
+}
+
 export interface PeriodicDisplayRow {
   taskId: EntityId
   taskNo: string

@@ -42,6 +42,7 @@ assert.equal(
   adapterModule.getTodoModuleAdapterForTask({ businessType: 'product_support' })?.type,
   'productSupport'
 )
+assert.equal(typeof adapterModule.loadPeriodicTodoPlanEntries, 'function')
 
 const workspaceSource = readFileSync(
   new URL('../src/views/WorkspaceTodoView.vue', import.meta.url),

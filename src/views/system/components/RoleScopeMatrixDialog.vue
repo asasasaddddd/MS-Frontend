@@ -264,7 +264,6 @@ watch(
               :selected-keys="selectedScopeOrgId ? [selectedScopeOrgId] : []"
               :field-names="{ key: 'key', title: 'title', children: 'children' }"
               block-node
-              default-expand-all
               show-line
               @select="handleTreeSelect"
             >

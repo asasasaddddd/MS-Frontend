@@ -1,4 +1,4 @@
-import type { EntityId, PeriodicDisplayRow, PeriodicTaskVO } from '../../types/periodic'
+import type { EntityId, PeriodicDisplayRow, PeriodicTaskVO, PeriodicTodoPlanEntry } from '../../types/periodic'
 import type { UnifiedScanInboxItem } from '../../types/scan'
 
 export type PeriodicTableRole = 'admin' | 'verifier' | 'confirmer' | 'externalOperator'
@@ -450,16 +450,31 @@ export function buildPeriodicPlanSubtitle(tasks: PeriodicTaskVO[]) {
   return nodeSummary === '-' ? deviceText : `${deviceText} · ${nodeSummary}`
 }
 
-export function buildPeriodicPlanPickerItems(tasks: PeriodicTaskVO[]): PeriodicPlanPickerItem[] {
+export function buildPeriodicPlanPickerItems(
+  tasks: PeriodicTaskVO[],
+  todoPlans: readonly PeriodicTodoPlanEntry[]
+): PeriodicPlanPickerItem[] {
   const authoritativeTasks = tasks.filter(
     (task) => task.planId !== undefined && task.planId !== null && task.planId !== ''
   )
-  return buildPeriodicPlanTodoGroups(authoritativeTasks).map(({ planId, tasks: planTasks, deviceCount }) => ({
-    planId,
-    planNo: derivePeriodicPlanLabel(planId, planTasks),
-    currentNodeSummary: periodicPlanNodeSummary(planTasks),
-    deviceCount
-  }))
+  const taskGroups = buildPeriodicPlanTodoGroups(authoritativeTasks)
+  const taskGroupByPlanId = new Map(taskGroups.map((group) => [group.planId, group]))
+
+  return todoPlans
+    .filter((plan) => plan.planId !== undefined && plan.planId !== null && plan.planId !== '')
+    .map((plan) => {
+      const planId = String(plan.planId)
+      const taskGroup = taskGroupByPlanId.get(planId)
+      const planTasks = taskGroup?.tasks || []
+      return {
+        planId,
+        planNo: plan.planNo?.trim()
+          || (planTasks.length > 0 ? derivePeriodicPlanLabel(planId, planTasks) : planId),
+        currentNodeSummary: plan.currentNodeSummary?.trim()
+          || (planTasks.length > 0 ? periodicPlanNodeSummary(planTasks) : '-'),
+        deviceCount: Number(plan.deviceCount ?? taskGroup?.deviceCount ?? 0)
+      }
+    })
 }
 
 const adminColumns: PeriodicTableColumn[] = [
@@ -473,7 +488,8 @@ const adminColumns: PeriodicTableColumn[] = [
   { title: '检定周期', key: 'verificationCycle', dataIndex: 'verificationCycle', width: 110 },
   { title: '有效日期', key: 'validUntil', dataIndex: 'validUntil', width: 120 },
   { title: '计量检定员', key: 'assignedVerifierName', dataIndex: 'assignedVerifierName', width: 130 },
-  { title: '检定方式', key: 'verificationMethodName', dataIndex: 'verificationMethodName', width: 110 }
+  { title: '检定方式', key: 'verificationMethodName', dataIndex: 'verificationMethodName', width: 110 },
+  { title: '操作', key: 'action', fixed: 'right', width: 92 }
 ]
 
 const verifierColumns: PeriodicTableColumn[] = [

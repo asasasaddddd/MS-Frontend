@@ -12,6 +12,12 @@ assert.match(panel, /activeRow\.timeline/)
 assert.doesNotMatch(panel, /getWorkflowProcessByBusiness/)
 assert.match(panel, /本人处理意见/)
 assert.match(panel, /当前流转节点/)
+assert.match(panel, /const deviceColumns\s*=\s*\[/)
+assert.match(panel, /activeRow\.order\.items \|\| \[\]/)
+for (const field of ['deviceCode', 'deviceName', 'modelSpec', 'factoryCode', 'deptName', 'oldStatus', 'newStatus']) {
+  assert.match(panel, new RegExp(field))
+}
+assert.match(panel, /设备明细/)
 
 const workflowApi = source('../src/api/workflow.ts')
 assert.doesNotMatch(workflowApi, /getWorkflowProcessByBusiness|\/workflow\/process\/by-business/)

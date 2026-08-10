@@ -69,6 +69,13 @@ export interface ChangeReviseRequest {
   items: ChangeItemSubmitRequest[]
 }
 
+export interface ChangeCancelRevisionRequest {
+  orderId: EntityId
+  taskId: EntityId
+  rowVersion: RowVersion
+  reason: string
+}
+
 export interface ChangeApproveRequest {
   orderId: EntityId
   /** 统一工作流任务主键。 */
@@ -144,6 +151,7 @@ export interface ChangeItemVO {
   precheckRequired?: number
   sendOutRequired?: number
   sendOutUnit?: string
+  auditStatus?: string
   approvalStatus?: string
   rejectReason?: string
   verifierRejectOpinion?: string

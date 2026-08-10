@@ -53,7 +53,7 @@ const columns = [
 function organizationOptions(nodes: AllowedOrganizationNodeVO[]): OrganizationOption[] {
   return (nodes || []).map((node) => ({
     value: node.orgId,
-    title: `${node.orgName || node.orgId} · ${node.orgType === 'DEPARTMENT' ? '部门' : '组'}`,
+    title: `${node.orgName || node.orgId}`,
     searchText: [node.orgId, node.orgName, node.orgFullPath].filter(Boolean).join(' ').toLowerCase(),
     children: node.children?.length ? organizationOptions(node.children) : undefined
   }))
@@ -215,7 +215,6 @@ onMounted(async () => {
             :filter-tree-node="filterOrganizationNode"
             :loading="organizationLoading"
             tree-node-filter-prop="searchText"
-            tree-default-expand-all
             show-search
             allow-clear
             placeholder="全部允许部门与组"

@@ -48,6 +48,14 @@ assert.deepEqual(
   resolveDeviceCurrentStatus({ deviceStatus: '封存' }),
   { code: 'sealed', text: '封存', color: 'orange', intermediate: false }
 )
+assert.deepEqual(
+  resolveDeviceCurrentStatus({
+    deviceStatus: 'sealed',
+    verificationStatus: 'change_processing',
+    sourceType: 'change'
+  }),
+  { code: 'change_processing', text: '状态变更中', color: 'orange', intermediate: true }
+)
 
 assert.deepEqual(
   resolveDeviceCurrentStatus({ deviceStatus: 'sealed', verificationStatus: 'deferred' }),

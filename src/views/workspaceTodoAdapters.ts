@@ -10,7 +10,7 @@ import type { RoleCode } from '../types/common.ts'
 import type { WorkflowTask } from '../types/workflow.ts'
 import type { ChangeOrderVO } from '../types/change.ts'
 import type { FirstCheckOrder } from '../types/firstcheck.ts'
-import type { PeriodicTaskVO } from '../types/periodic.ts'
+import type { PeriodicTaskVO, PeriodicTodoPlanEntry } from '../types/periodic.ts'
 import type { ProductSupportOrderVO } from '../types/productSupport.ts'
 import type { SamplingTaskVO } from '../types/sampling.ts'
 
@@ -126,4 +126,9 @@ export async function loadTodoModuleDetail(
   const adapter = getTodoModuleAdapterForTask(task)
   if (!adapter) throw new Error(`不支持的工作流业务类型：${task.businessType}`)
   return adapter.loadDetail(task, signal)
+}
+
+export async function loadPeriodicTodoPlanEntries(): Promise<PeriodicTodoPlanEntry[]> {
+  const { listPeriodicTodoPlans } = await import('../api/periodic.ts')
+  return listPeriodicTodoPlans()
 }

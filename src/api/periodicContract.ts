@@ -42,6 +42,7 @@ const periodicEndpoints = {
   generateTestPlan: '/periodic/plans/generate-test-one',
   generateMonthPlan: '/periodic/plans/generate-month',
   generateBeforeUsePlan: '/periodic/pre-use/plans/generate',
+  todoPlans: '/periodic/todo-plans',
   taskDetail: '/periodic/tasks',
   verifierReceive: '/periodic/verifier-receive',
   externalSendOut: '/periodic/external-send-out',

@@ -42,7 +42,7 @@ export const periodicNodes: WorkflowNode[] = [
 
 export const changeNodes: WorkflowNode[] = [
   { code: 'admin_submit', name: '管理员发起', summaryLabel: '待管理员发起', module: 'change', roles: ['MEASURE_ADMIN'], api: 'POST /api/change/submit' },
-  { code: 'manager_revise', name: '管理员修订', summaryLabel: '退回管理员修订', module: 'change', roles: ['MEASURE_ADMIN'], api: 'RESUBMIT POST /api/change/revise' },
+  { code: 'manager_revise', name: '管理员修订', summaryLabel: '退回管理员修订', module: 'change', roles: ['MEASURE_ADMIN'], api: 'RESUBMIT POST /api/change/revise; TERMINATE POST /api/change/cancel-revision' },
   { code: 'dept_leader_approve', name: '部门审批', summaryLabel: '待分厂主管领导审批', module: 'change', roles: ['DEPT_LEADER'], api: 'POST /api/change/approve' },
   { code: 'measure_leader_review', name: '计量领导审批', summaryLabel: '待计量领导审批', module: 'change', roles: ['MEASURE_LEADER'], api: 'POST /api/change/approve' },
   { code: 'responsible_engineer_review', name: '责任工程师审核', summaryLabel: '待责任工程师审批', module: 'change', roles: ['RESPONSIBLE_ENGINEER'], api: 'POST /api/change/approve' },

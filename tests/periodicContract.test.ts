@@ -11,6 +11,7 @@ import {
 
 assert.equal(periodicEndpoint('taskDetail', '2073579908903317505'), '/periodic/tasks/2073579908903317505')
 assert.equal(periodicEndpoint('generateTestPlan'), '/periodic/plans/generate-test-one')
+assert.equal(periodicEndpoint('todoPlans'), '/periodic/todo-plans')
 assert.equal(periodicEndpoint('verificationRecord'), '/periodic/self-verify')
 assert.equal(periodicEndpoint('supplierFillInfo'), '/periodic/external-common-fill')
 assert.equal(periodicEndpoint('verifierFillInfo'), '/periodic/external-uncommon-fill')
@@ -86,6 +87,7 @@ assert.doesNotMatch(periodicWorkspaceSource, /normalSubmit|submitNormalSelection
 
 const periodicApiSource = readFileSync(new URL('../src/api/periodic.ts', import.meta.url), 'utf8')
 assert.doesNotMatch(periodicApiSource, /my-tasks|my-history|listPeriodicMy/)
+assert.match(periodicApiSource, /listPeriodicTodoPlans\(\)/)
 assert.match(periodicApiSource, /generatePeriodicTestPlan\(scenario: PeriodicTestPlanScenario\)/)
 assert.match(periodicApiSource, /params:\s*\{ scenario \}/)
 assert.match(periodicApiSource, /function submitPeriodicResponsibleScrapConfirm[\s\S]*periodicEndpoint\('responsibleScrapConfirm'\)/)
@@ -99,6 +101,7 @@ const periodicTypeSource = readFileSync(new URL('../src/types/periodic.ts', impo
 assert.match(periodicTypeSource, /'self'/)
 assert.match(periodicTypeSource, /'external_common'/)
 assert.match(periodicTypeSource, /'external_non_common'/)
+assert.match(periodicTypeSource, /interface PeriodicTodoPlanEntry/)
 assert.match(periodicTypeSource, /interface PeriodicResponsibleScrapConfirmRequest/)
 assert.match(periodicTypeSource, /interface PeriodicResponsibleScrapTrackingDecisionRequest/)
 assert.doesNotMatch(periodicTypeSource, /PeriodicNormalSubmitRequest/)

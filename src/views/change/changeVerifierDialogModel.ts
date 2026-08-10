@@ -44,6 +44,7 @@ const externalVerificationMethodCodes = new Set([
 const externalReturnReceivedPhysicalStatuses = new Set(['send_out_return_received', 'sendout_return_received'])
 const externalReadyForSendOutPhysicalStatuses = new Set(['wait_external_send_out'])
 const verificationDecisionChangeTypes = new Set(['category', 'cycle'])
+const verificationRequiredAuditStatus = 'verification_required'
 
 const fullForm = {
   showApplicationMeta: true,
@@ -214,6 +215,14 @@ export function isExternalDecisionReadyForSendOut(order?: ChangeOrderVO | null) 
     )
 }
 
+/** 检定信息只能在“需要检定”的路线决策已经由后端持久化后录入。 */
+export function hasPersistedVerificationDecision(order?: ChangeOrderVO | null) {
+  if (!verificationDecisionChangeTypes.has(normalizeText(order?.changeType))) return false
+  const items = order?.items || []
+  return items.length > 0
+    && items.every((candidate) => normalizeText(candidate.auditStatus) === verificationRequiredAuditStatus)
+}
+
 export function shouldShowChangeVerifierInspectionFields(
   config: ChangeVerifierDialogConfig,
   form: ChangeVerifierFormState,
@@ -222,7 +231,9 @@ export function shouldShowChangeVerifierInspectionFields(
   const verificationRequired = config.showVerificationDecision
     ? form.verificationRequired === 1
     : config.showVerification
-  return verificationRequired && !isExternalDecisionBeforeReturn(order)
+  if (!verificationRequired) return false
+  if (config.showVerificationDecision && !hasPersistedVerificationDecision(order)) return false
+  return !isExternalDecisionBeforeReturn(order)
 }
 
 export function validateChangeVerifierForm(
@@ -276,6 +287,9 @@ export function buildChangeVerifierHandleRequest(
     opinion: form.opinion.trim() || undefined
   }
   if (verificationRequired === 0) {
+    return baseRequest
+  }
+  if (config.showVerificationDecision && !hasPersistedVerificationDecision(order)) {
     return baseRequest
   }
   if (isExternalDecisionBeforeReturn(order)) {

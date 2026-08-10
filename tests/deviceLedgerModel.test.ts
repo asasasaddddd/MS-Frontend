@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import {
+  deviceLedgerDataColumns,
   deviceCategoryText,
   deviceStatusText,
   formatCycle,
@@ -29,6 +30,25 @@ const device: DeviceVO = {
   validUntil: '2026-06-30',
   isMandatory: 0
 }
+
+assert.deepEqual(
+  deviceLedgerDataColumns.map((column) => column.key),
+  [
+    'deviceCode',
+    'deviceName',
+    'categoryText',
+    'modelSpec',
+    'factoryCode',
+    'statusText',
+    'cycleText',
+    'validUntil',
+    'lastVerificationDate',
+    'deptName',
+    'manufacturer',
+    'methodText'
+  ],
+  '设备台账数据列必须由共享模型统一维护'
+)
 
 assert.equal(deviceCategoryText('A'), 'A类')
 assert.equal(deviceCategoryText('B类'), 'B类')

@@ -197,7 +197,11 @@ const pickerTasks: PeriodicTaskVO[] = [
   }
 ]
 
-assert.deepEqual(buildPeriodicPlanPickerItems(pickerTasks), [
+assert.deepEqual(buildPeriodicPlanPickerItems(pickerTasks, [
+  { planId: 'P1', deviceCount: 10 },
+  { planId: 'P2', deviceCount: 10 },
+  { planId: 'P3', deviceCount: 10 }
+]), [
   {
     planId: 'P1',
     planNo: 'ZJ-202608-',
@@ -218,10 +222,35 @@ assert.deepEqual(buildPeriodicPlanPickerItems(pickerTasks), [
   }
 ])
 
+assert.deepEqual(buildPeriodicPlanPickerItems(pickerTasks, []), [])
+assert.deepEqual(buildPeriodicPlanPickerItems([], [
+  {
+    planId: 'P100',
+    planNo: 'ZJ-202611-0001',
+    currentNodeSummary: '剩余 3 条',
+    deviceCount: 10,
+    completedCount: 7,
+    pendingCount: 3,
+    status: 'processing',
+    statusName: '进行中'
+  }
+]), [
+  {
+    planId: 'P100',
+    planNo: 'ZJ-202611-0001',
+    currentNodeSummary: '剩余 3 条',
+    deviceCount: 10
+  }
+])
+
 assert.deepEqual(
-  getPeriodicTableColumns('admin').map((column) => column.title),
+  getPeriodicTableColumns('admin').filter((column) => column.key !== 'action').map((column) => column.title),
   ['当前状态', '计量编号', '设备名称', '规格型号', '出厂编号', '使用部门', '类别', '检定周期', '有效日期', '计量检定员', '检定方式']
 )
+
+const adminActionColumn = getPeriodicTableColumns('admin').find((column) => column.key === 'action')
+assert.equal(adminActionColumn?.fixed, 'right')
+assert.equal(adminActionColumn?.width, 92)
 
 assert.deepEqual(
   getPeriodicTableColumns('verifier').map((column) => column.title),

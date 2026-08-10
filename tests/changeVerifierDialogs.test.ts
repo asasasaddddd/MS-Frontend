@@ -294,6 +294,7 @@ const externalCycleWaitingReturnOrder: ChangeOrderVO = {
   items: [{
     id: 'ITEM-CYCLE-EXTERNAL-WAITING-RETURN',
     oldVerificationMethod: 'send_out',
+    auditStatus: 'verification_required',
     physicalStatus: 'wait_send_out_return'
   }]
 }
@@ -342,6 +343,7 @@ const externalReturnedRequest = buildChangeVerifierHandleRequest(
     items: [{
       id: 'ITEM-CYCLE-EXTERNAL-RETURNED',
       oldVerificationMethod: 'send_out',
+      auditStatus: 'verification_required',
       physicalStatus: 'send_out_return_received'
     }]
   },
@@ -359,6 +361,68 @@ assert.equal(externalReturnedRequest.verificationResult, 'qualified')
 assert.equal(externalReturnedRequest.verificationDate, '2026-07-28')
 assert.equal(externalReturnedRequest.certificateAttachmentGroupId, 'CERT-AFTER-RETURN')
 assert.match(dialogSource, /verificationFieldsVisible/)
+
+const selfDecisionOrder: ChangeOrderVO = {
+  id: 'CHANGE-CYCLE-SELF-DECISION',
+  changeType: 'cycle',
+  taskId: 'TASK-CYCLE-SELF-DECISION',
+  rowVersion: 9,
+  items: [{
+    id: 'ITEM-CYCLE-SELF-DECISION',
+    oldVerificationMethod: 'self',
+    physicalStatus: 'verifier_received'
+  }]
+}
+const selfDecisionConfig = resolveChangeVerifierDialog(selfDecisionOrder)
+const selfDecisionForm: ChangeVerifierFormState = {
+  reason: '确认需要检定',
+  verificationRequired: 1,
+  verificationDate: '2026-08-10',
+  validUntil: '2027-08-09',
+  result: 'qualified',
+  certificateAttachmentGroupId: 'CERT-SHOULD-NOT-SEND',
+  opinion: ''
+}
+assert.equal(
+  shouldShowChangeVerifierInspectionFields(selfDecisionConfig, selfDecisionForm, selfDecisionOrder),
+  false,
+  '自检首次选择需要检定时不得立即显示检定信息'
+)
+assert.equal(
+  validateChangeVerifierForm(selfDecisionConfig, selfDecisionForm, selfDecisionOrder),
+  '',
+  '自检首次决策只校验是否需要检定'
+)
+const selfDecisionRequest = buildChangeVerifierHandleRequest(selfDecisionOrder, selfDecisionForm)
+assert.equal(selfDecisionRequest.verificationRequired, 1)
+assert.equal(Object.prototype.hasOwnProperty.call(selfDecisionRequest, 'verificationResult'), false)
+assert.equal(Object.prototype.hasOwnProperty.call(selfDecisionRequest, 'verificationDate'), false)
+assert.equal(Object.prototype.hasOwnProperty.call(selfDecisionRequest, 'certificateAttachmentGroupId'), false)
+
+const selfInspectionOrder: ChangeOrderVO = {
+  ...selfDecisionOrder,
+  id: 'CHANGE-CYCLE-SELF-INSPECTION',
+  taskId: 'TASK-CYCLE-SELF-INSPECTION',
+  items: [{
+    id: 'ITEM-CYCLE-SELF-INSPECTION',
+    oldVerificationMethod: 'self',
+    auditStatus: 'verification_required',
+    physicalStatus: 'verifier_received'
+  }]
+}
+assert.equal(
+  shouldShowChangeVerifierInspectionFields(
+    resolveChangeVerifierDialog(selfInspectionOrder),
+    selfDecisionForm,
+    selfInspectionOrder
+  ),
+  true,
+  '自检路线决策已持久化后才显示检定信息'
+)
+const selfInspectionRequest = buildChangeVerifierHandleRequest(selfInspectionOrder, selfDecisionForm)
+assert.equal(selfInspectionRequest.verificationResult, 'qualified')
+assert.equal(selfInspectionRequest.verificationDate, '2026-08-10')
+assert.equal(selfInspectionRequest.certificateAttachmentGroupId, 'CERT-SHOULD-NOT-SEND')
 
 assert.match(modelSource, /scrapType.*normal|normal.*scrapType/s)
 assert.match(dialogSource, /listUsersByDeptAndRole\([^)]*'RESPONSIBLE_ENGINEER'/s)

@@ -23,6 +23,7 @@ import type {
   PeriodicSupplierFillInfoRequest,
   PeriodicTestPlanScenario,
   PeriodicTaskVO,
+  PeriodicTodoPlanEntry,
   PeriodicVerificationRecordRequest,
   PeriodicVerifierFillInfoRequest
 } from '@/types/periodic'
@@ -56,6 +57,13 @@ export function generateBeforeUsePlans(data: GenerateBeforeUsePlanRequest) {
     url: periodicEndpoint('generateBeforeUsePlan'),
     method: 'POST',
     data
+  })
+}
+
+export function listPeriodicTodoPlans() {
+  return request<PeriodicTodoPlanEntry[]>({
+    url: periodicEndpoint('todoPlans'),
+    method: 'GET'
   })
 }
 

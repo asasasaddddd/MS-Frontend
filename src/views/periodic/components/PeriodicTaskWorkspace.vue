@@ -90,7 +90,12 @@ const submitting = ref(false)
 const generatingTestPlan = ref(false)
 const testPlanScenario = ref<PeriodicTestPlanScenario>('self')
 const exceptionChangeSubmitting = ref(false)
-const activeTab = ref<ActiveTab>(route.query.tab === 'history' ? 'history' : 'todo')
+function normalizePeriodicActiveTab(tab: unknown): ActiveTab {
+  const value = Array.isArray(tab) ? tab[0] : tab
+  return value === 'history' ? 'history' : 'todo'
+}
+
+const activeTab = ref<ActiveTab>(normalizePeriodicActiveTab(route.query.tab))
 const statusFilter = ref<string>('all')
 const keyword = ref('')
 const currentTasks = ref<PeriodicTaskVO[]>([])
@@ -696,6 +701,13 @@ async function submitExceptionChange(payload: PeriodicExceptionChangeSubmitReque
 watch(workflowIdentity, () => {
   void loadData()
 }, { immediate: true })
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    activeTab.value = normalizePeriodicActiveTab(tab)
+  }
+)
 
 watch(routePlanId, () => {
   selectedRowKeys.value = []

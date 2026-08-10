@@ -159,7 +159,11 @@ function toView(definition: StatusDefinition): DeviceCurrentStatusView {
  */
 export function resolveDeviceCurrentStatus(device: DeviceCurrentStatusInput): DeviceCurrentStatusView {
   const baseStatus = findStatus(device.deviceStatus, deviceStatuses)
+  const verificationStatus = findStatus(device.verificationStatus, verificationStatuses)
   const rawStatus = String(device.deviceStatus || '').trim()
+  if (baseStatus?.code === 'sealed' && verificationStatus?.code === 'change_processing') {
+    return toView(verificationStatus)
+  }
   if (baseStatus && !verificationRefinableDeviceStatuses.has(baseStatus.code)) {
     return toView(baseStatus)
   }
@@ -172,7 +176,6 @@ export function resolveDeviceCurrentStatus(device: DeviceCurrentStatusInput): De
     }
   }
 
-  const verificationStatus = findStatus(device.verificationStatus, verificationStatuses)
   if (verificationStatus) return toView(verificationStatus)
 
   if (baseStatus) return toView(baseStatus)

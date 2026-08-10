@@ -2,7 +2,13 @@
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute } from 'vue-router'
-import { approveChange, getChangeOrderDetail, rejectChange, reviseChange } from '@/api/change'
+import {
+  approveChange,
+  cancelRevisionChange,
+  getChangeOrderDetail,
+  rejectChange,
+  reviseChange
+} from '@/api/change'
 import { listWorkflowTasks } from '@/api/workflow'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
@@ -202,6 +208,32 @@ async function handleRevise(payload: ChangeSubmitRequest & { opinion?: string })
   }
 }
 
+async function handleCancelRevision() {
+  const order = revisionOrder.value
+  if (!order) return
+  submitting.value = true
+  try {
+    if (order.taskId === undefined || order.rowVersion === undefined) {
+      throw new Error('状态变更修订任务身份不完整，请刷新后重试')
+    }
+    await cancelRevisionChange({
+      orderId: order.id,
+      taskId: order.taskId,
+      rowVersion: order.rowVersion,
+      reason: '管理员确认不再修订并终止申请'
+    })
+    message.success('状态变更申请已终止')
+    reviseOpen.value = false
+    revisionOrder.value = null
+    revisionDevices.value = []
+    await loadRows()
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '状态变更申请终止失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
 async function loadRows() {
   loading.value = true
   const summaryPromise = refreshSummary().catch(() => undefined)
@@ -352,6 +384,7 @@ onMounted(loadRows)
       :order="revisionOrder"
       :submitting="submitting"
       @submit="handleRevise"
+      @terminate="handleCancelRevision"
     />
   </section>
 </template>

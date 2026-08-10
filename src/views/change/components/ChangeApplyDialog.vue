@@ -33,6 +33,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:open': [value: boolean]
   submit: [payload: ChangeSubmitRequest & { opinion?: string }]
+  'terminate': []
 }>()
 
 const session = useSessionStore()
@@ -148,6 +149,10 @@ function revisionItemForDevice(device: DeviceVO) {
 
 function close() {
   emit('update:open', false)
+}
+
+function terminate() {
+  emit('terminate')
 }
 
 function required(value: unknown, text: string) {
@@ -312,6 +317,16 @@ function resolvePrimaryReason() {
         </div>
         <div class="header-actions">
           <a-button size="large" @click="close">取消</a-button>
+          <a-popconfirm
+            v-if="order"
+            title="确认终止当前申请？"
+            description="终止后流程立即结束，设备将释放占用，且无法恢复。"
+            ok-text="确认终止"
+            cancel-text="继续修订"
+            @confirm="terminate"
+          >
+            <a-button size="large" danger :disabled="submitting">终止申请</a-button>
+          </a-popconfirm>
           <a-button size="large" type="primary" :loading="submitting" :disabled="!canSubmit" @click="submit">提交</a-button>
         </div>
       </header>

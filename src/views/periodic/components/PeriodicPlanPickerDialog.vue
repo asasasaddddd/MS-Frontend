@@ -43,9 +43,9 @@ function selectPlan(planId: string) {
     <a-alert
       v-if="incomplete"
       class="picker-warning"
-      type="warning"
+      type="error"
       show-icon
-      message="部分周检详情加载失败，请刷新后重试"
+      message="周检单据入口加载失败，请检查后端接口"
     />
 
     <a-table
@@ -78,7 +78,11 @@ function selectPlan(planId: string) {
       </template>
     </a-table>
 
-    <a-empty v-else class="picker-empty" description="当前角色暂时无周检待办单据" />
+    <a-empty
+      v-else-if="!incomplete"
+      class="picker-empty"
+      description="当前角色暂时无周检待办单据"
+    />
   </a-modal>
 </template>
 

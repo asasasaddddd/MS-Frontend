@@ -13,6 +13,9 @@ const typeSource = source('../src/types/nodePermission.ts')
 assert.match(viewSource, /getAllowedOrganizationTree/)
 assert.match(viewSource, /RoleScopeMatrixDialog/)
 assert.match(viewSource, /listAllowedOrganizationUsers/)
+assert.doesNotMatch(viewSource, /tree-default-expand-all/)
+assert.match(viewSource, /title:\s*node\.orgName\s*\|\|\s*node\.orgId/)
+assert.doesNotMatch(viewSource, /title:\s*`[^`]*node\.orgType[^`]*`/)
 
 for (const forbiddenImport of [
   'listNodeOperations',
@@ -30,6 +33,7 @@ for (const forbiddenImport of [
 assert.match(dialogSource, />\s*权限范围\s*</)
 assert.match(dialogSource, />\s*角色配置\s*</)
 assert.match(dialogSource, /a-tree/)
+assert.doesNotMatch(dialogSource, /default-expand-all/)
 assert.match(dialogSource, /a-checkbox-group/)
 assert.match(dialogSource, /roleCountForScope/)
 assert.match(dialogSource, /diffRoleScopeMatrices/)

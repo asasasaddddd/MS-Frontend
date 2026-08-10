@@ -37,6 +37,7 @@ import DeviceLedgerEditForm from '@/views/device/DeviceLedgerEditForm.vue'
 import {
   deviceCategoryColor,
   deviceCategoryText,
+  deviceLedgerDataColumns,
   currentDeviceStatusColor,
   currentDeviceStatusText,
   displayValue,
@@ -120,18 +121,7 @@ const searchFields: Array<{ label: string; value: SearchField }> = [
 ]
 
 const columns = [
-  { title: '计量编号', key: 'deviceCode', width: 190, fixed: 'left' },
-  { title: '设备名称', key: 'deviceName', width: 170 },
-  { title: '管理类别', key: 'categoryText', width: 100 },
-  { title: '规格型号', key: 'modelSpec', width: 160 },
-  { title: '出厂编号', key: 'factoryCode', width: 150 },
-  { title: '设备状态', key: 'statusText', width: 110 },
-  { title: '检定周期', key: 'cycleText', width: 110 },
-  { title: '有效期', key: 'validUntil', width: 125 },
-  { title: '检定日期', key: 'lastVerificationDate', width: 125 },
-  { title: '使用部门', key: 'deptName', width: 160 },
-  { title: '生产厂家', key: 'manufacturer', width: 160 },
-  { title: '检定方式', key: 'methodText', width: 110 },
+  ...deviceLedgerDataColumns,
   { title: '查看详情', key: 'detail', width: 110, fixed: 'right' },
   { title: '履历', key: 'history', width: 90, fixed: 'right' }
 ]
