@@ -1,6 +1,7 @@
 import axios, { type AxiosRequestConfig } from 'axios'
 import { useSessionStore } from '@/stores/session'
 import type { ApiResponse } from '@/types/common'
+import { getClientRuntime } from '@/platform/pdaClient'
 
 export class ApiError extends Error {
   code: number
@@ -41,6 +42,7 @@ function clearSessionOnUnauthorized(code?: number, status?: number) {
 export function buildAuthHeaders(config: AxiosRequestConfig): Record<string, string> {
   const session = useSessionStore()
   const user = session.user
+  const client = getClientRuntime()
   const isFormData = typeof FormData !== 'undefined' && config.data instanceof FormData
   const headers: Record<string, string> = {}
 
@@ -58,6 +60,12 @@ export function buildAuthHeaders(config: AxiosRequestConfig): Record<string, str
     headers['X-User-Role'] = user.roleCode
     headers['X-User-Dept-Id'] = user.deptId || ''
     headers['X-User-Dept-Name'] = encodeURIComponent(user.deptName || '')
+  }
+
+  headers['X-Client-Type'] = client.clientType
+  headers['X-Terminal-Code'] = client.terminalCode
+  if (client.appVersion) {
+    headers['X-Client-Version'] = client.appVersion
   }
 
   return headers
