@@ -449,7 +449,7 @@ async function loadData() {
     } else {
       const details = await loadWorkflowDetails(
         [...workflowTodoTasks.value, ...workflowParticipatedTasks.value],
-        (task, signal) => getPeriodicTask(task.businessId, task.taskId, signal)
+        (task, signal) => getPeriodicTask(task.businessItemId, task.taskId, signal)
       )
       if (!details || loadId !== dataLoadId) return
       const normalizedDetails = details.map((task) => ({

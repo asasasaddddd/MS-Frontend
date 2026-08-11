@@ -34,10 +34,12 @@ export interface PeriodicPlanTodoGroup {
 }
 
 export interface PeriodicPlanPickerItem {
-  planId: string
-  planNo: string
+  containerId: string
+  containerNo: string
+  totalItemCount: number
+  myPendingItemCount: number
+  myPendingActionCount: number
   currentNodeSummary: string
-  deviceCount: number
 }
 
 export type PeriodicDisplayRowWithMeta = PeriodicDisplayRow & {
@@ -451,28 +453,23 @@ export function buildPeriodicPlanSubtitle(tasks: PeriodicTaskVO[]) {
 }
 
 export function buildPeriodicPlanPickerItems(
-  tasks: PeriodicTaskVO[],
+  _tasks: PeriodicTaskVO[],
   todoPlans: readonly PeriodicTodoPlanEntry[]
 ): PeriodicPlanPickerItem[] {
-  const authoritativeTasks = tasks.filter(
-    (task) => task.planId !== undefined && task.planId !== null && task.planId !== ''
-  )
-  const taskGroups = buildPeriodicPlanTodoGroups(authoritativeTasks)
-  const taskGroupByPlanId = new Map(taskGroups.map((group) => [group.planId, group]))
-
   return todoPlans
-    .filter((plan) => plan.planId !== undefined && plan.planId !== null && plan.planId !== '')
+    .filter((plan) => plan.containerId && Number(plan.myPendingItemCount) > 0)
     .map((plan) => {
-      const planId = String(plan.planId)
-      const taskGroup = taskGroupByPlanId.get(planId)
-      const planTasks = taskGroup?.tasks || []
+      const containerId = String(plan.containerId)
+      const nodeNames = plan.currentNodeSummary
+        .map((node) => node.nodeName || node.nodeCode)
+        .filter(Boolean)
       return {
-        planId,
-        planNo: plan.planNo?.trim()
-          || (planTasks.length > 0 ? derivePeriodicPlanLabel(planId, planTasks) : planId),
-        currentNodeSummary: plan.currentNodeSummary?.trim()
-          || (planTasks.length > 0 ? periodicPlanNodeSummary(planTasks) : '-'),
-        deviceCount: Number(plan.deviceCount ?? taskGroup?.deviceCount ?? 0)
+        containerId,
+        containerNo: plan.containerNo?.trim() || containerId,
+        totalItemCount: Number(plan.totalItemCount),
+        myPendingItemCount: Number(plan.myPendingItemCount),
+        myPendingActionCount: Number(plan.myPendingActionCount),
+        currentNodeSummary: nodeNames.length > 0 ? nodeNames.join(' / ') : '-'
       }
     })
 }

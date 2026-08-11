@@ -6,6 +6,7 @@ import type {
   WorkflowTask,
   WorkflowTaskPage,
   WorkflowTaskQuery,
+  WorkflowTodoContainer,
   WorkflowTodoSummaryQuery,
   WorkflowTimelineEntry
 } from '@/types/workflow'
@@ -41,6 +42,23 @@ export async function listWorkflowHistory(businessType?: BusinessType, signal?: 
 export function getWorkflowTodoSummary(query: WorkflowTodoSummaryQuery, signal?: AbortSignal) {
   return request<FlowSummary>({
     url: '/workflow/tasks/summary',
+    method: 'GET',
+    signal,
+    params: {
+      businessType: query.businessType,
+      scopeType: query.scopeType,
+      scopeId: query.scopeId
+    }
+  })
+}
+
+/** 读取当前工号和激活角色的权威待办容器。 */
+export function listWorkflowTodoContainers(
+  query: WorkflowTodoSummaryQuery = {},
+  signal?: AbortSignal
+) {
+  return request<WorkflowTodoContainer[]>({
+    url: '/workflow/todo-containers',
     method: 'GET',
     signal,
     params: {

@@ -21,9 +21,15 @@ const emit = defineEmits<{
 }>()
 
 const form = reactive({
-  confirmResult: 'APPROVE' as PeriodicConfirmResult,
-  opinion: '周检报告符合要求，同意确认'
+  confirmResult: 'qualified' as PeriodicConfirmResult,
+  opinion: '周检报告确认合格'
 })
+
+const decisionOpinions: Record<PeriodicConfirmResult, string> = {
+  qualified: '周检报告确认合格',
+  scrap: '周检报告判定报废',
+  repair: '周检报告判定维修'
+}
 
 function close() {
   emit('update:open', false)
@@ -33,6 +39,10 @@ function submit() {
   if (!props.task) return
   if (props.task.workflowTaskId === undefined || props.task.rowVersion === undefined) {
     message.warning('工作流任务上下文已失效，请刷新待办')
+    return
+  }
+  if (form.confirmResult === 'scrap' && !props.task?.responsibleEngineerId) {
+    message.warning('当前设备未配置责任工程师，无法提交报废判定')
     return
   }
   emit('submit', {
@@ -48,8 +58,15 @@ watch(
   () => props.open,
   (open) => {
     if (!open) return
-    form.confirmResult = 'APPROVE'
-    form.opinion = '周检报告符合要求，同意确认'
+    form.confirmResult = 'qualified'
+    form.opinion = decisionOpinions.qualified
+  }
+)
+
+watch(
+  () => form.confirmResult,
+  (decision) => {
+    form.opinion = decisionOpinions[decision]
   }
 )
 </script>
@@ -115,8 +132,9 @@ watch(
             <a-select
               v-model:value="form.confirmResult"
               :options="[
-                { label: '通过', value: 'APPROVE' },
-                { label: '驳回', value: 'REJECT' }
+                { label: '合格', value: 'qualified' },
+                { label: '报废', value: 'scrap' },
+                { label: '维修', value: 'repair' }
               ]"
             />
           </label>

@@ -32,6 +32,7 @@ function workflowRow(overrides: Record<string, unknown> = {}) {
     processInstanceId: '2090000000000000000',
     businessType: 'PERIODIC',
     businessId: '2089000000000000001',
+    businessItemId: '2089000000000000001',
     nodeCode: 'self_verify',
     nodeName: '自检检定',
     operationCode: 'SUBMIT',
@@ -201,8 +202,16 @@ for (const legacyApi of [
 }
 assert.doesNotMatch(allSource, /setInterval\s*\([^)]*(?:workflow|task|todo)|setTimeout\s*\([^)]*(?:workflow|task|todo)/i)
 
+const workspaceTodoSource = readFileSync(
+  new URL('../src/views/WorkspaceTodoView.vue', import.meta.url),
+  'utf8'
+)
+assert.match(workspaceTodoSource, /useWorkflowTask/)
+assert.match(workspaceTodoSource, /loadTodoContainers/)
+assert.match(workspaceTodoSource, /myPendingItemCount/)
+assert.doesNotMatch(workspaceTodoSource, /Math\.max\(detailDeviceCount/)
+
 for (const path of [
-  '../src/views/WorkspaceTodoView.vue',
   '../src/views/periodic/components/PeriodicTaskWorkspace.vue',
   '../src/views/sampling/components/SamplingTaskWorkspace.vue',
   '../src/views/product-support/ProductSupportVerifierView.vue'
@@ -234,6 +243,10 @@ const workspaceSource = readFileSync(new URL('../src/views/WorkspaceTodoView.vue
 assert.doesNotMatch(workspaceSource, /页面建设中|后续按原型继续补全|暂未实现/)
 
 const workflowTypeSource = readFileSync(new URL('../src/types/workflow.ts', import.meta.url), 'utf8')
+const workflowTaskTypeBlock = workflowTypeSource.match(
+  /export interface WorkflowTask \{[\s\S]*?\n}\s*/
+)?.[0] || ''
+assert.match(workflowTaskTypeBlock, /\bbusinessItemId:\s*WorkflowEntityId/)
 for (const field of [
   'id', 'taskId', 'businessItemId', 'eventKind', 'eventKindName', 'nodeCode', 'nodeName',
   'actionCode', 'actionName', 'nextNodeCode', 'nextNodeName', 'operatorId', 'operatorName',

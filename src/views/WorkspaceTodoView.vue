@@ -3,44 +3,38 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { SelectProps } from 'ant-design-vue'
-import { listUnifiedScanInbox } from '@/api/scan'
 import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
 import PeriodicPlanPickerDialog from '@/views/periodic/components/PeriodicPlanPickerDialog.vue'
 import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
-import { hasWorkflowAction, useWorkflowTask, type WorkflowBoundDetail } from '@/composables/useWorkflowTask'
+import { useWorkflowTask, type WorkflowBoundDetail } from '@/composables/useWorkflowTask'
+import {
+  useWorkspaceTodoLoad,
+  type WorkspaceTodoLoadSnapshot
+} from '@/composables/useWorkspaceTodoLoad'
 import { roleNameMap, type RoleCode } from '@/types/common'
-import type { WorkflowTask } from '@/types/workflow'
+import type { WorkflowTask, WorkflowTodoContainer } from '@/types/workflow'
 import type { PeriodicTaskVO, PeriodicTodoPlanEntry } from '@/types/periodic'
 import type { SamplingTaskVO } from '@/types/sampling'
 import type { ProductSupportOrderVO } from '@/types/productSupport'
 import type { FirstCheckOrder } from '@/types/firstcheck'
 import type { ChangeOrderVO } from '@/types/change'
-import type { UnifiedScanInboxItem } from '@/types/scan'
 import { useSessionStore } from '@/stores/session'
-import {
-  isPendingWorkflowTask,
-  matchesBusinessType
-} from '@/workflows/metrologyWorkflow'
+import { useTodoNotificationStore } from '@/stores/todoNotification'
+import { matchesBusinessType } from '@/workflows/metrologyWorkflow'
 import {
   buildPeriodicPlanSubtitle,
   buildPeriodicPlanPickerItems,
   buildPeriodicPlanTodoGroups,
-  derivePeriodicPlanLabel,
-  mergePeriodicTaskPhysicalActions
+  derivePeriodicPlanLabel
 } from '@/views/periodic/periodicDisplayModel'
 import { changeTypeName } from '@/views/change/changeDisplayModel'
 import {
-  countTodoItemsWithPhysicalActions,
-  countFirstCheckTodoItems,
-  countUniqueBusinessTasks,
   dedupeTodoEntriesByKey,
   filterTasksWithLoadedDetails,
   filterVisibleTodoEntries,
-  getPendingFirstCheckTakeBackRows,
   getWorkspaceLaunchActions,
   shouldShowWorkspaceTaskSections,
   sumWorkspaceTodoCounts,
-  uniqueTasksByBusinessId,
   visibleTodoTypeValues,
   workspaceTodoBusinessType,
   workspaceTodoTypeFromQuery,
@@ -48,7 +42,7 @@ import {
 } from '@/views/workspaceTodoModel'
 import {
   getTodoModuleAdapter,
-  loadPeriodicTodoPlanEntries,
+  loadTodoContainers,
   loadTodoModuleDetail
 } from '@/views/workspaceTodoAdapters'
 
@@ -72,21 +66,21 @@ interface TodoDefinition {
 const route = useRoute()
 const router = useRouter()
 const session = useSessionStore()
+const todoNotifications = useTodoNotificationStore()
 const activeBucket = ref<'todo' | 'history'>('todo')
 const selectedType = ref<TodoType>(workspaceTodoTypeFromQuery(route.query.type))
 const keyword = ref('')
 const periodicPlanPickerOpen = ref(false)
 const periodicTasks = ref<PeriodicTaskVO[]>([])
 const periodicHistoryTasks = ref<PeriodicTaskVO[]>([])
-const periodicTodoPlans = ref<PeriodicTodoPlanEntry[]>([])
-const periodicTodoPlanLoadFailed = ref(false)
+const todoContainers = ref<WorkflowTodoContainer[]>([])
+const todoContainerLoadFailed = ref(false)
 const samplingTasks = ref<SamplingTaskVO[]>([])
 const samplingHistoryTasks = ref<SamplingTaskVO[]>([])
 const productSupportTasks = ref<ProductSupportOrderVO[]>([])
 const productSupportHistoryTasks = ref<ProductSupportOrderVO[]>([])
 const firstCheckOrders = ref<Record<string, FirstCheckOrder>>({})
 const changeOrders = ref<Record<string, ChangeOrderVO>>({})
-const scanInboxRows = ref<UnifiedScanInboxItem[]>([])
 
 const roleCode = computed(() => session.user?.roleCode as RoleCode | undefined)
 const showWorkspaceTaskSections = computed(() => shouldShowWorkspaceTaskSections(roleCode.value))
@@ -121,6 +115,9 @@ const roleLabel = computed(() => {
   return roleNameMap[role] || session.user?.roleName || role || '-'
 })
 const launchActions = computed(() => getWorkspaceLaunchActions(roleCode.value))
+const periodicTodoPlans = computed<PeriodicTodoPlanEntry[]>(() =>
+  todoContainers.value.filter((container) => matchesBusinessType(container.businessType, 'periodic'))
+)
 const periodicPlanPickerItems = computed(() => buildPeriodicPlanPickerItems(
   periodicTasks.value,
   periodicTodoPlans.value
@@ -135,35 +132,38 @@ const filterOptions: SelectProps['options'] = [
   { label: '产品配套', value: 'productSupport' }
 ]
 
+function todoContainersFor(type: Exclude<TodoType, 'all'>) {
+  return todoContainers.value.filter((container) =>
+    Number(container.myPendingItemCount) > 0
+      && matchesBusinessType(container.businessType, type)
+  )
+}
+
+function sumMyPendingItems(containers: readonly WorkflowTodoContainer[]) {
+  return containers.reduce((sum, container) => sum + Number(container.myPendingItemCount), 0)
+}
+
 const firstCheckTodoEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
   if (!currentRole) return []
   const routeTarget = getTodoModuleAdapter('firstcheck').todoRoute(currentRole)!
 
-  const tasks = uniqueTasksByBusinessId(workflowTasks.value
-    .filter((task) => isPendingWorkflowTask(task))
-    .filter((task) => matchesBusinessType(task.businessType, 'firstcheck')))
-  const taskCount = countUniqueBusinessTasks(tasks)
-  const firstCheckTakeBackRows = getPendingFirstCheckTakeBackRows(scanInboxRows.value)
-  const takeBackCount = firstCheckTakeBackRows.length
-  const totalFirstCheckTodoCount = countFirstCheckTodoItems(taskCount, firstCheckTakeBackRows)
-  const waitingReceiveCount = tasks.filter(
-    (task) => !hasWorkflowAction(task, task.operationCode)
+  const containers = todoContainersFor('firstcheck')
+  const taskCount = containers.length
+  const totalFirstCheckTodoCount = sumMyPendingItems(containers)
+  const waitingReceiveCount = containers.filter((container) =>
+    container.currentNodeSummary.some((node) => /receive/i.test(node.nodeCode))
   ).length
   const workflowDetailTitle = taskCount === 0
     ? '当前共 0 张首检单待处理'
     : waitingReceiveCount > 0
       ? `当前共 ${taskCount} 张首检单待处理，其中 ${waitingReceiveCount} 张待接收`
       : `当前共 ${taskCount} 张首检单待处理`
-  const detailTitle = takeBackCount > 0
-    ? `${workflowDetailTitle}，另有 ${takeBackCount} 台待取回`
-    : workflowDetailTitle
-
   return [{
     key: 'firstcheck-todo-summary',
     type: 'firstcheck' as const,
     title: '首次检定',
-    detailTitle,
+    detailTitle: workflowDetailTitle,
     count: totalFirstCheckTodoCount,
     unit: '项',
     color: 'orange' as TodoColor,
@@ -210,18 +210,17 @@ const changeTodoEntries = computed<TodoDefinition[]>(() => {
   if (!currentRole) return []
   const routeTarget = getTodoModuleAdapter('change').todoRoute(currentRole)!
 
-  const tasks = uniqueTasksByBusinessId(workflowTasks.value
-    .filter((task) => isPendingWorkflowTask(task))
-    .filter((task) => matchesBusinessType(task.businessType, 'change')))
-  const taskCount = countUniqueBusinessTasks(tasks)
+  const containers = todoContainersFor('change')
+  const taskCount = containers.length
+  const itemCount = sumMyPendingItems(containers)
 
   return [{
     key: 'change-todo-summary',
     type: 'change' as const,
     title: '状态变更',
     detailTitle: `当前共 ${taskCount} 张状态变更单待处理`,
-    count: taskCount,
-    unit: '单',
+    count: itemCount,
+    unit: '条',
     color: 'blue' as TodoColor,
     alwaysVisible: true,
     roles: [currentRole],
@@ -264,18 +263,8 @@ const periodicTodoEntries = computed<TodoDefinition[]>(() => {
   if (!currentRole) return []
   const routeTarget = getTodoModuleAdapter('periodic').todoRoute(currentRole)!
 
-  const workflowPeriodicTasks = workflowTasks.value
-    .filter((task) => isPendingWorkflowTask(task))
-    .filter((task) => matchesBusinessType(task.businessType, 'periodic'))
-  const workflowDeviceCount = countUniqueBusinessTasks(workflowPeriodicTasks)
-  const physicalDeviceCount = countTodoItemsWithPhysicalActions(
-    workflowPeriodicTasks,
-    scanInboxRows.value,
-    'periodic'
-  )
-  const groups = buildPeriodicPlanTodoGroups(periodicTasks.value)
-  const detailDeviceCount = groups.reduce((sum, group) => sum + group.deviceCount, 0)
-  const deviceCount = Math.max(detailDeviceCount, workflowDeviceCount, physicalDeviceCount)
+  const groups = todoContainersFor('periodic')
+  const deviceCount = sumMyPendingItems(groups)
   const color: TodoColor = periodicTasks.value.some((task) =>
     task.taskStatus === 'exception' || task.currentNode === 'verifier_scrap_disposal')
     ? 'red'
@@ -299,7 +288,7 @@ const periodicTodoEntries = computed<TodoDefinition[]>(() => {
 })
 
 const periodicPlanPickerIncomplete = computed(() =>
-  periodicTodoPlanLoadFailed.value
+  todoContainerLoadFailed.value
 )
 
 const periodicHistoryEntries = computed<TodoDefinition[]>(() => {
@@ -355,21 +344,10 @@ const samplingTodoEntries = computed<TodoDefinition[]>(() => {
   if (!currentRole) return []
   const routeTarget = getTodoModuleAdapter('sampling').todoRoute(currentRole)!
 
-  const workflowSamplingTasks = workflowTasks.value
-    .filter((task) => isPendingWorkflowTask(task))
-    .filter((task) => matchesBusinessType(task.businessType, 'sampling'))
-  const workflowDeviceCount = countUniqueBusinessTasks(workflowSamplingTasks)
-  const groups = new Map<string, SamplingTaskVO[]>()
-  samplingTasks.value.forEach((task) => {
-    const key = samplingPlanGroupKey(task)
-    const list = groups.get(key) || []
-    list.push(task)
-    groups.set(key, list)
-  })
-
-  const detailDeviceCount = Array.from(groups.values())
-    .reduce((sum, tasks) => sum + tasks.length, 0)
-  const deviceCount = Math.max(detailDeviceCount, workflowDeviceCount)
+  const groups = new Map(
+    todoContainersFor('sampling').map((container) => [String(container.containerId), container])
+  )
+  const deviceCount = sumMyPendingItems(Array.from(groups.values()))
   const color: TodoColor = samplingTasks.value.some(
     (task) => task.taskStatus === 'rejected' || task.taskStatus === 'cancelled'
   ) ? 'red' : 'orange'
@@ -424,9 +402,13 @@ const productSupportTodoEntries = computed<TodoDefinition[]>(() => {
   const path = getTodoModuleAdapter('productSupport').todoRoute(currentRole)?.path
   if (!currentRole || !path) return []
 
-  return productSupportTasks.value
-    .map((order) => {
-      const orderId = String(order.id)
+  const detailsById = new Map(
+    productSupportTasks.value.map((order) => [String(order.id), order])
+  )
+  return todoContainersFor('productSupport')
+    .map((container) => {
+      const orderId = String(container.containerId)
+      const order = detailsById.get(orderId) || {} as ProductSupportOrderVO
       const titleNo = order.orderNo || order.contractNo || orderId
       const detailTitle = [
         order.contractNo,
@@ -443,12 +425,12 @@ const productSupportTodoEntries = computed<TodoDefinition[]>(() => {
         type: 'productSupport' as const,
         title: `产品配套单 ${titleNo}`,
         detailTitle,
-        count: 1,
-        unit: '单',
+        count: container.myPendingItemCount,
+        unit: '项',
         color: (order.orderStatus === 'completed' ? 'green' : 'orange') as TodoColor,
         roles: [currentRole],
         routeByRole: { [currentRole]: path },
-        query: { orderId }
+        query: { orderId, containerId: orderId }
       }
     })
     .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
@@ -527,7 +509,7 @@ function resetFilter() {
   keyword.value = ''
 }
 
-function openPeriodicPlan(planId: string) {
+function openPeriodicPlan(containerId: string) {
   const currentRole = roleCode.value
   const routeTarget = currentRole
     ? getTodoModuleAdapter('periodic').todoRoute(currentRole)
@@ -540,7 +522,7 @@ function openPeriodicPlan(planId: string) {
   periodicPlanPickerOpen.value = false
   void router.push({
     path: routeTarget.path,
-    query: { ...(routeTarget.query || {}), planId }
+    query: { ...(routeTarget.query || {}), planId: containerId, containerId }
   })
 }
 
@@ -556,9 +538,6 @@ function openTodo(item: TodoDefinition) {
   }
 }
 
-/** 当前工作台加载代次，用于丢弃角色切换前返回的异步响应。 */
-let workspaceLoadId = 0
-
 /** 清空上一激活角色的待办、已办及详情快照。 */
 function clearWorkspaceSummary() {
   periodicPlanPickerOpen.value = false
@@ -566,57 +545,38 @@ function clearWorkspaceSummary() {
   workflowHistoryTasks.value = []
   periodicTasks.value = []
   periodicHistoryTasks.value = []
-  periodicTodoPlans.value = []
-  periodicTodoPlanLoadFailed.value = false
+  todoContainers.value = []
+  todoContainerLoadFailed.value = false
   samplingTasks.value = []
   samplingHistoryTasks.value = []
   productSupportTasks.value = []
   productSupportHistoryTasks.value = []
   firstCheckOrders.value = {}
   changeOrders.value = {}
-  scanInboxRows.value = []
 }
 
-/** 判断异步请求结果是否仍属于当前激活角色和最新加载代次。 */
-function isCurrentWorkspaceLoad(loadId: number, requestedRole: RoleCode) {
-  return loadId === workspaceLoadId && roleCode.value === requestedRole
-}
-
-async function loadWorkflowSummary() {
-  const requestedRole = roleCode.value
-  const loadId = ++workspaceLoadId
+function applyWorkspaceSnapshot(
+  snapshot: WorkspaceTodoLoadSnapshot<WorkflowBoundDetail<object>> | null
+) {
   clearWorkspaceSummary()
-  if (!requestedRole) return
-  if (!shouldShowWorkspaceTaskSections(requestedRole)) return
+  if (!snapshot) return
 
-  const [workflowResult, scanInboxResult, periodicTodoPlanResult] = await Promise.allSettled([
-    refreshWorkflowTasks(),
-    listUnifiedScanInbox(),
-    loadPeriodicTodoPlanEntries()
-  ])
-  if (!isCurrentWorkspaceLoad(loadId, requestedRole)) return
-  scanInboxRows.value = scanInboxResult.status === 'fulfilled' ? scanInboxResult.value : []
-  periodicTodoPlans.value = periodicTodoPlanResult.status === 'fulfilled'
-    ? periodicTodoPlanResult.value
-    : []
-  periodicTodoPlanLoadFailed.value = periodicTodoPlanResult.status === 'rejected'
-  if (workflowResult.status === 'rejected') return
+  workflowTasks.value = snapshot.todoTasks
+  workflowHistoryTasks.value = snapshot.handledTasks
+  todoContainers.value = snapshot.todoContainers
+  todoContainerLoadFailed.value = snapshot.todoContainerLoadFailed
+  if (snapshot.workflowLoadFailed) return
 
-  const allTasks = [...workflowTasks.value, ...workflowHistoryTasks.value]
-  const details = await loadWorkflowDetails<object>(allTasks, loadTodoModuleDetail)
-  if (!details || !isCurrentWorkspaceLoad(loadId, requestedRole)) return
+  const allTasks = [...snapshot.todoTasks, ...snapshot.handledTasks]
+  const details = snapshot.details
 
   const detailByTaskId = new Map(details.map((detail) => [String(detail.workflowTaskId), detail]))
   const detailsFor = <T extends object>(tasks: WorkflowTask[]) => tasks
     .map((task) => detailByTaskId.get(String(task.taskId)) as WorkflowBoundDetail<T> | undefined)
     .filter((detail): detail is WorkflowBoundDetail<T> => Boolean(detail))
 
-  const workflowPeriodicTodoTasks = workflowTasks.value.filter((task) =>
-    matchesBusinessType(task.businessType, 'periodic')
-  )
-  periodicTasks.value = mergePeriodicTaskPhysicalActions(
-    detailsFor<PeriodicTaskVO>(workflowPeriodicTodoTasks),
-    scanInboxRows.value
+  periodicTasks.value = detailsFor<PeriodicTaskVO>(
+    workflowTasks.value.filter((task) => matchesBusinessType(task.businessType, 'periodic'))
   )
   periodicHistoryTasks.value = detailsFor<PeriodicTaskVO>(
     workflowHistoryTasks.value.filter((task) => matchesBusinessType(task.businessType, 'periodic'))
@@ -646,13 +606,28 @@ async function loadWorkflowSummary() {
     }, {})
 }
 
+const workspaceInvalidationVersion = computed(() => todoNotifications.invalidationVersion)
+const { snapshot: workspaceSnapshot } = useWorkspaceTodoLoad<WorkflowBoundDetail<object>>({
+  identityKey: workflowIdentity,
+  invalidationVersion: workspaceInvalidationVersion,
+  dependencies: {
+    loadTasks: async () => {
+      await refreshWorkflowTasks()
+      return {
+        todoTasks: [...workflowTasks.value],
+        handledTasks: [...workflowHistoryTasks.value]
+      }
+    },
+    loadContainers: (_identityKey, signal) => loadTodoContainers(signal),
+    loadDetails: (_identityKey, tasks) => loadWorkflowDetails<object>(tasks, loadTodoModuleDetail)
+  }
+})
+
+watch(workspaceSnapshot, applyWorkspaceSnapshot, { immediate: true })
+
 function openLaunch(path: string) {
   router.push(path)
 }
-
-watch(roleCode, () => {
-  void loadWorkflowSummary()
-}, { immediate: true })
 
 watch(
   () => route.query.type,

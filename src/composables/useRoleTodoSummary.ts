@@ -9,6 +9,11 @@ export interface UseRoleTodoSummaryOptions {
   identityKey: MaybeRefOrGetter<string | undefined>
   query: MaybeRefOrGetter<WorkflowTodoSummaryQuery | undefined>
   immediate?: boolean
+  loadSummary?: (
+    identityKey: string,
+    query: WorkflowTodoSummaryQuery,
+    signal: AbortSignal
+  ) => Promise<FlowSummary>
 }
 
 /**
@@ -28,10 +33,11 @@ export function useRoleTodoSummary(options: UseRoleTodoSummaryOptions) {
   let generation = 0
 
   async function refresh(): Promise<FlowSummary | undefined> {
+    const requestedIdentity = identityKey.value
     const requestGeneration = ++generation
     controller?.abort()
     controller = undefined
-    if (!identityKey.value) {
+    if (!requestedIdentity) {
       summary.value = null
       error.value = undefined
       loading.value = false
@@ -43,16 +49,26 @@ export function useRoleTodoSummary(options: UseRoleTodoSummaryOptions) {
     loading.value = true
     error.value = undefined
     try {
-      const result = await getWorkflowTodoSummary(query.value, activeController.signal)
-      if (requestGeneration !== generation || activeController.signal.aborted) return undefined
+      const result = await (options.loadSummary
+        ? options.loadSummary(requestedIdentity, query.value, activeController.signal)
+        : getWorkflowTodoSummary(query.value, activeController.signal))
+      if (
+        requestGeneration !== generation
+        || requestedIdentity !== identityKey.value
+        || activeController.signal.aborted
+      ) return undefined
       summary.value = result
       return result
     } catch (cause) {
-      if (requestGeneration !== generation || activeController.signal.aborted) return undefined
+      if (
+        requestGeneration !== generation
+        || requestedIdentity !== identityKey.value
+        || activeController.signal.aborted
+      ) return undefined
       error.value = cause
       throw cause
     } finally {
-      if (requestGeneration === generation) {
+      if (requestGeneration === generation && requestedIdentity === identityKey.value) {
         loading.value = false
         controller = undefined
       }

@@ -12,7 +12,7 @@ assert.match(workspace, /const showWorkspaceTaskSections = computed\(\(\) => sho
 assert.match(workspace, /user && showWorkspaceTaskSections\.value \? `\$\{user\.employeeId\}\|\$\{user\.roleCode\}` : ''/)
 assert.match(
   workspace,
-  /if \(!shouldShowWorkspaceTaskSections\(requestedRole\)\) return/,
+  /identityKey:\s*workflowIdentity/,
   '发起型角色不应触发待办汇总、扫码待办和详情加载'
 )
 assert.match(

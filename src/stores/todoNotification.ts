@@ -15,6 +15,25 @@ import {
   notificationIdentityKey
 } from '@/stores/todoNotificationModel'
 
+/** 待办消息仓库的可替换外部依赖，用于隔离网络流和行为测试。 */
+export interface TodoNotificationStoreDependencies {
+  listNotifications: typeof listTodoNotifications
+  getUnreadCount: typeof getTodoNotificationUnreadCount
+  markAllRead: typeof markAllTodoNotificationsRead
+  markRead: typeof markTodoNotificationRead
+  connectStream: typeof connectTodoNotificationStream
+  openNotification: typeof notification.open
+}
+
+const defaultDependencies: TodoNotificationStoreDependencies = {
+  listNotifications: listTodoNotifications,
+  getUnreadCount: getTodoNotificationUnreadCount,
+  markAllRead: markAllTodoNotificationsRead,
+  markRead: markTodoNotificationRead,
+  connectStream: connectTodoNotificationStream,
+  openNotification: notification.open
+}
+
 const promptedStoragePrefix = 'ms.todo-notification.prompted:'
 
 function readPromptedIds(identity: string): WorkflowEntityId[] {
@@ -35,7 +54,12 @@ function writePromptedIds(identity: string, eventIds: readonly WorkflowEntityId[
   sessionStorage.setItem(`${promptedStoragePrefix}${identity}`, JSON.stringify(eventIds.slice(-200)))
 }
 
-export const useTodoNotificationStore = defineStore('todoNotification', () => {
+/** 创建带身份和连接代次隔离的待办消息仓库。 */
+export function createTodoNotificationStore(
+  dependencies: TodoNotificationStoreDependencies = defaultDependencies,
+  storeId = 'todoNotification'
+) {
+  return defineStore(storeId, () => {
   const items = ref<TodoNotification[]>([])
   const unreadCount = ref(0)
   const loading = ref(false)
@@ -55,8 +79,8 @@ export const useTodoNotificationStore = defineStore('todoNotification', () => {
     error.value = undefined
     try {
       const [page, count] = await Promise.all([
-        listTodoNotifications({ includeRead: true, current: 1, size: 20 }),
-        getTodoNotificationUnreadCount()
+        dependencies.listNotifications({ includeRead: true, current: 1, size: 20 }),
+        dependencies.getUnreadCount()
       ])
       if (generation !== activationGeneration) return []
       items.value = page.records
@@ -70,17 +94,25 @@ export const useTodoNotificationStore = defineStore('todoNotification', () => {
     }
   }
 
-  async function handleInvalidation(eventIds: readonly WorkflowEntityId[]) {
-    const identity = activeIdentity.value
+  async function handleInvalidation(
+    identity: string,
+    streamGeneration: number,
+    eventIds: readonly WorkflowEntityId[]
+  ) {
+    if (
+      !identity
+      || identity !== activeIdentity.value
+      || streamGeneration !== activationGeneration
+    ) return
     const visibleItems = await refresh()
-    if (!identity || identity !== activeIdentity.value) return
+    if (identity !== activeIdentity.value || streamGeneration !== activationGeneration) return
     invalidationVersion.value += 1
 
     const promptResult = findNewPromptNotifications(visibleItems, eventIds, promptedIds)
     promptedIds = promptResult.promptedIds
     writePromptedIds(identity, promptedIds)
     promptResult.notifications.forEach((item) => {
-      notification.open({
+      dependencies.openNotification({
         key: `todo-notification-${identity}-${String(item.id)}`,
         message: item.title || '收到新的待办任务',
         description: item.content || `新增 ${item.itemCount || 1} 条待办`,
@@ -114,23 +146,31 @@ export const useTodoNotificationStore = defineStore('todoNotification', () => {
     deactivate()
     activeIdentity.value = identity
     promptedIds = readPromptedIds(identity)
+    const streamGeneration = activationGeneration
+    const isCurrentStream = () => (
+      activeIdentity.value === identity && activationGeneration === streamGeneration
+    )
     void refresh()
-    stopStream = connectTodoNotificationStream({
+    stopStream = dependencies.connectStream({
       onConnected: (value) => {
-        if (activeIdentity.value === identity) connected.value = value
+        if (isCurrentStream()) connected.value = value
       },
       onCalibration: async () => {
+        if (!isCurrentStream()) return
         await refresh()
       },
-      onInvalidated: (event) => handleInvalidation(event.eventIds),
+      onInvalidated: (event) => {
+        if (!isCurrentStream()) return
+        return handleInvalidation(identity, streamGeneration, event.eventIds)
+      },
       onError: (cause) => {
-        if (activeIdentity.value === identity) error.value = cause
+        if (isCurrentStream()) error.value = cause
       }
     })
   }
 
   async function markRead(eventId: WorkflowEntityId) {
-    await markTodoNotificationRead(eventId)
+    await dependencies.markRead(eventId)
     const item = items.value.find((candidate) => String(candidate.id) === String(eventId))
     if (item && !item.read) {
       item.read = true
@@ -140,7 +180,7 @@ export const useTodoNotificationStore = defineStore('todoNotification', () => {
   }
 
   async function markAllRead() {
-    await markAllTodoNotificationsRead()
+    await dependencies.markAllRead()
     const readAt = new Date().toISOString()
     items.value = items.value.map((item) => ({ ...item, read: true, readAt }))
     unreadCount.value = 0
@@ -161,3 +201,6 @@ export const useTodoNotificationStore = defineStore('todoNotification', () => {
     markAllRead
   }
 })
+}
+
+export const useTodoNotificationStore = createTodoNotificationStore()

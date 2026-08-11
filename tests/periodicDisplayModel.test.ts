@@ -9,10 +9,8 @@ import {
   periodicTagColor,
   resolvePeriodicTaskAction
 } from '../src/views/periodic/periodicDisplayModel.ts'
-import * as periodicDisplayModel from '../src/views/periodic/periodicDisplayModel.ts'
 import { periodicNodeName, periodicStatusName } from '../src/api/periodicContract.ts'
 import type { PeriodicTaskVO } from '../src/types/periodic.ts'
-import type { UnifiedScanInboxItem } from '../src/types/scan.ts'
 
 assert.equal(displayValue(undefined), '-')
 assert.equal(displayValue(null), '-')
@@ -101,63 +99,6 @@ assert.equal(resolvePeriodicTaskAction({
   scanAction: 'periodic-send-out-return'
 }), 'scan-send-out-return')
 
-const mergePeriodicTaskPhysicalActions = (
-  periodicDisplayModel as unknown as {
-    mergePeriodicTaskPhysicalActions?: (
-      tasks: readonly PeriodicTaskVO[],
-      scanRows: readonly UnifiedScanInboxItem[]
-    ) => PeriodicTaskVO[]
-  }
-).mergePeriodicTaskPhysicalActions
-assert.equal(typeof mergePeriodicTaskPhysicalActions, 'function')
-
-if (mergePeriodicTaskPhysicalActions) {
-  const workflowTask: PeriodicTaskVO = {
-    ...task,
-    id: 'periodic-task-merge',
-    planId: 'periodic-plan-merge',
-    currentNode: 'external_common_fill',
-    allowedActions: ['SUBMIT'],
-    physicalStatus: undefined,
-    physicalStatusName: undefined,
-    scanAction: undefined
-  }
-  const physicalRow: UnifiedScanInboxItem = {
-    id: 'periodic-periodic-task-merge-periodic-external-send-out-1',
-    businessType: 'periodic',
-    sourceType: 'PERIODIC',
-    sourceLabel: 'periodic',
-    businessId: 'periodic-plan-merge',
-    taskId: 'periodic-task-merge',
-    taskNo: 'ZJ-TEST-0001',
-    currentNodeName: 'pending external handover',
-    scanAction: 'periodic-external-send-out',
-    allowedActions: ['SEND_OUT'],
-    scanCode: 'DEVICE-001',
-    deviceCode: 'DEVICE-001',
-    scanned: false
-  }
-  const mergedTasks = mergePeriodicTaskPhysicalActions(
-    [workflowTask],
-    [physicalRow, { ...physicalRow, id: `${physicalRow.id}-duplicate` }]
-  )
-
-  assert.equal(mergedTasks.length, 1)
-  assert.equal(mergedTasks[0]?.id, 'periodic-task-merge')
-  assert.equal(mergedTasks[0]?.currentNode, 'external_common_fill')
-  assert.equal(mergedTasks[0]?.physicalStatus, 'wait_external_receive')
-  assert.equal(mergedTasks[0]?.physicalStatusName, 'pending external handover')
-  assert.equal(mergedTasks[0]?.scanAction, 'periodic-external-send-out')
-  assert.deepEqual(mergedTasks[0]?.allowedActions, ['SUBMIT', 'SEND_OUT'])
-  assert.equal(resolvePeriodicTaskAction(mergedTasks[0]!), 'scan-send-out')
-
-  const physicalOnlyTasks = mergePeriodicTaskPhysicalActions([], [physicalRow, physicalRow])
-  assert.equal(physicalOnlyTasks.length, 1)
-  assert.equal(physicalOnlyTasks[0]?.id, 'periodic-task-merge')
-  assert.equal(physicalOnlyTasks[0]?.planId, 'periodic-plan-merge')
-  assert.equal(physicalOnlyTasks[0]?.currentNode, 'external_common_fill')
-}
-
 const todoGroups = buildPeriodicPlanTodoGroups([
   exceptionRouteTask,
   { ...exceptionRouteTask, id: '2' },
@@ -197,51 +138,37 @@ const pickerTasks: PeriodicTaskVO[] = [
   }
 ]
 
-assert.deepEqual(buildPeriodicPlanPickerItems(pickerTasks, [
-  { planId: 'P1', deviceCount: 10 },
-  { planId: 'P2', deviceCount: 10 },
-  { planId: 'P3', deviceCount: 10 }
-]), [
-  {
-    planId: 'P1',
-    planNo: 'ZJ-202608-',
-    currentNodeSummary: '管理员异常分流',
-    deviceCount: 10
-  },
-  {
-    planId: 'P2',
-    planNo: 'ZJ-202609-',
-    currentNodeSummary: '待接收',
-    deviceCount: 10
-  },
-  {
-    planId: 'P3',
-    planNo: 'ZJ-202610-',
-    currentNodeSummary: '待接收 / 自检检定',
-    deviceCount: 10
-  }
-])
-
-assert.deepEqual(buildPeriodicPlanPickerItems(pickerTasks, []), [])
-assert.deepEqual(buildPeriodicPlanPickerItems([], [
-  {
-    planId: 'P100',
-    planNo: 'ZJ-202611-0001',
-    currentNodeSummary: '剩余 3 条',
-    deviceCount: 10,
-    completedCount: 7,
-    pendingCount: 3,
-    status: 'processing',
-    statusName: '进行中'
-  }
-]), [
-  {
-    planId: 'P100',
-    planNo: 'ZJ-202611-0001',
-    currentNodeSummary: '剩余 3 条',
-    deviceCount: 10
-  }
-])
+const authoritativePickerItems = buildPeriodicPlanPickerItems(pickerTasks, [{
+  businessType: 'PERIODIC',
+  containerId: 'P100',
+  containerNo: 'ZJ-202611-0001',
+  totalItemCount: 10,
+  myPendingItemCount: 5,
+  myPendingActionCount: 3,
+  currentNodeSummary: [{
+    nodeCode: 'self_verify',
+    nodeName: 'Self verification',
+    myPendingItemCount: 5,
+    myPendingActionCount: 3
+  }]
+}])
+assert.deepEqual(authoritativePickerItems, [{
+  containerId: 'P100',
+  containerNo: 'ZJ-202611-0001',
+  totalItemCount: 10,
+  myPendingItemCount: 5,
+  myPendingActionCount: 3,
+  currentNodeSummary: 'Self verification'
+}])
+assert.deepEqual(buildPeriodicPlanPickerItems(pickerTasks, [{
+  businessType: 'PERIODIC',
+  containerId: 'P100',
+  containerNo: 'ZJ-202611-0001',
+  totalItemCount: 10,
+  myPendingItemCount: 0,
+  myPendingActionCount: 0,
+  currentNodeSummary: []
+}]), [])
 
 assert.deepEqual(
   getPeriodicTableColumns('admin').filter((column) => column.key !== 'action').map((column) => column.title),

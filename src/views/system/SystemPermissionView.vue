@@ -53,7 +53,7 @@ const columns = [
 function organizationOptions(nodes: AllowedOrganizationNodeVO[]): OrganizationOption[] {
   return (nodes || []).map((node) => ({
     value: node.orgId,
-    title: `${node.orgName || node.orgId}`,
+    title: node.orgName || node.orgId,
     searchText: [node.orgId, node.orgName, node.orgFullPath].filter(Boolean).join(' ').toLowerCase(),
     children: node.children?.length ? organizationOptions(node.children) : undefined
   }))

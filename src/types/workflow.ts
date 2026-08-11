@@ -25,12 +25,33 @@ export interface WorkflowTodoSummaryQuery {
   scopeId?: WorkflowEntityId
 }
 
+/** 当前身份容器投影中的单个集中节点分组。 */
+export interface WorkflowTodoNodeSummary {
+  nodeCode: string
+  nodeName: string
+  myPendingItemCount: number
+  myPendingActionCount: number
+}
+
+/** 当前身份的权威容器、设备条目和操作任务投影。 */
+export interface WorkflowTodoContainer {
+  businessType: BusinessType
+  containerId: WorkflowEntityId
+  containerNo: string
+  totalItemCount: number
+  myPendingItemCount: number
+  myPendingActionCount: number
+  currentNodeSummary: WorkflowTodoNodeSummary[]
+  snapshotAt?: string
+}
+
 /** 后端统一任务查询返回的权威任务结构。 */
 export interface WorkflowTask {
   taskId: WorkflowEntityId
   processInstanceId: WorkflowEntityId
   businessType: BusinessType
   businessId: WorkflowEntityId
+  businessItemId: WorkflowEntityId
   nodeCode: string
   nodeName?: string
   operationCode: string

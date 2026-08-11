@@ -1,4 +1,5 @@
 import type { EntityId, RowVersion } from '@/types/common'
+import type { WorkflowTodoContainer } from '@/types/workflow'
 
 export type { EntityId } from '@/types/common'
 
@@ -36,7 +37,7 @@ export type PeriodicTaskStatus =
   | string
 
 export type PeriodicVerificationResult = 'qualified' | 'unqualified' | string
-export type PeriodicConfirmResult = 'APPROVE' | 'REJECT' | 'PASS' | 'RETURN' | string
+export type PeriodicConfirmResult = 'qualified' | 'scrap' | 'repair'
 
 /** 周检多轮判定接口允许提交的判定结果。 */
 export type PeriodicJudgementResult = 'qualified' | 'unqualified'
@@ -115,18 +116,7 @@ export interface PeriodicTaskVO {
   judgementRecords?: PeriodicJudgementRecordVO[]
 }
 
-export interface PeriodicTodoPlanEntry {
-  planId: EntityId
-  planNo?: string
-  planName?: string
-  deviceCount?: number
-  completedCount?: number
-  pendingCount?: number
-  status?: string
-  statusName?: string
-  currentNodeSummary?: string
-  generatedAt?: string
-}
+export interface PeriodicTodoPlanEntry extends WorkflowTodoContainer {}
 
 export interface PeriodicDisplayRow {
   taskId: EntityId

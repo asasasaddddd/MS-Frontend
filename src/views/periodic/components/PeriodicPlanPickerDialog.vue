@@ -11,7 +11,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:open': [value: boolean]
-  select: [planId: string]
+  select: [containerId: string]
 }>()
 
 const modalOpen = computed({
@@ -20,22 +20,20 @@ const modalOpen = computed({
 })
 
 const columns = [
-  { title: '周检单号', key: 'planNo', dataIndex: 'planNo', width: 220 },
+  { title: '周检单号', key: 'containerNo', dataIndex: 'containerNo', width: 200 },
   { title: '当前节点', key: 'currentNodeSummary', dataIndex: 'currentNodeSummary', width: 250 },
-  { title: '条目数量', key: 'deviceCount', dataIndex: 'deviceCount', width: 100, align: 'center' },
-  { title: '操作', key: 'action', width: 110, fixed: 'right' }
+  { title: '整单条目', key: 'totalItemCount', dataIndex: 'totalItemCount', width: 100, align: 'center' },
+  { title: '我的待办', key: 'myPendingItemCount', dataIndex: 'myPendingItemCount', width: 100, align: 'center' },
+  { title: '操作次数', key: 'myPendingActionCount', dataIndex: 'myPendingActionCount', width: 100, align: 'center' },
+  { title: '操作', key: 'action', width: 110 }
 ] as const
-
-function selectPlan(planId: string) {
-  emit('select', planId)
-}
 </script>
 
 <template>
   <a-modal
     v-model:open="modalOpen"
     title="周检待办单据"
-    width="760px"
+    width="min(1120px, calc(100vw - 32px))"
     wrap-class-name="periodic-plan-picker-dialog"
     :footer="null"
     destroy-on-close
@@ -52,25 +50,30 @@ function selectPlan(planId: string) {
       v-if="items.length > 0"
       class="picker-table"
       size="middle"
-      row-key="planId"
+      row-key="containerId"
       :columns="columns"
       :data-source="items"
       :pagination="false"
-      :scroll="{ x: 680 }"
     >
       <template #bodyCell="{ column, record }">
-        <span v-if="column.key === 'planNo'" class="plan-no">{{ record.planNo }}</span>
+        <span v-if="column.key === 'containerNo'" class="plan-no">{{ record.containerNo }}</span>
         <span v-else-if="column.key === 'currentNodeSummary'" class="node-summary">
           {{ record.currentNodeSummary }}
         </span>
-        <a-tag v-else-if="column.key === 'deviceCount'" class="device-count">
-          {{ record.deviceCount }} 条
+        <a-tag v-else-if="column.key === 'totalItemCount'" class="device-count">
+          {{ record.totalItemCount }} 条
         </a-tag>
+        <a-tag v-else-if="column.key === 'myPendingItemCount'" class="device-count">
+          {{ record.myPendingItemCount }}
+        </a-tag>
+        <span v-else-if="column.key === 'myPendingActionCount'">
+          {{ record.myPendingActionCount }}
+        </span>
         <a-button
           v-else-if="column.key === 'action'"
           type="link"
           class="enter-button"
-          @click="selectPlan(record.planId)"
+          @click="emit('select', record.containerId)"
         >
           进入详情
           <RightOutlined />
@@ -101,6 +104,10 @@ function selectPlan(planId: string) {
 .picker-table :deep(.ant-table-cell) {
   padding-top: 13px;
   padding-bottom: 13px;
+}
+
+.picker-table :deep(.ant-table) {
+  width: 100%;
 }
 
 .plan-no {

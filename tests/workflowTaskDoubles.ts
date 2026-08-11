@@ -19,3 +19,11 @@ export async function request<T>(config: AxiosRequestConfig): Promise<T> {
   workflowRequestCalls.push(config)
   return requestHandler(config) as Promise<T>
 }
+
+export function buildAuthHeaders() {
+  return { 'X-User-Role': 'TEST_ROLE' }
+}
+
+export function getApiBaseUrl() {
+  return '/api'
+}

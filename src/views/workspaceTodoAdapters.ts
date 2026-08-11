@@ -8,6 +8,7 @@ import {
 import { matchesBusinessType } from '../workflows/metrologyWorkflow.ts'
 import type { RoleCode } from '../types/common.ts'
 import type { WorkflowTask } from '../types/workflow.ts'
+import type { WorkflowTodoContainer } from '../types/workflow.ts'
 import type { ChangeOrderVO } from '../types/change.ts'
 import type { FirstCheckOrder } from '../types/firstcheck.ts'
 import type { PeriodicTaskVO, PeriodicTodoPlanEntry } from '../types/periodic.ts'
@@ -25,7 +26,7 @@ export type TodoDetail =
 export interface TodoModuleAdapter<TDetail extends TodoDetail = TodoDetail> {
   readonly type: TodoModuleType
   readonly businessType: string
-  loadDetail: (task: Pick<WorkflowTask, 'businessId' | 'taskId'>, signal: AbortSignal) => Promise<TDetail>
+  loadDetail: (task: Pick<WorkflowTask, 'businessId' | 'businessItemId' | 'taskId'>, signal: AbortSignal) => Promise<TDetail>
   todoRoute: (roleCode?: RoleCode) => WorkspaceTodoRouteTarget | undefined
   historyRoute: (roleCode?: RoleCode) => string | undefined
 }
@@ -68,7 +69,7 @@ export const todoModuleAdapters: Readonly<Record<TodoModuleType, TodoModuleAdapt
         import('../api/periodic.ts'),
         import('../api/periodicContract.ts')
       ])
-      const detail = await getPeriodicTask(task.businessId, task.taskId, signal)
+      const detail = await getPeriodicTask(task.businessItemId, task.taskId, signal)
       return { ...detail, currentNode: parsePeriodicNodeCode(detail.currentNode) }
     },
     todoRoute: (roleCode) => fixedTodoRoute('periodic', roleCode),
@@ -120,7 +121,7 @@ export function getTodoModuleAdapterForTask(task: Pick<WorkflowTask, 'businessTy
 }
 
 export async function loadTodoModuleDetail(
-  task: Pick<WorkflowTask, 'businessType' | 'businessId' | 'taskId'>,
+  task: Pick<WorkflowTask, 'businessType' | 'businessId' | 'businessItemId' | 'taskId'>,
   signal: AbortSignal
 ) {
   const adapter = getTodoModuleAdapterForTask(task)
@@ -128,7 +129,16 @@ export async function loadTodoModuleDetail(
   return adapter.loadDetail(task, signal)
 }
 
-export async function loadPeriodicTodoPlanEntries(): Promise<PeriodicTodoPlanEntry[]> {
-  const { listPeriodicTodoPlans } = await import('../api/periodic.ts')
-  return listPeriodicTodoPlans()
+/** 通过统一工作流接口加载当前身份的全部待办容器。 */
+export async function loadTodoContainers(signal?: AbortSignal): Promise<WorkflowTodoContainer[]> {
+  const { listWorkflowTodoContainers } = await import('../api/workflow.ts')
+  return listWorkflowTodoContainers({}, signal)
+}
+
+/** 周检旧调用方在切换期间使用的统一容器接口适配器。 */
+export async function loadPeriodicTodoPlanEntries(
+  signal?: AbortSignal
+): Promise<PeriodicTodoPlanEntry[]> {
+  const { listWorkflowTodoContainers } = await import('../api/workflow.ts')
+  return listWorkflowTodoContainers({ businessType: 'PERIODIC' }, signal)
 }
