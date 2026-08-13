@@ -215,8 +215,14 @@ export function submitUnifiedScan(row: UnifiedScanInboxItem, payload: UnifiedSca
   }
   if (row.businessType === 'firstcheck') {
     if (!row.orderId) return Promise.reject(new Error('Missing first-check order ID'))
+    if (row.scanAction !== 'sendout'
+      && (row.workflowTaskId === undefined || row.rowVersion === undefined)) {
+      return Promise.reject(new Error('Missing first-check workflow task identity'))
+    }
     return submitFirstCheckScan(row.scanAction, {
       orderId: row.orderId,
+      workflowTaskId: row.workflowTaskId,
+      rowVersion: row.rowVersion,
       scanCode: payload.scanCode,
       scanContent: payload.scanContent,
       opinion: payload.opinion
@@ -224,8 +230,13 @@ export function submitUnifiedScan(row: UnifiedScanInboxItem, payload: UnifiedSca
   }
   if (row.businessType === 'periodic') {
     if (!row.taskId) return Promise.reject(new Error('Missing periodic task ID'))
+    if (row.workflowTaskId === undefined || row.rowVersion === undefined) {
+      return Promise.reject(new Error('Missing periodic workflow task identity'))
+    }
     const requestPayload = {
       taskId: row.taskId,
+      workflowTaskId: row.workflowTaskId,
+      rowVersion: row.rowVersion,
       scanCode: payload.scanCode,
       scanContent: payload.scanContent,
       opinion: payload.opinion

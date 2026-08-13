@@ -175,6 +175,8 @@ export interface GenerateBeforeUsePlanRequest {
 
 export interface PeriodicScanRequest {
   taskId: EntityId
+  workflowTaskId: EntityId
+  rowVersion: RowVersion
   scanCode: string
   scanContent?: string
   scanLocation?: string

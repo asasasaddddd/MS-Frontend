@@ -80,7 +80,7 @@ export const todoModuleAdapters: Readonly<Record<TodoModuleType, TodoModuleAdapt
     businessType: 'CHANGE',
     loadDetail: async (task, signal) => {
       const { getChangeOrderDetail } = await import('../api/change.ts')
-      return getChangeOrderDetail(task.businessId, signal)
+      return getChangeOrderDetail(task.businessId, task.taskId, signal)
     },
     todoRoute: (roleCode) => fixedTodoRoute('change', roleCode),
     historyRoute: (roleCode) => getChangeTaskRoute(roleCode)

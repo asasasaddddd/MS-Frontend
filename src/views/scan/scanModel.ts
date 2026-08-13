@@ -105,6 +105,8 @@ export function normalizeFirstCheckInboxRow(
     sourceType: row.sourceType || 'FIRST_CHECK',
     sourceLabel: '\u9996\u68c0',
     businessId: row.orderId,
+    workflowTaskId: row.workflowTaskId,
+    rowVersion: row.rowVersion,
     currentNodeName: hasChinese(row.currentNodeName) ? row.currentNodeName : statusName(row.scanStatus),
     scanAction: action,
     allowedActions
@@ -132,6 +134,8 @@ export function normalizePeriodicInboxRow(row: PeriodicScanInboxItem): UnifiedSc
     businessId: row.planId,
     orderNo: row.taskNo,
     taskId: row.taskId,
+    workflowTaskId: row.workflowTaskId,
+    rowVersion: row.rowVersion,
     currentNodeName: row.currentNodeName || (row.scanned ? '\u5df2\u626b\u7801' : '-'),
     scanAction: action,
     allowedActions

@@ -48,11 +48,16 @@ const verifierModelSource = readFileSync(
 )
 
 assert.ok(apiSource.includes('buildChangeRejectRequest(data)'), '驳回接口不得重新组装并丢弃任务身份')
+assert.match(apiSource, /getChangeOrderDetail\(orderId: EntityId, taskId\?: EntityId, signal\?: AbortSignal\)/)
+assert.match(apiSource, /params: taskId \? \{ taskId \} : undefined/)
 ;[leaderSource, verifierSource, receiveAdminSource].forEach((source) => {
   assert.ok(source.includes('rowVersion: task.rowVersion'), '状态变更待办必须保存任务版本')
   assert.ok(source.includes('allowedActions: [...task.allowedActions]'), '状态变更按钮必须消费后端允许操作')
   assert.match(source, /listWorkflowTasks\('CHANGE'/, '状态变更页面必须按后端业务类型查询统一待办')
   assert.ok(!source.includes('changeNodeCodesByRole'), '状态变更页面不得按本地角色表二次推导节点权限')
+})
+;[leaderSource, verifierSource, receiveAdminSource].forEach((source) => {
+  assert.match(source, /getChangeOrderDetail\(task\.businessId, task\.taskId/)
 })
 assert.ok(leaderSource.includes('CHANGE_APPROVE_ACTION'))
 assert.ok(receiveAdminSource.includes('CHANGE_APPROVE_ACTION'))

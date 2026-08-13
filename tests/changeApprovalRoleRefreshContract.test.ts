@@ -24,7 +24,7 @@ assert.doesNotMatch(
 assert.match(source, /let rowLoadGeneration = 0/, '角色切换必须使旧角色异步加载结果失效')
 assert.match(source, /let rowLoadController: AbortController \| undefined/, '角色切换必须取消旧角色请求')
 assert.match(source, /listWorkflowTasks\('CHANGE', activeController\.signal\)/)
-assert.match(source, /getChangeOrderDetail\(task\.businessId, activeController\.signal\)/)
+assert.match(source, /getChangeOrderDetail\(task\.businessId, task\.taskId, activeController\.signal\)/)
 assert.match(
   source,
   /generation !== rowLoadGeneration \|\| activeController\.signal\.aborted \|\| workflowIdentity\.value !== requestedIdentity/,

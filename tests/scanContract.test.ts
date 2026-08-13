@@ -17,6 +17,8 @@ const firstCheckRows = [
   {
     orderId: largeFirstCheckOrderId,
     orderNo: 'FC-1001',
+    workflowTaskId: '70001',
+    rowVersion: '3',
     scanAction: 'receive',
     scanStatus: 'wait_receive',
     allowedActions: ['RECEIVE'],
@@ -149,6 +151,8 @@ const periodicRows = [
   },
   {
     taskId: '2006',
+    workflowTaskId: '9006',
+    rowVersion: '6',
     planId: '1000',
     taskNo: 'ZJ-2006',
     taskType: 'periodic',
@@ -345,6 +349,31 @@ assert.equal(rows.some((row) => row.orderId === 1007), false)
 assert.equal(rows.some((row) => row.orderId === 1008), false)
 assert.equal(rows.some((row) => row.taskId === '2004'), false)
 
+const normalizedFirstCheckTaskRow = rows.find((row) => row.orderId === largeFirstCheckOrderId)
+assert.equal(normalizedFirstCheckTaskRow?.workflowTaskId, '70001')
+assert.equal(normalizedFirstCheckTaskRow?.rowVersion, '3')
+await scan.submitUnifiedScan(normalizedFirstCheckTaskRow!, {
+  scanCode: 'FC-1001',
+  scanContent: '{"temporaryCode":"FC-1001"}'
+})
+const firstCheckSubmit = scanRequestCalls.at(-1)
+assert.equal(firstCheckSubmit?.url, '/scan/firstcheck/receive')
+assert.equal(firstCheckSubmit?.data.workflowTaskId, '70001')
+assert.equal(firstCheckSubmit?.data.rowVersion, '3')
+
+const missingFirstCheckTaskRow = {
+  ...normalizedFirstCheckTaskRow!,
+  workflowTaskId: undefined,
+  rowVersion: undefined
+}
+await assert.rejects(
+  () => scan.submitUnifiedScan(missingFirstCheckTaskRow!, {
+    scanCode: 'FC-1001',
+    scanContent: 'FC-1001'
+  }),
+  /Missing first-check workflow task identity/
+)
+
 const firstCheckHistory = rows.find((row) => row.orderId === 1006)
 assert.equal(firstCheckHistory?.scanned, true)
 assert.deepEqual(firstCheckHistory?.allowedActions, [])
@@ -378,8 +407,24 @@ const periodicTakeBackSubmit = scanRequestCalls.find(
   (call) => call.url === '/periodic/manager-take-back'
 )
 assert.equal(periodicTakeBackSubmit?.data.taskId, '2006')
+assert.equal(periodicTakeBackSubmit?.data.workflowTaskId, '9006')
+assert.equal(periodicTakeBackSubmit?.data.rowVersion, '6')
 assert.equal(periodicTakeBackSubmit?.data.scanCode, 'JL-2006')
 assert.equal(periodicTakeBackSubmit?.data.scanContent, '{"deviceCode":"JL-2006"}')
+
+const callsBeforeMissingPeriodicIdentity = scanRequestCalls.length
+await assert.rejects(
+  scan.submitUnifiedScan({
+    ...periodicTakeBack,
+    workflowTaskId: undefined,
+    rowVersion: undefined
+  }, {
+    scanCode: 'JL-2006',
+    scanContent: 'JL-2006'
+  }),
+  /workflow task identity|任务身份/i
+)
+assert.equal(scanRequestCalls.length, callsBeforeMissingPeriodicIdentity)
 
 const normalizedChangeRows = rows.filter((row) => row.businessType === 'change')
 assert.deepEqual(

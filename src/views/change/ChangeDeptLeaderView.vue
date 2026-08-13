@@ -162,7 +162,7 @@ async function loadRows() {
       const details = await Promise.allSettled(
         tasks.map(async (task) => ({
           task,
-          order: await getChangeOrderDetail(task.businessId, activeController.signal)
+          order: await getChangeOrderDetail(task.businessId, task.taskId, activeController.signal)
         }))
       )
       if (!isCurrentRowLoad(generation, requestedIdentity, activeController)) return

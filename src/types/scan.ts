@@ -37,6 +37,8 @@ export type UnifiedScanBusinessType = 'firstcheck' | 'periodic' | 'change' | str
 
 export interface FirstCheckScanInboxItem {
   orderId: ScanEntityId
+  workflowTaskId?: ScanEntityId
+  rowVersion?: RowVersion
   orderNo?: string
   lineNo?: number
   sourceType?: string
@@ -56,6 +58,8 @@ export interface FirstCheckScanInboxItem {
 
 export interface PeriodicScanInboxItem {
   taskId: ScanEntityId
+  workflowTaskId?: ScanEntityId
+  rowVersion?: RowVersion
   planId?: ScanEntityId
   taskNo?: string
   taskType?: string
@@ -108,6 +112,7 @@ export interface UnifiedScanInboxItem {
   orderId?: ScanEntityId
   itemId?: ScanEntityId
   taskId?: ScanEntityId
+  workflowTaskId?: ScanEntityId
   rowVersion?: RowVersion
   deviceId?: ScanEntityId
   orderNo?: string
@@ -130,6 +135,8 @@ export interface UnifiedScanInboxItem {
 
 export interface FirstCheckScanRequest {
   orderId: ScanEntityId
+  workflowTaskId?: ScanEntityId
+  rowVersion?: RowVersion
   scanCode: string
   scanContent?: string
   scanLocation?: string

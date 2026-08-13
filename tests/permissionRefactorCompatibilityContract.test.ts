@@ -105,7 +105,7 @@ for (const field of ['businessId', 'businessItemId', 'taskId']) {
 assert.match(adapters, /Pick<WorkflowTask, 'businessId' \| 'businessItemId' \| 'taskId'>/)
 assert.match(adapters, /getFirstCheckDetail\(task\.businessId, task\.taskId, signal\)/)
 assert.match(adapters, /getPeriodicTask\(task\.businessItemId, task\.taskId, signal\)/)
-assert.match(adapters, /getChangeOrderDetail\(task\.businessId, signal\)/)
+assert.match(adapters, /getChangeOrderDetail\(task\.businessId, task\.taskId, signal\)/)
 assert.match(adapters, /getSamplingTask\(task\.businessId, task\.taskId, signal\)/)
 assert.match(adapters, /getProductSupportOrder\(task\.businessId, signal\)/)
 
