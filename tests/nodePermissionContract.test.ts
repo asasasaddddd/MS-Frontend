@@ -2,7 +2,6 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
 import {
-  ROLE_SCOPE_TYPE_OPTIONS,
   buildNodeGrantRevokeCommand,
   buildNodeScopeGrantRequest,
   buildScopeOrganizationTree,
@@ -19,16 +18,10 @@ const typeSource = source('../src/types/nodePermission.ts')
 const apiSource = source('../src/api/nodePermission.ts')
 const systemApiSource = source('../src/api/system.ts')
 const viewSource = source('../src/views/system/SystemPermissionView.vue')
-const dialogSource = source('../src/views/system/components/RoleScopeMatrixDialog.vue')
 
 assert.equal(normalizeOrganizationType('DEPT'), 'DEPARTMENT')
 assert.equal(normalizeOrganizationType('TEAM'), 'GROUP')
 assert.equal(normalizeOrganizationType('COMPANY'), 'COMPANY')
-
-assert.deepEqual(
-  ROLE_SCOPE_TYPE_OPTIONS.map((option) => option.value),
-  ['DEPARTMENT', 'GROUP']
-)
 
 assert.deepEqual(validateNodeScopeGrantDraft({
   roleCode: 'VERIFIER_SELF',
@@ -96,14 +89,15 @@ assert.deepEqual(resolvePermissionDetailLoad(
 })
 
 // The restricted organization tree remains the single source for supplier and
-// permission configuration screens.
+// change screens; the permission page itself has moved to flat units.
 assert.match(systemApiSource, /getAllowedOrganizationTree[\s\S]*?\/system\/org-scopes\/allowed-tree/)
 assert.match(systemApiSource, /listAllowedOrganizationUsers[\s\S]*?\/system\/org-scopes\/users/)
-assert.match(viewSource, /getAllowedOrganizationTree/)
+assert.match(systemApiSource, /listAllowedUnits[\s\S]*?\/system\/org-scopes\/units/)
+assert.doesNotMatch(viewSource, /getAllowedOrganizationTree/)
 assert.match(viewSource, /listAllowedOrganizationUsers\(selectedOrganizationIds\.value\)/)
-assert.match(viewSource, /RoleScopeMatrixDialog/)
+assert.match(viewSource, /UserWorkScopeDialog/)
 
-// Daily permission editing is the organization-scope + multi-role matrix only.
+// Daily permission editing is the flat-unit + attribute work-scope matrix only.
 for (const importName of [
   'listNodeOperations',
   'previewUserNodeGrant',
@@ -116,32 +110,22 @@ for (const importName of [
 ]) {
   assert.doesNotMatch(viewSource, new RegExp(`\\b${importName}\\b`))
 }
-assert.match(dialogSource, />\s*权限范围\s*</)
-assert.match(dialogSource, />\s*角色配置\s*</)
-assert.match(dialogSource, /a-tree/)
-assert.match(dialogSource, /a-checkbox-group/)
-assert.doesNotMatch(dialogSource, /ALLOW|DENY|业务类型|操作权限/)
-assert.match(dialogSource, /blockedRoleCodes[\s\S]*?SUPER_ADMIN[\s\S]*?SUPPLIER[\s\S]*?EXTERNAL_OPERATOR/)
 
 // Matrix contract is transaction-shaped: one GET and one full replacement PUT.
 for (const contractName of [
-  'UserRoleScopeMatrixEntry',
-  'UserRoleScopeMatrixRequest',
-  'UserRoleScopeMatrixVO'
+  'UserWorkScopeEntry',
+  'UserWorkScopeMatrixRequest',
+  'UserWorkScopeMatrixVO'
 ]) {
   assert.match(typeSource, new RegExp(`interface ${contractName}\\b`))
 }
-assert.match(apiSource, /getUserRoleScopeMatrix[\s\S]*?role-scope-matrix[\s\S]*?method:\s*'GET'/)
-assert.match(apiSource, /replaceUserRoleScopeMatrix[\s\S]*?role-scope-matrix[\s\S]*?method:\s*'PUT'/)
+assert.match(apiSource, /getUserWorkScopes[\s\S]*?\/work-scopes[\s\S]*?method:\s*'GET'/)
+assert.match(apiSource, /replaceUserWorkScopes[\s\S]*?\/work-scopes[\s\S]*?method:\s*'PUT'/)
 
-// Existing role-scope and node-grant APIs remain available for runtime and
-// historical compatibility even though the new page no longer imports them.
+// Legacy node-grant APIs remain available for runtime and historical
+// compatibility even though the new page no longer imports them; role-scope
+// CRUD has been retired entirely.
 for (const apiName of [
-  'listUserRoleScopes',
-  'previewUserRoleScope',
-  'saveUserRoleScope',
-  'updateUserRoleScope',
-  'revokeUserRoleScope',
   'getUserNodeGrants',
   'previewUserNodeGrant',
   'saveUserNodeGrant',
@@ -152,8 +136,6 @@ for (const apiName of [
   assert.match(apiSource, new RegExp(`export function ${apiName}\\b`), `missing ${apiName}`)
 }
 for (const endpoint of [
-  '/role-scopes',
-  '/role-scopes/preview',
   '/node-grants',
   '/node-grants/preview',
   '/effective-permissions',
@@ -161,6 +143,7 @@ for (const endpoint of [
 ]) {
   assert.ok(apiSource.includes(endpoint), `missing compatibility endpoint ${endpoint}`)
 }
+assert.doesNotMatch(apiSource, /role-scope-matrix|\/role-scopes/)
 
 // New editable scopes exclude company-level configuration; candidate preview
 // keeps PERSON/COMPANY solely for workflow compatibility.

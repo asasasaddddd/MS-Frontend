@@ -1,19 +1,17 @@
 import { request } from '@/api/request'
 import type {
   EffectivePermissionVO,
+  UserWorkScopeMatrixRequest,
+  UserWorkScopeMatrixVO,
+  WorkScopeCandidatePreviewQuery,
+  WorkScopeCandidateVO,
   NodeGrantVO,
   NodeOperationVO,
   NodeScopeGrantPreviewVO,
   NodeScopeGrantRequest,
   TaskCandidatePreviewQuery,
-  TaskCandidateVO,
-  UserRoleScopePreviewVO,
-  UserRoleScopeMatrixRequest,
-  UserRoleScopeMatrixVO,
-  UserRoleScopeRequest,
-  UserRoleScopeVO
+  TaskCandidateVO
 } from '@/types/nodePermission'
-import type { EntityId, RowVersion } from '@/types/common'
 
 export function listNodeOperations(businessType: string) {
   return request<NodeOperationVO[]>({
@@ -59,72 +57,6 @@ export function deleteUserNodeGrant(
   })
 }
 
-export function listUserRoleScopes(userId: string) {
-  return request<UserRoleScopeVO[]>({
-    url: `/system/users/${encodeURIComponent(userId)}/role-scopes`,
-    method: 'GET'
-  })
-}
-
-export function getUserRoleScopeMatrix(userId: string) {
-  return request<UserRoleScopeMatrixVO>({
-    url: `/system/users/${encodeURIComponent(userId)}/role-scope-matrix`,
-    method: 'GET'
-  })
-}
-
-export function replaceUserRoleScopeMatrix(
-  userId: string,
-  data: UserRoleScopeMatrixRequest
-) {
-  return request<UserRoleScopeMatrixVO>({
-    url: `/system/users/${encodeURIComponent(userId)}/role-scope-matrix`,
-    method: 'PUT',
-    data
-  })
-}
-
-export function previewUserRoleScope(userId: string, data: UserRoleScopeRequest) {
-  return request<UserRoleScopePreviewVO>({
-    url: `/system/users/${encodeURIComponent(userId)}/role-scopes/preview`,
-    method: 'POST',
-    data
-  })
-}
-
-export function saveUserRoleScope(userId: string, data: UserRoleScopeRequest) {
-  return request<UserRoleScopeVO>({
-    url: `/system/users/${encodeURIComponent(userId)}/role-scopes`,
-    method: 'POST',
-    data
-  })
-}
-
-export function updateUserRoleScope(
-  userId: string,
-  scopeId: EntityId,
-  data: UserRoleScopeRequest
-) {
-  return request<UserRoleScopeVO>({
-    url: `/system/users/${encodeURIComponent(userId)}/role-scopes/${encodeURIComponent(scopeId)}`,
-    method: 'PUT',
-    data
-  })
-}
-
-export function revokeUserRoleScope(
-  userId: string,
-  scopeId: EntityId,
-  rowVersion: RowVersion,
-  reason: string
-) {
-  return request<UserRoleScopeVO>({
-    url: `/system/users/${encodeURIComponent(userId)}/role-scopes/${encodeURIComponent(scopeId)}`,
-    method: 'DELETE',
-    params: { rowVersion, reason }
-  })
-}
-
 export function getEffectivePermissions(userId: string) {
   return request<EffectivePermissionVO>({
     url: `/system/users/${encodeURIComponent(userId)}/effective-permissions`,
@@ -137,5 +69,34 @@ export function previewTaskCandidates(query: TaskCandidatePreviewQuery) {
     url: '/system/task-candidates/preview',
     method: 'GET',
     params: query
+  })
+}
+
+/** 读取人员作业范围矩阵（整组平级单位与设备属性规则）。 */
+export function getUserWorkScopes(userId: string) {
+  return request<UserWorkScopeMatrixVO>({
+    url: `/system/users/${encodeURIComponent(userId)}/work-scopes`,
+    method: 'GET'
+  })
+}
+
+/** 整组替换人员作业范围矩阵；版本冲突时后端返回 HTTP 409。 */
+export function replaceUserWorkScopes(
+  userId: string,
+  data: UserWorkScopeMatrixRequest
+) {
+  return request<UserWorkScopeMatrixVO>({
+    url: `/system/users/${encodeURIComponent(userId)}/work-scopes`,
+    method: 'PUT',
+    data
+  })
+}
+
+/** 按统一候选解析器预览最终候选人；前端不复制匹配算法。 */
+export function previewWorkScopeCandidates(data: WorkScopeCandidatePreviewQuery) {
+  return request<WorkScopeCandidateVO[]>({
+    url: '/system/work-scopes/candidates/preview',
+    method: 'POST',
+    data
   })
 }

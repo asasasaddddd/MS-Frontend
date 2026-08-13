@@ -3,29 +3,22 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import type { TablePaginationConfig } from 'ant-design-vue'
 import {
-  getAllowedOrganizationTree,
   listAllowedOrganizationUsers,
+  listAllowedUnits,
   listSystemRoles,
   type SysRoleVO,
   type SysUserVO
 } from '@/api/system'
-import type { AllowedOrganizationNodeVO } from '@/types/nodePermission'
-import RoleScopeMatrixDialog from '@/views/system/components/RoleScopeMatrixDialog.vue'
-
-interface OrganizationOption {
-  value: string
-  title: string
-  searchText: string
-  children?: OrganizationOption[]
-}
+import type { AllowedUnitVO } from '@/types/nodePermission'
+import UserWorkScopeDialog from '@/views/system/components/UserWorkScopeDialog.vue'
 
 const loading = ref(false)
-const organizationLoading = ref(false)
+const unitLoading = ref(false)
 const roleLoading = ref(false)
-const organizationTree = ref<AllowedOrganizationNodeVO[]>([])
+const units = ref<AllowedUnitVO[]>([])
 const roles = ref<SysRoleVO[]>([])
 const users = ref<SysUserVO[]>([])
-const selectedOrganizationId = ref<string>()
+const selectedUnitId = ref<string>()
 const selectedUser = ref<SysUserVO | null>(null)
 const permissionDialogOpen = ref(false)
 let userRequestSerial = 0
@@ -50,40 +43,16 @@ const columns = [
   { title: '操作', dataIndex: 'action', width: 120, fixed: 'right' }
 ]
 
-function organizationOptions(nodes: AllowedOrganizationNodeVO[]): OrganizationOption[] {
-  return (nodes || []).map((node) => ({
-    value: node.orgId,
-    title: node.orgName || node.orgId,
-    searchText: [node.orgId, node.orgName, node.orgFullPath].filter(Boolean).join(' ').toLowerCase(),
-    children: node.children?.length ? organizationOptions(node.children) : undefined
-  }))
-}
+const unitOptions = computed(() => units.value.map((unit) => ({
+  label: unit.unitName ? `${unit.unitName}（${unit.unitId}）` : unit.unitId,
+  value: unit.unitId,
+  searchText: [unit.unitId, unit.unitName, unit.orgFullPath]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+})))
 
-const organizationTreeData = computed(() => organizationOptions(organizationTree.value))
-
-function findOrganization(
-  nodes: AllowedOrganizationNodeVO[],
-  orgId?: string
-): AllowedOrganizationNodeVO | null {
-  if (!orgId) return null
-  for (const node of nodes) {
-    if (node.orgId === orgId) return node
-    const child = findOrganization(node.children || [], orgId)
-    if (child) return child
-  }
-  return null
-}
-
-function collectOrganizationIds(node: AllowedOrganizationNodeVO | null, target: string[] = []) {
-  if (!node) return target
-  target.push(node.orgId)
-  for (const child of node.children || []) collectOrganizationIds(child, target)
-  return target
-}
-
-const selectedOrganizationIds = computed(() => collectOrganizationIds(
-  findOrganization(organizationTree.value, selectedOrganizationId.value)
-))
+const selectedOrganizationIds = computed(() => selectedUnitId.value ? [selectedUnitId.value] : [])
 
 const filteredUsers = computed(() => {
   const employeeId = filters.employeeId.trim().toLowerCase()
@@ -96,8 +65,8 @@ const filteredUsers = computed(() => {
   })
 })
 
-function filterOrganizationNode(input: string, node: OrganizationOption) {
-  return node.searchText.includes(input.trim().toLowerCase())
+function filterUnitOption(input: string, option: { searchText: string }) {
+  return option.searchText.includes(input.trim().toLowerCase())
 }
 
 function roleCodes(user: SysUserVO) {
@@ -120,14 +89,14 @@ function errorMessage(error: unknown, fallback: string) {
   return fallback
 }
 
-async function loadOrganizations() {
-  organizationLoading.value = true
+async function loadUnits() {
+  unitLoading.value = true
   try {
-    organizationTree.value = await getAllowedOrganizationTree()
+    units.value = await listAllowedUnits()
   } catch (error) {
-    message.error(errorMessage(error, '允许组织范围加载失败'))
+    message.error(errorMessage(error, '平级单位列表加载失败'))
   } finally {
-    organizationLoading.value = false
+    unitLoading.value = false
   }
 }
 
@@ -159,14 +128,14 @@ async function loadUsers() {
   }
 }
 
-function handleOrganizationChange() {
+function handleUnitChange() {
   loadUsers()
 }
 
 function handleReset() {
   filters.employeeId = ''
   filters.employeeName = ''
-  selectedOrganizationId.value = undefined
+  selectedUnitId.value = undefined
   loadUsers()
 }
 
@@ -185,7 +154,7 @@ async function handleMatrixSaved() {
 }
 
 onMounted(async () => {
-  await Promise.all([loadOrganizations(), loadRoles()])
+  await Promise.all([loadUnits(), loadRoles()])
   await loadUsers()
 })
 </script>
@@ -195,10 +164,10 @@ onMounted(async () => {
     <header class="page-heading">
       <div>
         <h1>人员权限配置</h1>
-        <p>按允许部门与组配置人员角色范围；流程节点操作继续由后端统一模板控制。</p>
+        <p>按平级单位与设备属性配置人员作业范围；流程节点操作继续由后端统一模板控制。</p>
       </div>
       <div class="page-metrics">
-        <span>允许组织 <strong>{{ organizationTree.length }}</strong></span>
+        <span>平级单位 <strong>{{ units.length }}</strong></span>
         <span>当前人员 <strong>{{ filteredUsers.length }}</strong></span>
         <span>可配置角色 <strong>{{ roles.length }}</strong></span>
       </div>
@@ -207,18 +176,16 @@ onMounted(async () => {
     <a-card :bordered="false" class="filter-card">
       <div class="filter-grid">
         <label>
-          <span>部门 / 组</span>
-          <a-tree-select
-            v-model:value="selectedOrganizationId"
-            :tree-data="organizationTreeData"
-            :field-names="{ value: 'value', label: 'title', children: 'children' }"
-            :filter-tree-node="filterOrganizationNode"
-            :loading="organizationLoading"
-            tree-node-filter-prop="searchText"
+          <span>单位</span>
+          <a-select
+            v-model:value="selectedUnitId"
+            :options="unitOptions"
+            :filter-option="filterUnitOption"
+            :loading="unitLoading"
             show-search
             allow-clear
-            placeholder="全部允许部门与组"
-            @change="handleOrganizationChange"
+            placeholder="全部平级单位"
+            @change="handleUnitChange"
           />
         </label>
         <label>
@@ -240,7 +207,7 @@ onMounted(async () => {
         <div class="card-title">
           <div>
             <strong>人员列表</strong>
-            <span>点击“配置权限”设置该人员在不同部门或组下的角色。</span>
+            <span>点击“配置权限”设置该人员的平级单位与设备属性作业范围。</span>
           </div>
         </div>
       </template>
@@ -284,10 +251,9 @@ onMounted(async () => {
       </a-table>
     </a-card>
 
-    <RoleScopeMatrixDialog
+    <UserWorkScopeDialog
       v-model:open="permissionDialogOpen"
       :user="selectedUser"
-      :organization-tree="organizationTree"
       :roles="roles"
       @saved="handleMatrixSaved"
     />

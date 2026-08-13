@@ -1,6 +1,6 @@
 import { request } from '@/api/request'
 import type { EntityId, PageResult } from '@/types/common'
-import type { AllowedOrganizationNodeVO } from '@/types/nodePermission'
+import type { AllowedOrganizationNodeVO, AllowedUnitVO } from '@/types/nodePermission'
 
 export interface SysUserVO {
   id?: EntityId
@@ -130,6 +130,14 @@ export function assignUserRoles(employeeId: string, roleCodes: string[]) {
 export function getAllowedOrganizationTree() {
   return request<AllowedOrganizationNodeVO[]>({
     url: '/system/org-scopes/allowed-tree',
+    method: 'GET'
+  })
+}
+
+/** 平级单位列表：权限配置页的单位筛选与作业范围表单共用一维选项。 */
+export function listAllowedUnits() {
+  return request<AllowedUnitVO[]>({
+    url: '/system/org-scopes/units',
     method: 'GET'
   })
 }

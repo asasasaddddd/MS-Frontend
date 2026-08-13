@@ -36,19 +36,98 @@ export interface AllowedOrganizationNodeVO {
   children: AllowedOrganizationNodeVO[]
 }
 
-export interface UserRoleScopeRequest {
-  roleCode: string
-  scopeType: RoleScopeType
-  scopeOrgId: string
-  audienceMode: RoleScopeAudienceMode
-  grantSource: RoleScopeGrantSource
-  effectiveFrom?: string
-  effectiveTo?: string
-  grantReason?: string
-  rowVersion?: RowVersion
+/** 平级授权单位；单位之间无父子继承关系。 */
+export interface AllowedUnitVO {
+  unitId: string
+  unitName?: string | null
+  orgFullPath?: string | null
 }
 
-export interface UserRoleScopeVO {
+/** 角色作业范围策略，与后端 WorkScopeRolePolicy 序列化字段一致。 */
+export interface WorkScopeRolePolicyVO {
+  roleCode: string
+  strategy: string
+  configurable: boolean
+  subjectRequired: boolean
+  commonRequired: boolean
+}
+
+export type WorkScopeVerificationMethod = 'NOT_APPLICABLE' | 'self' | 'send_out'
+
+export type WorkScopeCommonScopeCode = 'NOT_APPLICABLE' | 'COMMON' | 'NON_COMMON'
+
+/** 人员作业范围标准行；同一规则可配置给多人，同一人员内不得重复。 */
+export interface UserWorkScopeEntry {
+  id?: EntityId | null
+  roleCode: string
+  unitId: string
+  unitName?: string | null
+  orgFullPath?: string | null
+  subjectSubcategory: string
+  verificationMethod: WorkScopeVerificationMethod
+  commonScope: WorkScopeCommonScopeCode
+  grantSource?: string | null
+  status?: string | null
+}
+
+export interface UserWorkScopeMatrixVO {
+  userId: string
+  userName?: string | null
+  homeUnitId?: string | null
+  homeUnitName?: string | null
+  matrixVersion: string
+  rolePolicies: WorkScopeRolePolicyVO[]
+  entries: UserWorkScopeEntry[]
+}
+
+export interface UserWorkScopeMatrixRequest {
+  matrixVersion: string
+  entries: UserWorkScopeEntry[]
+}
+
+/** 作业范围候选预览条件，与后端 TaskCandidateQuery 一致。 */
+export interface WorkScopeCandidatePreviewQuery {
+  businessType: string
+  nodeCode: string
+  operationCode: string
+  permissionCode: string
+  requiredRoleCode: string
+  routingContext: {
+    unitId?: string | null
+    subjectSubcategory?: string | null
+    verificationMethod?: string | null
+    commonScope?: WorkScopeCommonScopeCode | null
+  }
+}
+
+/** 作业范围候选预览结果。 */
+export interface WorkScopeCandidateVO {
+  userId: string
+  userName?: string | null
+  roleCode?: string | null
+  requiredRoleCode?: string | null
+  permissionCode?: string | null
+  matchedWorkScopeId?: EntityId | null
+  matchStrategy?: string | null
+  unitId?: string | null
+  matchSource?: string | null
+  matchReason?: string | null
+}
+
+export interface EffectivePermissionItemVO {
+  roleCode: string
+  permissionCode: string
+  scopeType: NodeScopeType
+  scopeOrgId: string
+  audienceMode: RoleScopeAudienceMode
+  decision: string
+  source: string
+  matchedRoleScopeId?: EntityId | null
+  matchedGrantId?: EntityId | null
+}
+
+/** 旧组织范围授权记录，仅在生效权限诊断视图中回读展示。 */
+export interface LegacyRoleScopeRecordVO {
   id: EntityId
   userId: string
   userName?: string | null
@@ -74,62 +153,11 @@ export interface UserRoleScopeVO {
   updatedAt?: string | null
 }
 
-export interface UserRoleScopePreviewVO {
-  userId: string
-  userName?: string | null
-  roleCode: string
-  roleName?: string | null
-  scopeType: RoleScopeType
-  scopeOrgId: string
-  scopeOrgName?: string | null
-  scopeOrgPath?: string | null
-  allowedDepartmentOrgId?: string | null
-  audienceMode: RoleScopeAudienceMode
-  grantSource: RoleScopeGrantSource
-  effectiveFrom?: string | null
-  effectiveTo?: string | null
-  grantReason?: string | null
-  roleWillBeAssigned: boolean
-  existingScopeId?: EntityId | null
-  existingStatus?: string | null
-  existingRowVersion?: RowVersion | null
-  warnings: string[]
-}
-
-export interface UserRoleScopeMatrixEntry {
-  scopeOrgId: string
-  roleCodes: string[]
-}
-
-export interface UserRoleScopeMatrixRequest {
-  matrixVersion: string
-  entries: UserRoleScopeMatrixEntry[]
-}
-
-export interface UserRoleScopeMatrixVO {
-  employeeId: string
-  matrixVersion: string
-  entries: UserRoleScopeMatrixEntry[]
-  activeLegacyNodeGrantCount: number
-}
-
-export interface EffectivePermissionItemVO {
-  roleCode: string
-  permissionCode: string
-  scopeType: NodeScopeType
-  scopeOrgId: string
-  audienceMode: RoleScopeAudienceMode
-  decision: string
-  source: string
-  matchedRoleScopeId?: EntityId | null
-  matchedGrantId?: EntityId | null
-}
-
 export interface EffectivePermissionVO {
   userId: string
   userName?: string | null
   evaluatedAt: string
-  roleScopes: UserRoleScopeVO[]
+  roleScopes: LegacyRoleScopeRecordVO[]
   nodeGrants: NodeGrantVO[]
   permissions: EffectivePermissionItemVO[]
 }
