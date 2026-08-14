@@ -67,6 +67,7 @@ const tenItemContainer = {
   totalItemCount: 10,
   myPendingItemCount: 5,
   myPendingActionCount: 5,
+  unfinishedItemCount: 5,
   currentNodeSummary: [{
     nodeCode: 'verifier_receive',
     nodeName: 'Pending receive',
@@ -82,15 +83,28 @@ assert.equal(pickerItems[0]?.totalItemCount, 10)
 assert.equal(pickerItems[0]?.myPendingItemCount, 5)
 assert.equal(pickerItems[0]?.myPendingActionCount, 5)
 
-const completedForCurrentIdentity = {
+const fullyReleasedContainer = {
   ...tenItemContainer,
   myPendingItemCount: 0,
-  myPendingActionCount: 0
+  myPendingActionCount: 0,
+  unfinishedItemCount: 0
 } as unknown as PeriodicTodoPlanEntry
 assert.deepEqual(
-  buildPeriodicPlanPickerItems([], [completedForCurrentIdentity]),
+  buildPeriodicPlanPickerItems([], [fullyReleasedContainer]),
   [],
-  'a container must disappear for the current identity once its pending item count reaches zero'
+  'a container must disappear once every device in the plan has been fully released'
+)
+
+const inFlightButNotMineContainer = {
+  ...tenItemContainer,
+  myPendingItemCount: 0,
+  myPendingActionCount: 0,
+  unfinishedItemCount: 3
+} as unknown as PeriodicTodoPlanEntry
+assert.equal(
+  buildPeriodicPlanPickerItems([], [inFlightButNotMineContainer]).length,
+  1,
+  'a container must remain visible while any device is still in flight, even with no pending items for the current identity'
 )
 
 assert.match(

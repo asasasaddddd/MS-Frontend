@@ -23,6 +23,7 @@ const columns = [
   { title: '周检单号', key: 'containerNo', dataIndex: 'containerNo', width: 200 },
   { title: '当前节点', key: 'currentNodeSummary', dataIndex: 'currentNodeSummary', width: 250 },
   { title: '整单条目', key: 'totalItemCount', dataIndex: 'totalItemCount', width: 100, align: 'center' },
+  { title: '未完成', key: 'unfinishedItemCount', dataIndex: 'unfinishedItemCount', width: 100, align: 'center' },
   { title: '我的待办', key: 'myPendingItemCount', dataIndex: 'myPendingItemCount', width: 100, align: 'center' },
   { title: '操作次数', key: 'myPendingActionCount', dataIndex: 'myPendingActionCount', width: 100, align: 'center' },
   { title: '操作', key: 'action', width: 110 }
@@ -62,6 +63,9 @@ const columns = [
         </span>
         <a-tag v-else-if="column.key === 'totalItemCount'" class="device-count">
           {{ record.totalItemCount }} 条
+        </a-tag>
+        <a-tag v-else-if="column.key === 'unfinishedItemCount'" class="device-count">
+          {{ record.unfinishedItemCount }}
         </a-tag>
         <a-tag v-else-if="column.key === 'myPendingItemCount'" class="device-count">
           {{ record.myPendingItemCount }}

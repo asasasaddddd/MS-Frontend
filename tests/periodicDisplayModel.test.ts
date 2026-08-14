@@ -145,6 +145,7 @@ const authoritativePickerItems = buildPeriodicPlanPickerItems(pickerTasks, [{
   totalItemCount: 10,
   myPendingItemCount: 5,
   myPendingActionCount: 3,
+  unfinishedItemCount: 5,
   currentNodeSummary: [{
     nodeCode: 'self_verify',
     nodeName: 'Self verification',
@@ -158,6 +159,7 @@ assert.deepEqual(authoritativePickerItems, [{
   totalItemCount: 10,
   myPendingItemCount: 5,
   myPendingActionCount: 3,
+  unfinishedItemCount: 5,
   currentNodeSummary: 'Self verification'
 }])
 assert.deepEqual(buildPeriodicPlanPickerItems(pickerTasks, [{
@@ -167,6 +169,7 @@ assert.deepEqual(buildPeriodicPlanPickerItems(pickerTasks, [{
   totalItemCount: 10,
   myPendingItemCount: 0,
   myPendingActionCount: 0,
+  unfinishedItemCount: 0,
   currentNodeSummary: []
 }]), [])
 

@@ -39,6 +39,7 @@ export interface PeriodicPlanPickerItem {
   totalItemCount: number
   myPendingItemCount: number
   myPendingActionCount: number
+  unfinishedItemCount: number
   currentNodeSummary: string
 }
 
@@ -457,7 +458,7 @@ export function buildPeriodicPlanPickerItems(
   todoPlans: readonly PeriodicTodoPlanEntry[]
 ): PeriodicPlanPickerItem[] {
   return todoPlans
-    .filter((plan) => plan.containerId && Number(plan.myPendingItemCount) > 0)
+    .filter((plan) => plan.containerId && Number(plan.unfinishedItemCount) > 0)
     .map((plan) => {
       const containerId = String(plan.containerId)
       const nodeNames = plan.currentNodeSummary
@@ -469,6 +470,7 @@ export function buildPeriodicPlanPickerItems(
         totalItemCount: Number(plan.totalItemCount),
         myPendingItemCount: Number(plan.myPendingItemCount),
         myPendingActionCount: Number(plan.myPendingActionCount),
+        unfinishedItemCount: Number(plan.unfinishedItemCount),
         currentNodeSummary: nodeNames.length > 0 ? nodeNames.join(' / ') : '-'
       }
     })

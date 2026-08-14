@@ -41,6 +41,7 @@ export interface WorkflowTodoContainer {
   totalItemCount: number
   myPendingItemCount: number
   myPendingActionCount: number
+  unfinishedItemCount?: number
   currentNodeSummary: WorkflowTodoNodeSummary[]
   snapshotAt?: string
 }
