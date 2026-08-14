@@ -425,6 +425,18 @@ async function loadConfirmers(tasks: PeriodicTaskVO[]) {
   }
 }
 
+/** 周检设备任务终态集合：完成/取消/驳回视为设备已释放。 */
+const RELEASED_TASK_STATUSES = new Set(['completed', 'cancelled', 'rejected'])
+
+/**
+ * 判断周检设备条目是否仍在流转中（未释放）。
+ *
+ * @param task 周检设备任务详情
+ */
+function isUnreleasedPeriodicTask(task: PeriodicTaskVO) {
+  return !RELEASED_TASK_STATUSES.has(String(task.taskStatus || ''))
+}
+
 let dataLoadId = 0
 
 async function loadData() {
@@ -461,11 +473,24 @@ async function loadData() {
         const detail = detailByWorkflowTaskId.get(String(task.taskId))
         return detail ? [detail as PeriodicTaskVO] : []
       })
-      currentTasks.value = mergePeriodicTaskPhysicalActions(workflowCurrentTasks, scanInboxRows)
-      historyTasks.value = workflowParticipatedTasks.value.flatMap((task) => {
+      /** 当前待办已覆盖的设备条目，流转中提升行不重复并入。 */
+      const coveredItemIds = new Set(workflowCurrentTasks.map((task) => String(task.id)))
+      const participatedDetails = workflowParticipatedTasks.value.flatMap((task) => {
         const detail = detailByWorkflowTaskId.get(String(task.taskId))
         return detail ? [detail as PeriodicTaskVO] : []
       })
+      /**
+       * 设备未释放口径：处理过但设备仍流转（含派生状态变更）的条目保留在当前列表，
+       * 只读展示当前节点，待设备释放后进入已办。
+       */
+      const promotedRows = participatedDetails.filter(
+        (task) => isUnreleasedPeriodicTask(task) && !coveredItemIds.has(String(task.id))
+      )
+      currentTasks.value = mergePeriodicTaskPhysicalActions(
+        [...workflowCurrentTasks, ...promotedRows],
+        scanInboxRows
+      )
+      historyTasks.value = participatedDetails.filter((task) => !isUnreleasedPeriodicTask(task))
     }
   } catch (error) {
     if (loadId === dataLoadId) {
