@@ -6,7 +6,7 @@ import {
   previewWorkScopeCandidates,
   replaceUserWorkScopes
 } from '@/api/nodePermission'
-import { listAllowedUnits, type SysRoleVO, type SysUserVO } from '@/api/system'
+import { getUserRoles, listAllowedUnits, type SysRoleVO, type SysUserVO } from '@/api/system'
 import { listDictItems, productionDictionaryTypes, type DictItemVO } from '@/api/dict'
 import type {
   AllowedUnitVO,
@@ -100,6 +100,8 @@ const previewLoading = ref(false)
 const previewRows = ref<WorkScopeCandidateVO[]>([])
 const previewError = ref('')
 const previewExecuted = ref(false)
+const fetchedUserRoleCodes = ref<string[]>([])
+const roleLoading = ref(false)
 
 let loadSerial = 0
 
@@ -109,7 +111,9 @@ const userRoleCodes = computed(() => {
   if (Array.isArray(record.roles) && record.roles.length) {
     return record.roles.filter(Boolean)
   }
-  return String(record.role || '').split(',').map((item) => item.trim()).filter(Boolean)
+  const fromRoleField = String(record.role || '').split(',').map((item) => item.trim()).filter(Boolean)
+  if (fromRoleField.length) return fromRoleField
+  return (fetchedUserRoleCodes.value || []).filter(Boolean)
 })
 
 function roleLabel(roleCode: string) {
@@ -187,6 +191,28 @@ function resetPreview() {
   previewRows.value = []
   previewError.value = ''
   previewExecuted.value = false
+}
+
+/**
+ * 当列表未返回角色时，回调查询该人员的真实角色，避免弹窗角色下拉框为空。
+ */
+async function loadUserRolesIfNeeded() {
+  const record = props.user
+  if (!record?.employeeId) return
+  const hasRolesFromList = (Array.isArray(record.roles) && record.roles.length)
+    || String(record.role || '').split(',').filter(Boolean).length > 0
+  if (hasRolesFromList) {
+    fetchedUserRoleCodes.value = []
+    return
+  }
+  roleLoading.value = true
+  try {
+    fetchedUserRoleCodes.value = await getUserRoles(record.employeeId)
+  } catch (error) {
+    fetchedUserRoleCodes.value = []
+  } finally {
+    roleLoading.value = false
+  }
 }
 
 async function loadMatrix() {
@@ -329,8 +355,12 @@ function closeDialog() {
 watch(
   () => [props.open, props.user?.employeeId] as const,
   ([open]) => {
-    if (open) loadMatrix()
-    else loadSerial += 1
+    if (open) {
+      loadUserRolesIfNeeded()
+      loadMatrix()
+    } else {
+      loadSerial += 1
+    }
   },
   { immediate: true }
 )
@@ -384,6 +414,7 @@ watch(
               <a-select
                 v-model:value="formRoleCode"
                 :options="configurableRoleOptions"
+                :loading="roleLoading"
                 placeholder="选择可配置角色"
                 allow-clear
               />
