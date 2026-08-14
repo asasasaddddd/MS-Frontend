@@ -3,8 +3,6 @@ import type {
   EffectivePermissionVO,
   UserWorkScopeMatrixRequest,
   UserWorkScopeMatrixVO,
-  WorkScopeCandidatePreviewQuery,
-  WorkScopeCandidateVO,
   NodeGrantVO,
   NodeOperationVO,
   NodeScopeGrantPreviewVO,
@@ -92,11 +90,3 @@ export function replaceUserWorkScopes(
   })
 }
 
-/** 按统一候选解析器预览最终候选人；前端不复制匹配算法。 */
-export function previewWorkScopeCandidates(data: WorkScopeCandidatePreviewQuery) {
-  return request<WorkScopeCandidateVO[]>({
-    url: '/system/work-scopes/candidates/preview',
-    method: 'POST',
-    data
-  })
-}

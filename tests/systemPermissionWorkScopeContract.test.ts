@@ -48,6 +48,15 @@ assert.match(dialogSource, /user\?\.employeeName/)
 assert.match(dialogSource, /user\?\.employeeId/)
 assert.match(dialogSource, /homeUnitName/)
 
+// 弹窗三栏：左栏角色分配（全部启用角色，勾选立即调用覆盖式分配接口），
+// 中栏人员信息，右栏范围规则表单；无角色人员可先在左栏授予角色再配范围。
+assert.match(dialogSource, /角色分配/)
+assert.match(dialogSource, /人员信息/)
+assert.match(dialogSource, /assignUserRoles/)
+assert.match(dialogSource, /assignedRoleCodes/)
+assert.match(dialogSource, /handleRoleToggle/)
+assert.match(systemApiSource, /assignUserRoles[\s\S]*?\/system\/users\/\$\{encodeURIComponent\(employeeId\)\}\/roles[\s\S]*?method:\s*'PUT'/)
+
 // 角色驱动表单：管理员只显示单位；自检加学科小类且隐藏通用性；外委再加通用/否通用。
 assert.match(modelSource, /MEASURE_ADMIN[\s\S]*?fixedSubjectSubcategory:\s*'ALL'/)
 assert.match(modelSource, /VERIFIER_SELF[\s\S]*?fixedVerificationMethod:\s*'self'[\s\S]*?fixedCommonScope:\s*'NOT_APPLICABLE'/)
@@ -69,9 +78,6 @@ assert.match(dialogSource, /保留 \{\{ matrixDiff\.retained\.length \}\}/)
 assert.match(dialogSource, /validateWorkScopeDraft\(draftEntries\.value\)/)
 assert.match(modelSource, /WORK_SCOPE_EXTERNAL_COMMON_REQUIRED/)
 
-// 候选预览只调用后端统一候选解析器；前端不复制匹配算法。
-assert.match(dialogSource, /previewWorkScopeCandidates/)
-assert.match(apiSource, /previewWorkScopeCandidates[\s\S]*?\/system\/work-scopes\/candidates\/preview[\s\S]*?method:\s*'POST'/)
 
 // 矩阵版本冲突：HTTP 409 原样提示，不允许本地改写或静默重试。
 assert.match(dialogSource, /isMatrixVersionConflict/)
