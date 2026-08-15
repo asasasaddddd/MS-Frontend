@@ -58,7 +58,12 @@ export const todoModuleAdapters: Readonly<Record<TodoModuleType, TodoModuleAdapt
       const { getFirstCheckDetail } = await import('../api/firstcheck.ts')
       return getFirstCheckDetail(task.businessId, task.taskId, signal)
     },
-    todoRoute: (roleCode) => fixedTodoRoute('firstcheck', roleCode),
+    todoRoute: (roleCode) => roleCode === 'EXTERNAL_OPERATOR'
+      ? {
+          path: '/scan',
+          query: { module: 'firstcheck', action: 'sendout', view: 'list' }
+        }
+      : fixedTodoRoute('firstcheck', roleCode),
     historyRoute: (roleCode) => historyTodoRoute('firstcheck', roleCode)
   },
   periodic: {

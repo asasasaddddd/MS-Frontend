@@ -33,6 +33,14 @@ assert.deepEqual(
   { path: '/todo', query: { type: 'periodic' } },
   '无角色业务页时固定入口仍需回退到只读业务筛选'
 )
+assert.deepEqual(
+  adapters.firstcheck.todoRoute('EXTERNAL_OPERATOR'),
+  {
+    path: '/scan',
+    query: { module: 'firstcheck', action: 'sendout', view: 'list' }
+  },
+  '外扩人员的首检入口必须保留外委送出扫码范围'
+)
 assert.equal(adapters.productSupport.todoRoute('MEASURE_ADMIN'), undefined)
 assert.equal(
   adapterModule.getTodoModuleAdapterForTask({ businessType: 'FIRST_CHECK' })?.type,

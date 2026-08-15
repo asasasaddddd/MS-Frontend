@@ -119,7 +119,9 @@ watch(
       </template>
 
       <div class="dashboard-toolbar">
+        <label class="sr-only" for="workspace-dashboard-business-filter">业务类型筛选</label>
         <a-select
+          id="workspace-dashboard-business-filter"
           class="dashboard-filter"
           :value="selectedType"
           :options="filterOptions"
@@ -147,14 +149,11 @@ watch(
           <tr
             v-for="row in rows"
             :key="row.type"
-            tabindex="0"
             :class="{
               'dashboard-row--zero': row.pendingActionCount === 0,
               'dashboard-row--selected': row.type === selectedType
             }"
             @click="emit('open', row.type)"
-            @keydown.enter="emit('open', row.type)"
-            @keydown.space.prevent="emit('open', row.type)"
           >
             <th class="dashboard-cell--title" scope="row">{{ row.title }}</th>
             <td class="dashboard-cell--actions" data-label="待操作">
