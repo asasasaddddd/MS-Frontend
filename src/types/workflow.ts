@@ -26,6 +26,25 @@ export interface WorkflowTodoSummaryQuery {
 }
 
 /** 当前身份容器投影中的单个集中节点分组。 */
+export interface WorkflowTodoDashboardOverview {
+  pendingActionCount: number
+  todayNewActionCount: number
+}
+
+export interface WorkflowTodoBusinessRow {
+  businessType: BusinessType
+  pendingActionCount: number
+  containerCount: number
+  affectedItemCount: number
+  affectedItemUnit: 'device' | 'material' | string
+}
+
+export interface WorkflowTodoDashboard {
+  snapshotAt: string
+  overview: WorkflowTodoDashboardOverview
+  businessRows: WorkflowTodoBusinessRow[]
+}
+
 export interface WorkflowTodoNodeSummary {
   nodeCode: string
   nodeName: string

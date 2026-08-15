@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict'
 import { register } from 'node:module'
-import { createRenderer, defineComponent, h, nextTick, ref, type App } from 'vue'
+import { computed, createRenderer, defineComponent, h, nextTick, ref, type App } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 
 register('./workflowTaskLoader.mjs', import.meta.url)
 
 const { createWorkflowTaskCoordinator, useWorkflowTask } = await import('../src/composables/useWorkflowTask.ts')
-const { useRoleTodoSummary } = await import('../src/composables/useRoleTodoSummary.ts')
+const { useRoleTodoDashboard } = await import('../src/composables/useRoleTodoDashboard.ts')
 const { useWorkspaceTodoLoad } = await import('../src/composables/useWorkspaceTodoLoad.ts')
 const { useTodoNotificationStore } = await import('../src/stores/todoNotification.ts')
 
@@ -268,53 +268,98 @@ async function testMountedWorkspaceLoaderDropsLateContainerTaskAndDetailResponse
   mounted.app.unmount()
 }
 
-async function testMountedSummaryDropsLateRejectAndRefreshesOnInvalidation() {
+async function testMountedDashboardDropsLateRejectAndRefreshesOnInvalidation() {
   setActivePinia(createPinia())
-  const summaryRequests: Array<{
+  const dashboardRequests: Array<{
     identityKey: string
     signal: AbortSignal
-    request: ReturnType<typeof deferred<{ stages: [] }>>
+    request: ReturnType<typeof deferred<ReturnType<typeof dashboard>>>
   }> = []
 
   const identity = ref('U-A|VERIFIER_SELF')
-  const mounted = mountSetup(() => useRoleTodoSummary({
+  const selectedType = ref<'all' | 'periodic'>('all')
+  const mounted = mountSetup(() => useRoleTodoDashboard({
     identityKey: identity,
-    query: { businessType: 'PERIODIC' },
+    selectedType,
+    query: computed(() => selectedType.value === 'all'
+      ? {}
+      : { businessType: 'PERIODIC' }),
     immediate: true,
-    loadSummary: (identityKey: string, _query: unknown, signal: AbortSignal) => {
-      const request = deferred<{ stages: [] }>()
-      summaryRequests.push({ identityKey, signal, request })
+    loadDashboard: (identityKey: string, _query: unknown, signal: AbortSignal) => {
+      const request = deferred<ReturnType<typeof dashboard>>()
+      dashboardRequests.push({ identityKey, signal, request })
       return request.promise
     }
   }))
   await nextTick()
-  assert.equal(summaryRequests.length, 1)
-  assert.equal(summaryRequests[0]?.identityKey, 'U-A|VERIFIER_SELF')
+  assert.equal(dashboardRequests.length, 1)
+  assert.equal(dashboardRequests[0]?.identityKey, 'U-A|VERIFIER_SELF')
 
   identity.value = 'U-B|VERIFIER_EXTERNAL'
   await nextTick()
-  assert.equal(summaryRequests.length, 2, 'role switch must request summary for the new identity')
-  assert.equal(summaryRequests[0]?.signal.aborted, true)
-  assert.equal(summaryRequests[1]?.identityKey, 'U-B|VERIFIER_EXTERNAL')
-  summaryRequests[1]?.request.resolve({ stages: [] })
+  assert.equal(dashboardRequests.length, 2, 'role switch must request dashboard for the new identity')
+  assert.equal(dashboardRequests[0]?.signal.aborted, true)
+  assert.equal(dashboardRequests[1]?.identityKey, 'U-B|VERIFIER_EXTERNAL')
+  assert.equal(mounted.state.dashboard.value, null, 'role switch must clear the old dashboard immediately')
+  dashboardRequests[1]?.request.resolve(dashboard(4))
   await flushAsyncUpdates()
-  assert.deepEqual(mounted.state.summary.value, { stages: [] })
+  assert.equal(mounted.state.dashboard.value?.overview.pendingActionCount, 4)
 
-  summaryRequests[0]?.request.reject(new Error('stale role A failure'))
+  dashboardRequests[0]?.request.reject(new Error('stale role A failure'))
   await flushAsyncUpdates()
-  assert.equal(mounted.state.error.value, undefined, 'stale rejection must not become the active role error')
+  assert.equal(mounted.state.error.value, undefined,
+    'late role A rejection must not become the active role error')
 
+  selectedType.value = 'periodic'
+  await nextTick()
+  assert.equal(dashboardRequests.length, 3, 'business filter change must request a fresh dashboard')
+  assert.equal(mounted.state.dashboard.value, null, 'business filter change must clear stale counts')
+  dashboardRequests[2]?.request.resolve(dashboard(2, true))
+  await flushAsyncUpdates()
+  assert.equal(mounted.state.dashboard.value?.businessRows.length, 1)
+
+  const staleRefresh = mounted.state.refresh()
+  assert.equal(dashboardRequests.length, 4)
   const notifications = useTodoNotificationStore()
   notifications.invalidationVersion += 1
   await nextTick()
-  assert.equal(summaryRequests.length, 3, 'notification invalidation must refresh the current role summary')
-  assert.equal(summaryRequests[2]?.identityKey, 'U-B|VERIFIER_EXTERNAL')
-  summaryRequests[2]?.request.resolve({ stages: [] })
+  assert.equal(dashboardRequests.length, 5,
+    'notification invalidation must refresh the current role dashboard')
+  assert.equal(dashboardRequests[3]?.signal.aborted, true)
+  assert.equal(dashboardRequests[4]?.identityKey, 'U-B|VERIFIER_EXTERNAL')
+  dashboardRequests[4]?.request.resolve(dashboard(3, true))
   await flushAsyncUpdates()
-  assert.deepEqual(mounted.state.summary.value, { stages: [] })
+  assert.equal(mounted.state.dashboard.value?.overview.pendingActionCount, 3)
+
+  dashboardRequests[3]?.request.resolve(dashboard(99, true))
+  await staleRefresh
+  await flushAsyncUpdates()
+  assert.equal(mounted.state.dashboard.value?.overview.pendingActionCount, 3,
+    'late successful response must not overwrite the current dashboard')
   mounted.app.unmount()
+}
+
+function dashboard(pendingActionCount: number, filtered = false) {
+  const periodicRow = {
+    businessType: 'PERIODIC',
+    pendingActionCount,
+    containerCount: pendingActionCount,
+    affectedItemCount: pendingActionCount,
+    affectedItemUnit: 'device'
+  }
+  return {
+    snapshotAt: '2026-08-15T08:11:26',
+    overview: { pendingActionCount, todayNewActionCount: pendingActionCount },
+    businessRows: filtered ? [periodicRow] : [
+      { businessType: 'FIRST_CHECK', pendingActionCount: 0, containerCount: 0, affectedItemCount: 0, affectedItemUnit: 'device' },
+      periodicRow,
+      { businessType: 'CHANGE', pendingActionCount: 0, containerCount: 0, affectedItemCount: 0, affectedItemUnit: 'device' },
+      { businessType: 'SAMPLING', pendingActionCount: 0, containerCount: 0, affectedItemCount: 0, affectedItemUnit: 'device' },
+      { businessType: 'PRODUCT_SUPPORT', pendingActionCount: 0, containerCount: 0, affectedItemCount: 0, affectedItemUnit: 'material' }
+    ]
+  }
 }
 
 await testMountedWorkflowRoleSwitchDropsLateTasksAndDetails()
 await testMountedWorkspaceLoaderDropsLateContainerTaskAndDetailResponses()
-await testMountedSummaryDropsLateRejectAndRefreshesOnInvalidation()
+await testMountedDashboardDropsLateRejectAndRefreshesOnInvalidation()

@@ -7,6 +7,7 @@ import type {
   WorkflowTaskPage,
   WorkflowTaskQuery,
   WorkflowTodoContainer,
+  WorkflowTodoDashboard,
   WorkflowTodoSummaryQuery,
   WorkflowTimelineEntry
 } from '@/types/workflow'
@@ -59,6 +60,23 @@ export function listWorkflowTodoContainers(
 ) {
   return request<WorkflowTodoContainer[]>({
     url: '/workflow/todo-containers',
+    method: 'GET',
+    signal,
+    params: {
+      businessType: query.businessType,
+      scopeType: query.scopeType,
+      scopeId: query.scopeId
+    }
+  })
+}
+
+/** Read the authoritative todo dashboard for the active identity and role. */
+export function getWorkflowTodoDashboard(
+  query: WorkflowTodoSummaryQuery = {},
+  signal?: AbortSignal
+) {
+  return request<WorkflowTodoDashboard>({
+    url: '/workflow/todo-dashboard',
     method: 'GET',
     signal,
     params: {
