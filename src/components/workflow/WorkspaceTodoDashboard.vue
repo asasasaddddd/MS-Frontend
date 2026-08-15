@@ -131,6 +131,13 @@ watch(
       </div>
 
       <table class="dashboard-table">
+        <colgroup aria-hidden="true">
+          <col class="dashboard-col--name" />
+          <col class="dashboard-col--metric" />
+          <col class="dashboard-col--metric" />
+          <col class="dashboard-col--metric" />
+          <col class="dashboard-col--action" />
+        </colgroup>
         <thead>
           <tr>
             <th>业务类型</th>
@@ -327,9 +334,18 @@ watch(
   border-collapse: collapse;
 }
 
+.dashboard-col--metric {
+  width: 132px;
+}
+
+.dashboard-col--action {
+  width: 76px;
+}
+
 .dashboard-table th,
 .dashboard-table td {
   min-width: 0;
+  box-sizing: border-box;
   padding: 13px 18px;
   border-bottom: 1px solid #edf0f4;
   overflow-wrap: anywhere;
@@ -346,17 +362,15 @@ watch(
 .dashboard-table thead th:nth-child(2),
 .dashboard-table thead th:nth-child(3),
 .dashboard-table thead th:nth-child(4),
-.dashboard-cell--actions,
-.dashboard-cell--documents,
-.dashboard-cell--objects {
-  width: 132px;
-  text-align: right;
+.dashboard-table td.dashboard-cell--actions,
+.dashboard-table td.dashboard-cell--documents,
+.dashboard-table td.dashboard-cell--objects {
+  text-align: center;
 }
 
 .dashboard-table thead th:last-child,
-.dashboard-cell--link {
-  width: 76px;
-  text-align: right;
+.dashboard-table td.dashboard-cell--link {
+  text-align: center;
 }
 
 .dashboard-table tbody tr {
@@ -510,9 +524,13 @@ watch(
   .dashboard-cell--objects { grid-area: objects; }
   .dashboard-cell--link { grid-area: link; }
 
-  .dashboard-cell--actions,
-  .dashboard-cell--link {
+  .dashboard-table td.dashboard-cell--actions,
+  .dashboard-table td.dashboard-cell--link {
     text-align: right;
+  }
+
+  .dashboard-table colgroup {
+    display: none;
   }
 
   .dashboard-cell--documents,

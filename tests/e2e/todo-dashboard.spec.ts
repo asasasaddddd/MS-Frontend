@@ -156,6 +156,15 @@ async function openDashboard(page: Page, options: ApiOptions) {
   await expect(page.locator('.workspace-dashboard')).toBeVisible()
 }
 
+async function contentCenterX(locator: ReturnType<Page['locator']>) {
+  return locator.evaluate((node) => {
+    const range = document.createRange()
+    range.selectNodeContents(node)
+    const rect = range.getBoundingClientRect()
+    return rect.left + rect.width / 2
+  })
+}
+
 test('renders one conserved action-first snapshot on desktop and mobile', async ({ page }) => {
   await openDashboard(page, {
     dashboard: dashboardWith(row('CHANGE', 3, 3, 5), 2)
@@ -169,6 +178,14 @@ test('renders one conserved action-first snapshot on desktop and mobile', async 
   await expect(changeRow).toContainText('3 张')
   await expect(changeRow).toContainText('5 台')
   await expect(page.locator('.dashboard-table tbody tr')).toHaveCount(5)
+
+  const headers = page.locator('.dashboard-table thead th')
+  const changeCells = changeRow.locator('td')
+  for (const [headerIndex, cellIndex] of [[1, 0], [2, 1], [3, 2], [4, 3]] as const) {
+    const headerCenter = await contentCenterX(headers.nth(headerIndex))
+    const cellCenter = await contentCenterX(changeCells.nth(cellIndex))
+    expect(Math.abs(headerCenter - cellCenter)).toBeLessThanOrEqual(2)
+  }
   await page.screenshot({ path: 'test-results/todo-dashboard-desktop.png', fullPage: true })
 
   await page.setViewportSize({ width: 390, height: 844 })
