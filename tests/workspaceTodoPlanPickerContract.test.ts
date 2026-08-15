@@ -31,19 +31,17 @@ assert.match(workspace, /const todoContainers = ref<WorkflowTodoContainer\[\]>\(
 assert.match(workspace, /const todoContainerLoadFailed = ref\(false\)/)
 assert.match(workspace, /const periodicPlanPickerIncomplete = computed/)
 
-const periodicSummaryBlock = workspace.match(
-  /const periodicTodoEntries = computed<TodoDefinition\[\]>\(\(\) => \{([\s\S]*?)\n\}\)/
-)?.[1] || ''
-assert.match(periodicSummaryBlock, /todoContainersFor\('periodic'\)/)
-assert.match(periodicSummaryBlock, /sumMyPendingItems\(groups\)/)
-assert.doesNotMatch(periodicSummaryBlock, /Math\.max|countTodoItemsWithPhysicalActions/)
+assert.match(workspace, /useRoleTodoDashboard/)
+assert.doesNotMatch(workspace, /const periodicTodoEntries|periodic-todo-summary|sumMyPendingItems/)
 
-const openTodoBlock = workspace.match(/function openTodo\(item: TodoDefinition\) \{([\s\S]*?)\n\}/)?.[1] || ''
-assert.match(openTodoBlock, /activeBucket\.value === 'todo'/)
-assert.match(openTodoBlock, /item\.key === 'periodic-todo-summary'/)
-assert.match(openTodoBlock, /periodicPlanPickerOpen\.value = true/)
-assert.match(openTodoBlock, /return/)
-assert.match(openTodoBlock, /router\.push/)
+const openDashboardBlock = workspace.match(
+  /function openDashboardBusiness\(type: Exclude<WorkspaceTodoType, 'all'>\) \{([\s\S]*?)\n\}/
+)?.[1] || ''
+assert.match(openDashboardBlock, /type === 'periodic'/)
+assert.match(openDashboardBlock, /periodicPlanPickerOpen\.value = true/)
+assert.match(openDashboardBlock, /return/)
+assert.match(openDashboardBlock, /getTodoModuleAdapter\(type\)\.todoRoute\(roleCode\.value\)/)
+assert.match(openDashboardBlock, /router\.push/)
 
 const openPeriodicPlanBlock = workspace.match(/function openPeriodicPlan\(containerId: string\) \{([\s\S]*?)\n\}/)?.[1] || ''
 assert.match(openPeriodicPlanBlock, /const currentRole = roleCode\.value/)

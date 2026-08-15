@@ -46,7 +46,8 @@ assert.doesNotMatch(
   /Math\.max\(detailDeviceCount,\s*workflowDeviceCount,\s*physicalDeviceCount\)/,
   'personal todo count must not union unrelated detail, workflow, and scan projections'
 )
-assert.match(workspaceSource, /myPendingItemCount/)
+assert.match(workspaceSource, /useRoleTodoDashboard/)
+assert.doesNotMatch(workspaceSource, /myPendingItemCount/)
 assert.match(workspaceSource, /containerId/)
 assert.match(pickerSource, /containerId/)
 assert.match(pickerSource, /myPendingItemCount/)

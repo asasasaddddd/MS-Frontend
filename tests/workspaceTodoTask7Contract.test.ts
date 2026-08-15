@@ -8,74 +8,66 @@ function source(path: string) {
 function blockBetween(content: string, startMarker: string, endMarker: string) {
   const start = content.indexOf(startMarker)
   const end = content.indexOf(endMarker, start + startMarker.length)
-  assert.ok(start >= 0, `缺少代码段：${startMarker}`)
-  assert.ok(end > start, `无法确定代码段边界：${startMarker}`)
+  assert.ok(start >= 0, `missing source block: ${startMarker}`)
+  assert.ok(end > start, `cannot determine source block boundary: ${startMarker}`)
   return content.slice(start, end)
 }
 
 const workspace = source('../src/views/WorkspaceTodoView.vue')
+const dashboard = source('../src/components/workflow/WorkspaceTodoDashboard.vue')
 const model = source('../src/views/workspaceTodoModel.ts')
 const adapters = source('../src/views/workspaceTodoAdapters.ts')
 
-const firstCheckTodo = blockBetween(workspace, 'const firstCheckTodoEntries', 'const firstCheckHistoryEntries')
-const firstCheckHistory = blockBetween(workspace, 'const firstCheckHistoryEntries', 'const changeTodoEntries')
-const changeTodo = blockBetween(workspace, 'const changeTodoEntries', 'const changeHistoryEntries')
-const changeHistory = blockBetween(workspace, 'const changeHistoryEntries', 'const periodicTodoEntries')
-const periodicTodo = blockBetween(workspace, 'const periodicTodoEntries', 'const periodicHistoryEntries')
+const firstCheckHistory = blockBetween(workspace, 'const firstCheckHistoryEntries', 'const changeHistoryEntries')
+const changeHistory = blockBetween(workspace, 'const changeHistoryEntries', 'const periodicPlanPickerIncomplete')
 const periodicHistory = blockBetween(workspace, 'const periodicHistoryEntries', 'function samplingPlanGroupKey')
-const samplingTodo = blockBetween(workspace, 'const samplingTodoEntries', 'const samplingHistoryEntries')
-const samplingHistory = blockBetween(workspace, 'const samplingHistoryEntries', 'const productSupportTodoEntries')
-const productSupportHistory = blockBetween(workspace, 'const productSupportHistoryEntries', 'const permittedTodos')
-const pendingTotal = blockBetween(workspace, 'const pendingTotal', 'const visibleFilterOptions')
+const samplingHistory = blockBetween(workspace, 'const samplingHistoryEntries', 'const productSupportHistoryEntries')
+const productSupportHistory = blockBetween(workspace, 'const productSupportHistoryEntries', 'const permittedHistory')
+const permittedHistory = blockBetween(workspace, 'const permittedHistory', 'const filteredHistory')
 
-assert.match(model, /export function filterTasksWithLoadedDetails/)
+assert.match(workspace, /useRoleTodoDashboard/)
+assert.match(workspace, /<WorkspaceTodoDashboard/)
+assert.match(workspace, /@open="openDashboardBusiness"/)
 assert.doesNotMatch(
   workspace,
-  /actionableWorkflowTasks/,
-  '总待办必须展示全部候选待办；未扫码等条件门禁只能控制操作按钮，不能隐藏待办入口'
+  /const (?:firstCheck|periodic|change|sampling|productSupport)TodoEntries|todoContainersFor|sumMyPendingItems|pendingTotal/
 )
-assert.match(
-  firstCheckTodo,
-  /todoContainersFor\('firstcheck'\)/,
-  '首检待办入口必须直接基于统一候选待办，包含 allowedActions 为空的待接收任务'
-)
-assert.match(firstCheckTodo, /todoContainersFor\('firstcheck'\)/)
-assert.match(firstCheckTodo, /sumMyPendingItems\(containers\)/)
 assert.doesNotMatch(workspace, /listUnifiedScanInbox|getPendingFirstCheckTakeBackRows|scanInboxRows/)
-assert.doesNotMatch(firstCheckTodo, /if \(tasks\.length === 0\) return \[\]/)
-assert.match(firstCheckTodo, /alwaysVisible:\s*true/)
-assert.doesNotMatch(changeTodo, /if \(tasks\.length === 0\) return \[\]/)
-assert.match(changeTodo, /todoContainersFor\('change'\)/)
-assert.match(changeTodo, /alwaysVisible:\s*true/)
-assert.match(periodicTodo, /key:\s*'periodic-todo-summary'/)
-assert.match(periodicTodo, /todoContainersFor\('periodic'\)/)
-assert.match(periodicTodo, /alwaysVisible:\s*true/)
-assert.match(samplingTodo, /key:\s*'sampling-todo-summary'/)
-assert.match(samplingTodo, /todoContainersFor\('sampling'\)/)
-assert.match(samplingTodo, /alwaysVisible:\s*true/)
-for (const block of [firstCheckTodo, periodicTodo, changeTodo, samplingTodo]) {
-  assert.match(block, /getTodoModuleAdapter/)
-  assert.doesNotMatch(block, /!path/)
-}
-assert.match(adapters, /getWorkspaceFixedTodoRoute/)
-assert.doesNotMatch(firstCheckTodo, /filterTasksWithLoadedDetails/)
-assert.match(firstCheckHistory, /filterTasksWithLoadedDetails/)
-assert.doesNotMatch(changeTodo, /filterTasksWithLoadedDetails/)
-assert.match(changeHistory, /filterTasksWithLoadedDetails/)
 assert.doesNotMatch(workspace, /matchesWorkflowTaskRole|changeNodeCodesByRole/)
-
-assert.doesNotMatch(model, /periodicTodoScopeByRole|samplingTodoNodeCodesByRole/)
-assert.match(periodicTodo, /sumMyPendingItems\(groups\)/)
-assert.match(periodicHistory, /const handledTasks = periodicHistoryTasks\.value/)
-assert.match(samplingTodo, /sumMyPendingItems\(Array\.from\(groups\.values\(\)\)\)/)
-
-assert.doesNotMatch(periodicHistory, /pendingIds/)
-assert.doesNotMatch(samplingHistory, /pendingIds/)
-assert.doesNotMatch(productSupportHistory, /pendingIds/)
-assert.match(pendingTotal, /permittedTodos\.value/)
-assert.doesNotMatch(pendingTotal, /History|history/)
 assert.doesNotMatch(workspace, /const isVerifier = computed/)
-assert.match(workspace, /v-if="activeBucket === 'todo'" class="count-pill orange"/)
+assert.doesNotMatch(workspace, /class="count-pill orange"/)
+
+assert.match(dashboard, /buildWorkspaceDashboardRows/)
+assert.match(dashboard, /row\.pendingActionCount === 0/)
+assert.match(dashboard, /@click="emit\('open', row\.type\)"/)
+
+assert.match(model, /export function filterTasksWithLoadedDetails/)
+assert.doesNotMatch(model, /periodicTodoScopeByRole|samplingTodoNodeCodesByRole/)
+assert.match(adapters, /getWorkspaceFixedTodoRoute/)
+
+assert.match(firstCheckHistory, /filterTasksWithLoadedDetails/)
+assert.match(changeHistory, /filterTasksWithLoadedDetails/)
+assert.match(periodicHistory, /const handledTasks = periodicHistoryTasks\.value/)
+assert.match(samplingHistory, /samplingHistoryTasks\.value/)
+assert.match(productSupportHistory, /productSupportHistoryTasks\.value/)
+for (const historyBlock of [periodicHistory, samplingHistory, productSupportHistory]) {
+  assert.doesNotMatch(historyBlock, /pendingIds/)
+}
+for (const historyName of [
+  'firstCheckHistoryEntries',
+  'periodicHistoryEntries',
+  'changeHistoryEntries',
+  'samplingHistoryEntries',
+  'productSupportHistoryEntries'
+]) {
+  assert.match(permittedHistory, new RegExp(`\\.\\.\\.${historyName}\\.value`))
+}
+
+assert.match(workspace, /function openDashboardBusiness/)
+assert.match(workspace, /type === 'periodic'[\s\S]*?periodicPlanPickerOpen\.value = true/)
+assert.match(workspace, /const periodicPlanPickerItems = computed\(\(\) => buildPeriodicPlanPickerItems/)
+assert.match(workspace, /<PeriodicPlanPickerDialog/)
+assert.match(workspace, /@select="openPeriodicPlan"/)
 
 assert.match(workspace, /useWorkspaceTodoLoad/)
 assert.match(workspace, /watch\(workspaceSnapshot,\s*applyWorkspaceSnapshot/)

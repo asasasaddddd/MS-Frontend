@@ -3,9 +3,9 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { SelectProps } from 'ant-design-vue'
-import FlowStatusSummary from '@/components/workflow/FlowStatusSummary.vue'
+import WorkspaceTodoDashboard from '@/components/workflow/WorkspaceTodoDashboard.vue'
 import PeriodicPlanPickerDialog from '@/views/periodic/components/PeriodicPlanPickerDialog.vue'
-import { useRoleTodoSummary } from '@/composables/useRoleTodoSummary'
+import { useRoleTodoDashboard } from '@/composables/useRoleTodoDashboard'
 import { useWorkflowTask, type WorkflowBoundDetail } from '@/composables/useWorkflowTask'
 import {
   useWorkspaceTodoLoad,
@@ -34,7 +34,6 @@ import {
   filterVisibleTodoEntries,
   getWorkspaceLaunchActions,
   shouldShowWorkspaceTaskSections,
-  sumWorkspaceTodoCounts,
   visibleTodoTypeValues,
   workspaceTodoBusinessType,
   workspaceTodoTypeFromQuery,
@@ -89,16 +88,18 @@ const workflowIdentity = computed(() => {
   return user && showWorkspaceTaskSections.value ? `${user.employeeId}|${user.roleCode}` : ''
 })
 const selectedWorkflowBusinessType = computed(() => workspaceTodoBusinessType(selectedType.value))
-const summaryQuery = computed(() => ({
+const dashboardQuery = computed(() => ({
   businessType: selectedWorkflowBusinessType.value
 }))
 const {
-  summary: todoSummary,
-  loading: todoSummaryLoading,
-  error: todoSummaryError
-} = useRoleTodoSummary({
+  dashboard: todoDashboard,
+  loading: todoDashboardLoading,
+  error: todoDashboardError,
+  refresh: refreshTodoDashboard
+} = useRoleTodoDashboard({
   identityKey: workflowIdentity,
-  query: summaryQuery
+  selectedType,
+  query: dashboardQuery
 })
 const {
   todoTasks: workflowTasks,
@@ -132,50 +133,6 @@ const filterOptions: SelectProps['options'] = [
   { label: '产品配套', value: 'productSupport' }
 ]
 
-function todoContainersFor(type: Exclude<TodoType, 'all'>) {
-  return todoContainers.value.filter((container) =>
-    Number(container.myPendingItemCount) > 0
-      && matchesBusinessType(container.businessType, type)
-  )
-}
-
-function sumMyPendingItems(containers: readonly WorkflowTodoContainer[]) {
-  return containers.reduce((sum, container) => sum + Number(container.myPendingItemCount), 0)
-}
-
-const firstCheckTodoEntries = computed<TodoDefinition[]>(() => {
-  const currentRole = roleCode.value
-  if (!currentRole) return []
-  const routeTarget = getTodoModuleAdapter('firstcheck').todoRoute(currentRole)!
-
-  const containers = todoContainersFor('firstcheck')
-  const taskCount = containers.length
-  const totalFirstCheckTodoCount = sumMyPendingItems(containers)
-  const waitingReceiveCount = containers.filter((container) =>
-    container.currentNodeSummary.some((node) => /receive/i.test(node.nodeCode))
-  ).length
-  const workflowDetailTitle = taskCount === 0
-    ? '当前共 0 张首检单待处理'
-    : waitingReceiveCount > 0
-      ? `当前共 ${taskCount} 张首检单待处理，其中 ${waitingReceiveCount} 张待接收`
-      : `当前共 ${taskCount} 张首检单待处理`
-  return [{
-    key: 'firstcheck-todo-summary',
-    type: 'firstcheck' as const,
-    title: '首次检定',
-    detailTitle: workflowDetailTitle,
-    count: totalFirstCheckTodoCount,
-    unit: '项',
-    color: 'orange' as TodoColor,
-    alwaysVisible: true,
-    roles: [currentRole],
-    routeByRole: { [currentRole]: routeTarget.path },
-    query: currentRole === 'EXTERNAL_OPERATOR'
-      ? { module: 'firstcheck', action: 'sendout', view: 'list' }
-      : routeTarget.query
-  }]
-})
-
 const firstCheckHistoryEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
   const path = getTodoModuleAdapter('firstcheck').historyRoute(currentRole)
@@ -205,30 +162,6 @@ const firstCheckHistoryEntries = computed<TodoDefinition[]>(() => {
     })
 })
 
-const changeTodoEntries = computed<TodoDefinition[]>(() => {
-  const currentRole = roleCode.value
-  if (!currentRole) return []
-  const routeTarget = getTodoModuleAdapter('change').todoRoute(currentRole)!
-
-  const containers = todoContainersFor('change')
-  const taskCount = containers.length
-  const itemCount = sumMyPendingItems(containers)
-
-  return [{
-    key: 'change-todo-summary',
-    type: 'change' as const,
-    title: '状态变更',
-    detailTitle: `当前共 ${taskCount} 张状态变更单待处理`,
-    count: itemCount,
-    unit: '条',
-    color: 'blue' as TodoColor,
-    alwaysVisible: true,
-    roles: [currentRole],
-    routeByRole: { [currentRole]: routeTarget.path },
-    query: routeTarget.query
-  }]
-})
-
 const changeHistoryEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
   const path = getTodoModuleAdapter('change').historyRoute(currentRole)
@@ -256,35 +189,6 @@ const changeHistoryEntries = computed<TodoDefinition[]>(() => {
         query: { orderId, tab: 'history' }
       }
     })
-})
-
-const periodicTodoEntries = computed<TodoDefinition[]>(() => {
-  const currentRole = roleCode.value
-  if (!currentRole) return []
-  const routeTarget = getTodoModuleAdapter('periodic').todoRoute(currentRole)!
-
-  const groups = todoContainersFor('periodic')
-  const deviceCount = sumMyPendingItems(groups)
-  const color: TodoColor = periodicTasks.value.some((task) =>
-    task.taskStatus === 'exception' || task.currentNode === 'verifier_scrap_disposal')
-    ? 'red'
-    : 'orange'
-
-  return [{
-    key: 'periodic-todo-summary',
-    type: 'periodic' as const,
-    title: '周检计划',
-    detailTitle: groups.length === 0
-      ? '当前共 0 张周检单待处理'
-      : `当前共 ${groups.length} 张周检单、${deviceCount} 台设备待处理`,
-    count: deviceCount,
-    unit: '台',
-    color,
-    alwaysVisible: true,
-    roles: [currentRole],
-    routeByRole: { [currentRole]: routeTarget.path },
-    query: routeTarget.query
-  }]
 })
 
 const periodicPlanPickerIncomplete = computed(() =>
@@ -339,36 +243,6 @@ function buildSamplingPlanSubtitle(tasks: SamplingTaskVO[]) {
   return `${deviceText} · ${nodes.slice(0, 2).join(' / ')}${nodes.length > 2 ? ' 等' : ''}`
 }
 
-const samplingTodoEntries = computed<TodoDefinition[]>(() => {
-  const currentRole = roleCode.value
-  if (!currentRole) return []
-  const routeTarget = getTodoModuleAdapter('sampling').todoRoute(currentRole)!
-
-  const groups = new Map(
-    todoContainersFor('sampling').map((container) => [String(container.containerId), container])
-  )
-  const deviceCount = sumMyPendingItems(Array.from(groups.values()))
-  const color: TodoColor = samplingTasks.value.some(
-    (task) => task.taskStatus === 'rejected' || task.taskStatus === 'cancelled'
-  ) ? 'red' : 'orange'
-
-  return [{
-    key: 'sampling-todo-summary',
-    type: 'sampling' as const,
-    title: 'C类物资抽检',
-    detailTitle: groups.size === 0
-      ? '当前共 0 张 C 类抽检单待处理'
-      : `当前共 ${groups.size} 张C类抽检单、${deviceCount} 台设备待处理`,
-    count: deviceCount,
-    unit: '台',
-    color,
-    alwaysVisible: true,
-    roles: [currentRole],
-    routeByRole: { [currentRole]: routeTarget.path },
-    query: routeTarget.query
-  }]
-})
-
 const samplingHistoryEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
   const path = getTodoModuleAdapter('sampling').historyRoute(currentRole)
@@ -397,45 +271,6 @@ const samplingHistoryEntries = computed<TodoDefinition[]>(() => {
   }))
 })
 
-const productSupportTodoEntries = computed<TodoDefinition[]>(() => {
-  const currentRole = roleCode.value
-  const path = getTodoModuleAdapter('productSupport').todoRoute(currentRole)?.path
-  if (!currentRole || !path) return []
-
-  const detailsById = new Map(
-    productSupportTasks.value.map((order) => [String(order.id), order])
-  )
-  return todoContainersFor('productSupport')
-    .map((container) => {
-      const orderId = String(container.containerId)
-      const order = detailsById.get(orderId) || {} as ProductSupportOrderVO
-      const titleNo = order.orderNo || order.contractNo || orderId
-      const detailTitle = [
-        order.contractNo,
-        order.projectNo,
-        order.currentNodeName || order.currentNode,
-        order.ratioCount ? `${order.ratioCount}类抽检比例` : undefined,
-        order.itemCount ? `${order.itemCount}项明细` : undefined
-      ]
-        .filter(Boolean)
-        .join(' / ')
-
-      return {
-        key: `product-support-${orderId}`,
-        type: 'productSupport' as const,
-        title: `产品配套单 ${titleNo}`,
-        detailTitle,
-        count: container.myPendingItemCount,
-        unit: '项',
-        color: (order.orderStatus === 'completed' ? 'green' : 'orange') as TodoColor,
-        roles: [currentRole],
-        routeByRole: { [currentRole]: path },
-        query: { orderId, containerId: orderId }
-      }
-    })
-    .sort((a, b) => a.title.localeCompare(b.title, 'zh-Hans'))
-})
-
 const productSupportHistoryEntries = computed<TodoDefinition[]>(() => {
   const currentRole = roleCode.value
   const path = getTodoModuleAdapter('productSupport').historyRoute(currentRole)
@@ -458,20 +293,6 @@ const productSupportHistoryEntries = computed<TodoDefinition[]>(() => {
   })
 })
 
-const permittedTodos = computed(() => {
-  const currentRole = roleCode.value
-  if (!currentRole) return []
-  return filterVisibleTodoEntries(
-    dedupeTodoEntriesByKey([
-      ...firstCheckTodoEntries.value,
-      ...periodicTodoEntries.value,
-      ...changeTodoEntries.value,
-      ...samplingTodoEntries.value,
-      ...productSupportTodoEntries.value
-    ])
-  )
-})
-
 const permittedHistory = computed(() => {
   const currentRole = roleCode.value
   if (!currentRole) return []
@@ -486,27 +307,40 @@ const permittedHistory = computed(() => {
   )
 })
 
-const activeEntries = computed(() => (activeBucket.value === 'todo' ? permittedTodos.value : permittedHistory.value))
-
-const filteredTodos = computed(() => {
+const filteredHistory = computed(() => {
   const text = keyword.value.trim()
-  return activeEntries.value.filter((item) => {
+  return permittedHistory.value.filter((item) => {
     const matchesType = selectedType.value === 'all' || item.type === selectedType.value
     const matchesKeyword = !text || item.title.includes(text) || Boolean(item.detailTitle?.includes(text))
     return matchesType && matchesKeyword
   })
 })
 
-const pendingTotal = computed(() => sumWorkspaceTodoCounts(permittedTodos.value))
-
 const visibleFilterOptions = computed(() => {
-  const types = new Set<TodoType>(visibleTodoTypeValues(activeEntries.value))
+  const types = new Set<TodoType>(visibleTodoTypeValues(permittedHistory.value))
   return filterOptions.filter((option) => types.has(option.value as TodoType))
 })
 
 function resetFilter() {
   selectedType.value = 'all'
   keyword.value = ''
+}
+
+function selectTodoType(type: WorkspaceTodoType) {
+  selectedType.value = type
+}
+
+function openDashboardBusiness(type: Exclude<WorkspaceTodoType, 'all'>) {
+  if (type === 'periodic') {
+    periodicPlanPickerOpen.value = true
+    return
+  }
+  const target = getTodoModuleAdapter(type).todoRoute(roleCode.value)
+  if (target) {
+    void router.push(target)
+    return
+  }
+  void router.push({ path: '/todo', query: { type } })
 }
 
 function openPeriodicPlan(containerId: string) {
@@ -527,10 +361,6 @@ function openPeriodicPlan(containerId: string) {
 }
 
 function openTodo(item: TodoDefinition) {
-  if (activeBucket.value === 'todo' && item.key === 'periodic-todo-summary') {
-    periodicPlanPickerOpen.value = true
-    return
-  }
   const currentRole = roleCode.value
   const path = currentRole ? item.routeByRole[currentRole] : undefined
   if (path) {
@@ -652,26 +482,35 @@ watch(
       </div>
     </a-card>
 
-    <FlowStatusSummary
+    <a-tabs
+      v-if="showWorkspaceTaskSections && route.path === '/todo'"
+      v-model:active-key="activeBucket"
+      class="workspace-task-tabs"
+      @change="resetFilter"
+    >
+      <a-tab-pane key="todo" tab="我的待办" />
+      <a-tab-pane key="history" tab="我的已办" />
+    </a-tabs>
+
+    <WorkspaceTodoDashboard
       v-if="showWorkspaceTaskSections && route.path === '/todo' && activeBucket === 'todo'"
-      :summary="todoSummary"
-      :loading="todoSummaryLoading"
-      :error="todoSummaryError"
-      title="全部流程待办汇总"
+      :dashboard="todoDashboard"
+      :selected-type="selectedType"
+      :loading="todoDashboardLoading"
+      :error="todoDashboardError"
+      @retry="refreshTodoDashboard"
+      @select-type="selectTodoType"
+      @open="openDashboardBusiness"
     />
 
-    <a-card v-if="showWorkspaceTaskSections && route.path === '/todo'" class="todo-panel" :bordered="false">
+    <a-card
+      v-if="showWorkspaceTaskSections && route.path === '/todo' && activeBucket === 'history'"
+      class="todo-panel"
+      :bordered="false"
+    >
       <template #title>
-        <h2>流程任务</h2>
+        <h2>已办记录</h2>
       </template>
-      <template #extra>
-        <a-tag v-if="activeBucket === 'todo'" class="count-pill orange">{{ pendingTotal }} 项待办</a-tag>
-      </template>
-
-      <a-tabs v-model:active-key="activeBucket" class="workspace-task-tabs" @change="resetFilter">
-        <a-tab-pane key="todo" tab="我的待办" />
-        <a-tab-pane key="history" tab="我的已办" />
-      </a-tabs>
 
       <div class="task-filter">
         <a-select v-model:value="selectedType" class="type-select" :options="visibleFilterOptions" />
@@ -680,8 +519,8 @@ watch(
         <a-button @click="resetFilter">重置</a-button>
       </div>
 
-      <div v-if="filteredTodos.length > 0" class="task-list">
-        <div v-for="item in filteredTodos" :key="item.key || item.type" class="task-item">
+      <div v-if="filteredHistory.length > 0" class="task-list">
+        <div v-for="item in filteredHistory" :key="item.key || item.type" class="task-item">
           <div class="task-item-body">
             <div class="task-title">
               <strong>{{ item.title }}</strong>
@@ -698,7 +537,7 @@ watch(
       <a-empty
         v-else
         class="todo-empty"
-        :description="activeBucket === 'todo' ? '当前角色暂无该类型待办' : '当前角色暂无该类型已办记录'"
+        description="当前角色暂无该类型已办记录"
       />
     </a-card>
 

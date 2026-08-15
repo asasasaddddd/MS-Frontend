@@ -208,7 +208,9 @@ const workspaceTodoSource = readFileSync(
 )
 assert.match(workspaceTodoSource, /useWorkflowTask/)
 assert.match(workspaceTodoSource, /loadTodoContainers/)
-assert.match(workspaceTodoSource, /myPendingItemCount/)
+assert.match(workspaceTodoSource, /useRoleTodoDashboard/)
+assert.match(workspaceTodoSource, /<WorkspaceTodoDashboard/)
+assert.doesNotMatch(workspaceTodoSource, /myPendingItemCount|const (?:firstCheck|periodic|change|sampling|productSupport)TodoEntries|pendingTotal/)
 assert.doesNotMatch(workspaceTodoSource, /Math\.max\(detailDeviceCount/)
 
 for (const path of [
