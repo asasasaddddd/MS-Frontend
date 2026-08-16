@@ -97,10 +97,11 @@ export function hasWorkflowAction(task: { allowedActions?: readonly string[] } |
 }
 
 export function bindWorkflowTask<T extends object>(detail: T, workflowTask: WorkflowTask): WorkflowBoundDetail<T> {
+  const businessState = detail as { currentNode?: string; currentNodeName?: string }
   return {
     ...detail,
-    currentNode: workflowTask.currentNodeCode || workflowTask.nodeCode,
-    currentNodeName: workflowTask.currentNodeName || workflowTask.nodeName,
+    currentNode: businessState.currentNode || workflowTask.currentNodeCode || workflowTask.nodeCode,
+    currentNodeName: businessState.currentNodeName || workflowTask.currentNodeName || workflowTask.nodeName,
     workflowTaskId: workflowTask.taskId,
     processInstanceId: workflowTask.processInstanceId,
     rowVersion: workflowTask.rowVersion,

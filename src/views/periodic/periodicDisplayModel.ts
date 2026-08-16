@@ -365,12 +365,17 @@ export function mapPeriodicTaskRow(task: PeriodicTaskVO, role?: PeriodicTableRol
   const physicalStatusName = task.physicalStatus === 'wait_verifier_receive'
     ? '待接收'
     : task.physicalStatusName || physicalStatusDisplayName(task.physicalStatus)
-  const verifierHandover = role === 'verifier'
+  const initialVerifierEntry = role === 'verifier'
     && task.currentNode === 'admin_exception_route'
     && task.physicalStatus === 'wait_verifier_receive'
-  const currentNodeName = verifierHandover
+  const handoverAlreadyDecided = task.currentNode === 'admin_exception_route'
+    && task.physicalStatus !== 'wait_verifier_receive'
+    && task.physicalStatus !== undefined
+    && task.physicalStatus !== null
+    && task.physicalStatus !== ''
+  const currentNodeName = initialVerifierEntry || handoverAlreadyDecided
     ? physicalStatusName
-    : task.currentNodeName || nodeDisplayName(task.currentNode)
+    : task.exceptionFlowName || task.currentNodeName || nodeDisplayName(task.currentNode)
   const taskStatusName = task.taskStatusName || statusDisplayName(task.taskStatus)
   return {
     taskId: task.id,

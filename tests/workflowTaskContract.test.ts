@@ -123,6 +123,31 @@ const boundDetail = workflowTask.bindWorkflowTask({ name: 'detail' }, workflowRo
 assert.equal(boundDetail.workflowTaskId, '2090000000000000001')
 assert.equal(boundDetail.rowVersion, 3)
 assert.deepEqual(boundDetail.allowedActions, ['SUBMIT'])
+
+const derivedFlowDetail = workflowTask.bindWorkflowTask(
+  {
+    currentNode: 'exception_disposal',
+    currentNodeName: '管理类别调整'
+  },
+  workflowRow({
+    nodeCode: 'completed',
+    nodeName: '已完成',
+    currentNodeCode: 'completed',
+    currentNodeName: '已完成',
+    taskStatus: 'completed',
+    allowedActions: []
+  })
+)
+assert.equal(
+  derivedFlowDetail.currentNode,
+  'exception_disposal',
+  '已结束的源工作流快照不得覆盖仍在流转的业务节点'
+)
+assert.equal(
+  derivedFlowDetail.currentNodeName,
+  '管理类别调整',
+  '派生状态变更期间必须保留业务详情返回的具体派生类型'
+)
 assert.equal(
   workflowTask.hasWorkflowAction({ ...workflowRow(), nodeCode: 'completed', allowedActions: [] }, 'SUBMIT'),
   false,

@@ -315,6 +315,7 @@ export interface PeriodicResponsibleScrapConfirmRequest {
   taskId: EntityId
   rowVersion: RowVersion
   approved: boolean
+  trackingRequired?: boolean
   opinion?: string
 }
 

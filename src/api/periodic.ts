@@ -67,6 +67,13 @@ export function listPeriodicTodoPlans() {
   })
 }
 
+export function listPeriodicParticipatedUnfinishedTasks() {
+  return request<PeriodicTaskVO[]>({
+    url: periodicEndpoint('participatedUnfinished'),
+    method: 'GET'
+  })
+}
+
 export function getPeriodicTask(periodicTaskId: EntityId, workflowTaskId: EntityId, signal?: AbortSignal) {
   return request<PeriodicTaskVO>({
     url: periodicEndpoint('taskDetail', periodicTaskId),

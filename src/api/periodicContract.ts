@@ -43,6 +43,7 @@ const periodicEndpoints = {
   generateMonthPlan: '/periodic/plans/generate-month',
   generateBeforeUsePlan: '/periodic/pre-use/plans/generate',
   todoPlans: '/periodic/todo-plans',
+  participatedUnfinished: '/periodic/participated-unfinished',
   taskDetail: '/periodic/tasks',
   verifierReceive: '/periodic/verifier-receive',
   externalSendOut: '/periodic/external-send-out',
@@ -213,6 +214,7 @@ export function buildPeriodicResponsibleScrapConfirmRequest(
   return {
     ...input,
     approved: Boolean(input.approved),
+    trackingRequired: input.approved ? input.trackingRequired : undefined,
     opinion: input.opinion?.trim() || undefined
   }
 }

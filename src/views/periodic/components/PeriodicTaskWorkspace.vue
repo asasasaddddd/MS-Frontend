@@ -6,6 +6,7 @@ import {
   confirmerConfirmPeriodic,
   generatePeriodicTestPlan,
   getPeriodicTask,
+  listPeriodicParticipatedUnfinishedTasks,
   managerForwardConfirmPeriodic,
   submitPeriodicResponsibleScrapConfirm,
   submitPeriodicResponsibleScrapTrackingDecision,
@@ -447,16 +448,28 @@ async function loadData() {
   /** 路由计划的权威汇总与任务列表并行读取。 */
   const planSummaryPromise = refreshSummary().catch(() => undefined)
   try {
-    const [workflowResult, scanResult] = await Promise.allSettled([
+    const [workflowResult, scanResult, participatedResult] = await Promise.allSettled([
       refreshWorkflowTasks(),
-      listUnifiedScanInbox()
+      listUnifiedScanInbox(),
+      listPeriodicParticipatedUnfinishedTasks()
     ])
     const scanInboxRows = scanResult.status === 'fulfilled' ? scanResult.value : []
-    if (workflowResult.status === 'rejected' && scanResult.status === 'rejected') {
+    const participatedRows = participatedResult.status === 'fulfilled'
+      ? participatedResult.value.map((task) => ({
+          ...task,
+          currentNode: parsePeriodicNodeCode(task.currentNode)
+        }))
+      : []
+    if (workflowResult.status === 'rejected'
+      && scanResult.status === 'rejected'
+      && participatedResult.status === 'rejected') {
       throw workflowResult.reason
     }
     if (workflowResult.status === 'rejected') {
-      currentTasks.value = mergePeriodicTaskPhysicalActions([], scanInboxRows)
+      currentTasks.value = mergePeriodicTaskPhysicalActions(
+        participatedRows.filter(isUnreleasedPeriodicTask),
+        scanInboxRows
+      )
       historyTasks.value = []
     } else {
       const details = await loadWorkflowDetails(
@@ -486,8 +499,14 @@ async function loadData() {
       const promotedRows = participatedDetails.filter(
         (task) => isUnreleasedPeriodicTask(task) && !coveredItemIds.has(String(task.id))
       )
+      const retainedItemIds = new Set(
+        [...workflowCurrentTasks, ...promotedRows].map((task) => String(task.id))
+      )
+      const participatedUnfinishedRows = participatedRows.filter(
+        (task) => isUnreleasedPeriodicTask(task) && !retainedItemIds.has(String(task.id))
+      )
       currentTasks.value = mergePeriodicTaskPhysicalActions(
-        [...workflowCurrentTasks, ...promotedRows],
+        [...workflowCurrentTasks, ...promotedRows, ...participatedUnfinishedRows],
         scanInboxRows
       )
       historyTasks.value = participatedDetails.filter((task) => !isUnreleasedPeriodicTask(task))
@@ -666,7 +685,7 @@ async function handleScrapDisposalSubmit(payload: PeriodicScrapDisposalRequest) 
 }
 
 async function handleScrapConfirmSubmit(payload: PeriodicResponsibleScrapConfirmRequest) {
-  await runSubmit(activeTask.value, () => submitPeriodicResponsibleScrapConfirm(payload), '报废确认已提交', () => {
+  await runSubmit(activeTask.value, () => submitPeriodicResponsibleScrapConfirm(payload), '报废确认与追踪判定已提交', () => {
     scrapConfirmOpen.value = false
   })
 }

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 
 import {
   buildPeriodicScanRequest,
+  buildPeriodicResponsibleScrapConfirmRequest,
   buildPeriodicVerificationRecordRequest,
   isPeriodicJudgementResult,
   periodicEndpoint,
@@ -12,6 +13,7 @@ import {
 assert.equal(periodicEndpoint('taskDetail', '2073579908903317505'), '/periodic/tasks/2073579908903317505')
 assert.equal(periodicEndpoint('generateTestPlan'), '/periodic/plans/generate-test-one')
 assert.equal(periodicEndpoint('todoPlans'), '/periodic/todo-plans')
+assert.equal(periodicEndpoint('participatedUnfinished'), '/periodic/participated-unfinished')
 assert.equal(periodicEndpoint('verificationRecord'), '/periodic/self-verify')
 assert.equal(periodicEndpoint('supplierFillInfo'), '/periodic/external-common-fill')
 assert.equal(periodicEndpoint('verifierFillInfo'), '/periodic/external-uncommon-fill')
@@ -72,6 +74,43 @@ assert.equal(verificationPayload.confirmationRequired, 0)
 assert.equal(verificationPayload.certificateAttachmentGroupId, '2073579912313286657')
 assert.equal(typeof verificationPayload.certificateAttachmentGroupId, 'string')
 
+assert.deepEqual(
+  buildPeriodicResponsibleScrapConfirmRequest({
+    periodicTaskId: '200',
+    taskId: '900',
+    rowVersion: 0,
+    approved: true,
+    trackingRequired: true,
+    opinion: '  确认报废并进行追踪  '
+  }),
+  {
+    periodicTaskId: '200',
+    taskId: '900',
+    rowVersion: 0,
+    approved: true,
+    trackingRequired: true,
+    opinion: '确认报废并进行追踪'
+  }
+)
+
+assert.deepEqual(
+  buildPeriodicResponsibleScrapConfirmRequest({
+    periodicTaskId: '200',
+    taskId: '900',
+    rowVersion: 0,
+    approved: true,
+    opinion: '  尚未选择追踪结果  '
+  }),
+  {
+    periodicTaskId: '200',
+    taskId: '900',
+    rowVersion: 0,
+    approved: true,
+    trackingRequired: undefined,
+    opinion: '尚未选择追踪结果'
+  }
+)
+
 const periodicWorkspaceSource = readFileSync(
   new URL('../src/views/periodic/components/PeriodicTaskWorkspace.vue', import.meta.url),
   'utf8'
@@ -88,6 +127,7 @@ assert.doesNotMatch(periodicWorkspaceSource, /normalSubmit|submitNormalSelection
 const periodicApiSource = readFileSync(new URL('../src/api/periodic.ts', import.meta.url), 'utf8')
 assert.doesNotMatch(periodicApiSource, /my-tasks|my-history|listPeriodicMy/)
 assert.match(periodicApiSource, /listPeriodicTodoPlans\(\)/)
+assert.match(periodicApiSource, /listPeriodicParticipatedUnfinishedTasks\(\)/)
 assert.match(periodicApiSource, /generatePeriodicTestPlan\(scenario: PeriodicTestPlanScenario\)/)
 assert.match(periodicApiSource, /params:\s*\{ scenario \}/)
 assert.match(periodicApiSource, /function submitPeriodicResponsibleScrapConfirm[\s\S]*periodicEndpoint\('responsibleScrapConfirm'\)/)
@@ -96,6 +136,14 @@ assert.doesNotMatch(periodicApiSource, /normalSubmit|submitPeriodicNormalTasks/)
 
 const periodicContractSource = readFileSync(new URL('../src/api/periodicContract.ts', import.meta.url), 'utf8')
 assert.doesNotMatch(periodicContractSource, /normalSubmit|normal-submit/)
+
+const scrapConfirmDialogSource = readFileSync(
+  new URL('../src/views/periodic/components/PeriodicResponsibleScrapConfirmDialog.vue', import.meta.url),
+  'utf8'
+)
+assert.match(scrapConfirmDialogSource, /v-if="form\.approved"/)
+assert.match(scrapConfirmDialogSource, /是否进行不合格追踪/)
+assert.match(scrapConfirmDialogSource, /trackingRequired:\s*form\.approved\s*\?\s*form\.trackingRequired/)
 
 const periodicTypeSource = readFileSync(new URL('../src/types/periodic.ts', import.meta.url), 'utf8')
 assert.match(periodicTypeSource, /'self'/)
@@ -118,6 +166,7 @@ const periodicDetailSource = readFileSync(
 )
 assert.doesNotMatch(periodicDetailSource, /计划基本信息|PeriodicPlanVO|plan\?\./)
 assert.doesNotMatch(periodicWorkspaceSource, /getPeriodicPlan\(|currentPlan|:plan="currentPlan"/)
+assert.match(periodicWorkspaceSource, /listPeriodicParticipatedUnfinishedTasks/)
 
 const periodicAdminSource = readFileSync(
   new URL('../src/views/periodic/PeriodicAdminView.vue', import.meta.url),

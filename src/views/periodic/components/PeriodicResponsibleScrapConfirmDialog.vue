@@ -26,10 +26,18 @@ const emit = defineEmits<{
 
 const form = reactive({
   approved: true,
+  trackingRequired: undefined as boolean | undefined,
   opinion: ''
 })
 
-const resultName = computed(() => (form.approved ? '同意正常报废' : '退回原检定路线重检'))
+const resultName = computed(() => {
+  if (!form.approved) return '退回原检定路线重检'
+  if (form.trackingRequired === true) return '同意报废并进行追踪'
+  if (form.trackingRequired === false) return '同意报废，无需追踪'
+  return '同意正常报废'
+})
+
+const canSubmit = computed(() => !form.approved || form.trackingRequired !== undefined)
 
 function close() {
   emit('update:open', false)
@@ -46,6 +54,7 @@ function submit() {
     taskId: props.task.workflowTaskId,
     rowVersion: props.task.rowVersion,
     approved: form.approved,
+    trackingRequired: form.approved ? form.trackingRequired : undefined,
     opinion: form.opinion
   })
 }
@@ -55,6 +64,7 @@ watch(
   (open) => {
     if (!open) return
     form.approved = true
+    form.trackingRequired = undefined
     form.opinion = '确认正常报废'
   }
 )
@@ -63,6 +73,7 @@ watch(
   () => form.approved,
   (approved, previous) => {
     if (!props.open) return
+    form.trackingRequired = undefined
     const previousDefault = previous ? '确认正常报废' : '退回原检定路线重检'
     if (!form.opinion || form.opinion === previousDefault) {
       form.opinion = approved ? '确认正常报废' : '退回原检定路线重检'
@@ -81,7 +92,7 @@ watch(
         </div>
         <div class="dialog-title-actions">
           <a-button @click="close">取消</a-button>
-          <a-button type="primary" :loading="submitting" @click="submit">提交</a-button>
+          <a-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="submit">提交</a-button>
         </div>
       </div>
     </template>
@@ -115,6 +126,13 @@ watch(
             <a-radio-group v-model:value="form.approved" button-style="solid">
               <a-radio-button :value="true">同意正常报废</a-radio-button>
               <a-radio-button :value="false">退回重检</a-radio-button>
+            </a-radio-group>
+          </label>
+          <label v-if="form.approved">
+            <span>是否进行不合格追踪</span>
+            <a-radio-group v-model:value="form.trackingRequired" button-style="solid">
+              <a-radio-button :value="true">需要追踪</a-radio-button>
+              <a-radio-button :value="false">无需追踪</a-radio-button>
             </a-radio-group>
           </label>
           <label>

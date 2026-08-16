@@ -61,6 +61,41 @@ const exceptionRouteTask: PeriodicTaskVO = {
 assert.equal(mapPeriodicTaskRow(exceptionRouteTask, 'admin').currentNodeName, '管理员异常分流')
 assert.equal(mapPeriodicTaskRow(exceptionRouteTask, 'verifier').currentNodeName, '待接收')
 
+const verifierExternalCarriedTask: PeriodicTaskVO = {
+  ...task,
+  currentNode: 'admin_exception_route',
+  currentNodeName: '管理员异常分流',
+  taskStatus: 'wait_scan',
+  verificationMethod: 'send_out',
+  physicalStatus: 'wait_external_receive',
+  physicalStatusName: '待外扩接收',
+  allowedActions: []
+}
+assert.equal(
+  mapPeriodicTaskRow(verifierExternalCarriedTask, 'verifier').currentNodeName,
+  '待外扩接收',
+  '检定员扫码接收后，未完成的外委设备应保留并显示并行实物流转节点'
+)
+assert.equal(
+  mapPeriodicTaskRow(verifierExternalCarriedTask, 'admin').currentNodeName,
+  '待外扩接收',
+  '管理员异常入口在检定员扫码后失效，但当前周检条目应保留并显示实物下一节点'
+)
+
+const derivedChangeTask: PeriodicTaskVO = {
+  ...task,
+  currentNode: 'exception_disposal',
+  currentNodeName: '异常处置',
+  exceptionFlowType: 'category',
+  exceptionFlowName: '管理类别调整',
+  taskStatus: 'exception'
+}
+assert.equal(
+  mapPeriodicTaskRow(derivedChangeTask, 'admin').currentNodeName,
+  '管理类别调整',
+  '派生流程应显示具体派生类型，而不是通用异常节点或源流程完成状态'
+)
+
 const takeBackTask: PeriodicTaskVO = {
   ...task,
   currentNode: 'admin_take_back',
